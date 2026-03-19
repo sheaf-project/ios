@@ -1,0 +1,77 @@
+name: Build
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    name: Build Unsigned IPA
+    runs-on: macos-26-arm64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_16.3.app/Contents/Developer
+
+      - name: Show build environment
+        run: |
+          xcodebuild -version
+          swift --version
+
+      - name: Resolve dependencies
+        run: |
+          xcodebuild -resolvePackageDependencies \
+            -project Sheaf.xcodeproj \
+            -scheme Sheaf
+
+      # Build for generic iOS device — produces a .app we can package
+      - name: Build iOS (unsigned)
+        run: |
+          xcodebuild build \
+            -project Sheaf.xcodeproj \
+            -scheme Sheaf \
+            -destination 'generic/platform=iOS' \
+            -configuration Release \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            AD_HOC_CODE_SIGNING_ALLOWED=YES \
+            | xcpretty --color || exit 1
+
+      # Package the .app into an unsigned IPA
+      # Users can sign this themselves with AltStore, Sideloadly, or their own cert
+      - name: Package IPA
+        run: |
+          APP_PATH=$(find build/DerivedData -name "Sheaf.app" -not -path "*/WatchKitApp/*" | head -1)
+          echo "Found .app at: $APP_PATH"
+
+          mkdir -p build/Payload
+          cp -r "$APP_PATH" build/Payload/Sheaf.app
+
+          cd build
+          zip -r Sheaf-unsigned.ipa Payload
+          cd ..
+
+          echo "IPA created at build/Sheaf-unsigned.ipa"
+          ls -lh build/Sheaf-unsigned.ipa
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Sheaf-unsigned-ipa
+          path: build/Sheaf-unsigned.ipa
+          retention-days: 30
+
+      - name: Upload build logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: ~/Library/Logs/DiagnosticReports/
+          retention-days: 7
