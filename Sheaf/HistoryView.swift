@@ -6,6 +6,7 @@ struct HistoryView: View {
     @Environment(\.theme) var theme
     @State private var isLoading = false
     @State private var selectedEntry: FrontEntry?
+    @State private var showAddEntry = false
 
     var body: some View {
         ZStack {
@@ -18,12 +19,21 @@ struct HistoryView: View {
                         .font(.system(size: 28, weight: .bold, design: .rounded))
                         .foregroundColor(theme.textPrimary)
                     Spacer()
-                    Button {
-                        Task { await reload() }
-                    } label: {
-                        Image(systemName: "arrow.clockwise")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(theme.textSecondary)
+                    HStack(spacing: 16) {
+                        Button {
+                            showAddEntry = true
+                        } label: {
+                            Image(systemName: "plus.circle.fill")
+                                .font(.system(size: 22))
+                                .foregroundColor(theme.accentLight)
+                        }
+                        Button {
+                            Task { await reload() }
+                        } label: {
+                            Image(systemName: "arrow.clockwise")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(theme.textSecondary)
+                        }
                     }
                 }
                 .padding(.horizontal, 24)
@@ -68,10 +78,18 @@ struct HistoryView: View {
                                     .padding(.horizontal, 24)
                                     .padding(.bottom, 12)
 
-                                ForEach(store.frontHistory) { entry in
-                                    FrontHistoryRow(entry: entry, members: membersFor(entry))
-                                        .padding(.horizontal, 24)
-                                        .padding(.bottom, 10)
+                                LazyVStack(spacing: 10) {
+                                    ForEach(store.frontHistory) { entry in
+                                        FrontHistoryRow(entry: entry, members: membersFor(entry))
+                                            .padding(.horizontal, 24)
+                                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                                Button(role: .destructive) {
+                                                    Task { await deleteFrontEntry(entry) }
+                                                } label: {
+                                                    Label("Delete", systemImage: "trash")
+                                                }
+                                            }
+                                    }
                                 }
                             }
 
@@ -83,8 +101,26 @@ struct HistoryView: View {
             }
         }
         .task { await reload() }
+        .sheet(isPresented: $showAddEntry, onDismiss: { Task { await reload() } }) {
+            AddFrontEntrySheet()
+                .environmentObject(store)
+        }
     }
 
+
+    func deleteFrontEntry(_ entry: FrontEntry) async {
+        guard let api = store.api else { return }
+        do {
+            try await api.deleteFront(id: entry.id)
+            await MainActor.run {
+                store.frontHistory.removeAll { $0.id == entry.id }
+                // Also remove from currentFronts if it was active
+                store.currentFronts.removeAll { $0.id == entry.id }
+            }
+        } catch {
+            store.errorMessage = error.localizedDescription
+        }
+    }
 
     func reload() async {
         isLoading = true

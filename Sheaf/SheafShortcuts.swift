@@ -20,9 +20,18 @@ struct SheafShortcuts: AppShortcutsProvider {
                 "Add someone to front in \(.applicationName)",
                 "Add to front in \(.applicationName)",
                 "Co-front in \(.applicationName)",
-            ],
+                ],
             shortTitle: "Add to Front",
             systemImageName: "person.fill.checkmark"
+        )
+        AppShortcut(
+            intent: RemoveFromFrontIntent(),
+            phrases: [
+                "Remove someone from front in \(.applicationName)",
+                "Remove from front in \(.applicationName)",
+                ],
+            shortTitle: "Remove from Front",
+            systemImageName: "person.fill.xmark"
         )
         AppShortcut(
             intent: GetCurrentFrontIntent(),
@@ -50,20 +59,43 @@ struct MemberEntity: AppEntity {
     var displayRepresentation: DisplayRepresentation {
         DisplayRepresentation(title: "\(displayName ?? name)")
     }
+
+    // Tells Siri which spoken words map to this entity —
+    // includes both name and displayName so either works
+    static var typeDisplayName: LocalizedStringResource = "Member"
 }
 
 // MARK: - Member Entity Query
-struct MemberEntityQuery: EntityQuery {
+struct MemberEntityQuery: EntityQuery, EnumerableEntityQuery, EntityStringQuery {
+    // EnumerableEntityQuery tells Shortcuts to show a full pre-populated
+    // picker list instead of a free-text search field.
+    func allEntities() async throws -> [MemberEntity] {
+        let members = await ShortcutsDataStore.shared.members
+        return members
+            .map { MemberEntity(id: $0.id, name: $0.name, displayName: $0.displayName, color: $0.color) }
+    }
+
     func entities(for identifiers: [String]) async throws -> [MemberEntity] {
-        let store = await ShortcutsDataStore.shared
-        return await store.members
+        let members = await ShortcutsDataStore.shared.members
+        return members
             .filter { identifiers.contains($0.id) }
             .map { MemberEntity(id: $0.id, name: $0.name, displayName: $0.displayName, color: $0.color) }
     }
 
     func suggestedEntities() async throws -> [MemberEntity] {
-        let store = await ShortcutsDataStore.shared
-        return await store.members
+        try await allEntities()
+    }
+
+    // EntityStringQuery: called when Siri hears a name and needs to resolve
+    // it — matches against both name and displayName so either works
+    func entities(matching query: String) async throws -> [MemberEntity] {
+        let members = await ShortcutsDataStore.shared.members
+        let q = query.lowercased()
+        return members
+            .filter {
+                $0.name.lowercased().contains(q) ||
+                ($0.displayName?.lowercased().contains(q) ?? false)
+            }
             .map { MemberEntity(id: $0.id, name: $0.name, displayName: $0.displayName, color: $0.color) }
     }
 }
@@ -76,15 +108,25 @@ struct SwitchFrontIntent: AppIntent {
         Summary("Switch front to \(\.$members)")
     }
 
-    @Parameter(title: "Members", description: "Who should be fronting")
+    // Optional — if not pre-filled by the user in Shortcuts, perform() will
+    // interactively prompt with the full member list before executing.
+    @Parameter(
+        title: "Members",
+        description: "Who should be fronting",
+        requestValueDialog: IntentDialog("Who should be fronting?")
+    )
     var members: [MemberEntity]
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
-        let store = await ShortcutsDataStore.shared
+        // Siri resolves member names via EntityStringQuery automatically.
+        // requestValueDialog on the @Parameter handles the case where no
+        // name was spoken — Siri will ask without showing a dropdown.
+        let store = ShortcutsDataStore.shared
         let ids = members.map { $0.id }
         try await store.switchFronting(to: ids)
-        let names = members.map { $0.displayName ?? $0.name }.joined(separator: ", ")
-        return .result(dialog: "\(names) is now fronting.")
+        let names = formatNameList(members.map { $0.displayName ?? $0.name })
+        let verb = members.count == 1 ? "is" : "are"
+        return .result(dialog: "\(names) \(verb) now fronting.")
     }
 }
 
@@ -96,11 +138,18 @@ struct AddToFrontIntent: AppIntent {
         Summary("Add \(\.$member) to front")
     }
 
-    @Parameter(title: "Member", description: "Who to add to front")
-    var member: MemberEntity
+    @Parameter(
+        title: "Member",
+        description: "Who to add to front",
+        requestValueDialog: IntentDialog("Who should be added to front?")
+    )
+    var member: MemberEntity?
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
-        let store = await ShortcutsDataStore.shared
+        guard let member else {
+            throw $member.needsValueError("Who should be added to front?")
+        }
+        let store = ShortcutsDataStore.shared
         let currentIDs = await store.currentFrontingIDs
         let newIDs = Array(Set(currentIDs + [member.id]))
         try await store.switchFronting(to: newIDs)
@@ -115,56 +164,114 @@ struct GetCurrentFrontIntent: AppIntent {
     static var description = IntentDescription("Get the names of everyone currently fronting.")
 
     func perform() async throws -> some IntentResult & ProvidesDialog & ReturnsValue<String> {
-        let store = await ShortcutsDataStore.shared
+        let store = ShortcutsDataStore.shared
         let names = await store.frontingMemberNames
 
+        let nameList = formatNameList(names)
         if names.isEmpty {
             return .result(value: "No one", dialog: "No one is currently fronting.")
         }
-        let nameList = names.joined(separator: ", ")
-        return .result(value: nameList, dialog: "\(nameList) is currently fronting.")
+        let verb = names.count == 1 ? "is" : "are"
+        return .result(value: nameList, dialog: "\(nameList) \(verb) currently fronting.")
     }
+}
+
+// MARK: - Remove from Front Intent
+struct RemoveFromFrontIntent: AppIntent {
+    static var title: LocalizedStringResource = "Remove from Front"
+    static var description = IntentDescription("Remove a member from the current front without affecting others.")
+    static var parameterSummary: some ParameterSummary {
+        Summary("Remove \(\.$member) from front")
+    }
+
+    @Parameter(
+        title: "Member",
+        description: "Who to remove from front",
+        requestValueDialog: IntentDialog("Who should be removed from front?")
+    )
+    var member: MemberEntity?
+
+    func perform() async throws -> some IntentResult & ProvidesDialog {
+        guard let member else {
+            throw $member.needsValueError("Who should be removed from front?")
+        }
+        let store = ShortcutsDataStore.shared
+        let currentIDs = await store.currentFrontingIDs
+
+        guard currentIDs.contains(member.id) else {
+            let name = member.displayName ?? member.name
+            return .result(dialog: "\(name) isn't currently fronting.")
+        }
+
+        let remaining = currentIDs.filter { $0 != member.id }
+        try await store.switchFronting(to: remaining)
+
+        let name = member.displayName ?? member.name
+        if remaining.isEmpty {
+            return .result(dialog: "\(name) has been removed from front. No one is now fronting.")
+        }
+        return .result(dialog: "\(name) has been removed from front.")
+    }
+}
+
+// MARK: - Name list formatting
+private func formatNameList(_ names: [String]) -> String {
+    guard !names.isEmpty else { return "No one" }
+    return names.formatted(.list(type: .and, width: .standard))
 }
 
 // MARK: - ShortcutsDataStore
 // A lightweight singleton that the intents use to access the API
 // without depending on the SwiftUI environment.
-@MainActor
+// NOTE: Not @MainActor so intents can call it directly from their background context.
 final class ShortcutsDataStore {
     static let shared = ShortcutsDataStore()
 
     private let authManager = AuthManager()
     private lazy var api = APIClient(auth: authManager)
 
-    private(set) var members: [Member] = []
-    private(set) var currentFronts: [FrontEntry] = []
-
     var currentFrontingIDs: [String] {
-        Array(Set(currentFronts.flatMap { $0.memberIDs }))
+        get async {
+            guard authManager.isAuthenticated else { return [] }
+            do {
+                let fronts = try await api.getCurrentFronts()
+                return Array(Set(fronts.flatMap { $0.memberIDs }))
+            } catch {
+                return []
+            }
+        }
     }
 
     var frontingMemberNames: [String] {
-        let ids = Set(currentFrontingIDs)
-        return members
-            .filter { ids.contains($0.id) }
-            .map { $0.displayName ?? $0.name }
+        get async {
+            guard authManager.isAuthenticated else { return [] }
+            do {
+                async let frontsTask   = api.getCurrentFronts()
+                async let membersTask  = api.getMembers()
+                let fronts   = try await frontsTask
+                let members  = try await membersTask
+                let ids      = Set(fronts.flatMap { $0.memberIDs })
+                return members
+                    .filter { ids.contains($0.id) }
+                    .map { $0.displayName ?? $0.name }
+            } catch {
+                return []
+            }
+        }
     }
 
-    func refreshIfNeeded() async {
-        guard authManager.isAuthenticated else { return }
-        do {
-            async let m = api.getMembers()
-            async let f = api.getCurrentFronts()
-            members       = try await m
-            currentFronts = try await f
-        } catch {}
+    var members: [Member] {
+        get async {
+            guard authManager.isAuthenticated else { return [] }
+            return (try? await api.getMembers()) ?? []
+        }
     }
 
     func switchFronting(to memberIDs: [String]) async throws {
         guard authManager.isAuthenticated else {
             throw ShortcutError.notAuthenticated
         }
-        await refreshIfNeeded()
+        let currentFronts = (try? await api.getCurrentFronts()) ?? []
         let now = Date()
         for front in currentFronts where front.endedAt == nil {
             _ = try await api.updateFront(
@@ -175,8 +282,6 @@ final class ShortcutsDataStore {
         if !memberIDs.isEmpty {
             _ = try await api.createFront(FrontCreate(memberIDs: memberIDs, startedAt: now))
         }
-        // Refresh after switching
-        await refreshIfNeeded()
     }
 }
 

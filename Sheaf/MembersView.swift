@@ -34,82 +34,66 @@ struct MembersView: View {
     }
 
     var body: some View {
-        ZStack {
-            theme.backgroundPrimary.ignoresSafeArea()
-
-            VStack(spacing: 0) {
-                // Header
-                HStack {
-                    Text("Members")
-                        .font(.system(size: 28, weight: .bold, design: .rounded))
-                        .foregroundColor(theme.textPrimary)
-                    Spacer()
+        NavigationStack {
+            Group {
+                if store.isLoading && store.members.isEmpty {
+                    ProgressView()
+                        .tint(theme.accentLight)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    List {
+                        ForEach(filtered) { member in
+                            MemberRow(member: member, isFronting: store.frontingMembers.contains(where: { $0.id == member.id })) {
+                                selectedMember = member
+                            }
+                            .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                                let isFronting = store.frontingMembers.contains(where: { $0.id == member.id })
+                                if isFronting {
+                                    Button {
+                                        Task { await removeMemberFromFront(member) }
+                                    } label: {
+                                        Label("Remove Front", systemImage: "person.fill.xmark")
+                                    }
+                                    .tint(.orange)
+                                } else {
+                                    Button {
+                                        Task { await store.switchFronting(to: store.frontingMembers.map { $0.id } + [member.id]) }
+                                    } label: {
+                                        Label("Add to Front", systemImage: "person.fill.checkmark")
+                                    }
+                                    .tint(theme.accentLight)
+                                }
+                            }
+                            .swipeActions(edge: .trailing) {
+                                Button(role: .destructive) {
+                                    Task { await store.deleteMember(id: member.id) }
+                                } label: {
+                                    Label("Delete", systemImage: "trash")
+                                }
+                            }
+                            .listRowBackground(theme.backgroundCard)
+                            .listRowSeparator(.hidden)
+                            .listRowInsets(EdgeInsets(top: 5, leading: 24, bottom: 5, trailing: 24))
+                        }
+                    }
+                    .listStyle(.plain)
+                    .background(theme.backgroundPrimary)
+                    .scrollContentBackground(.hidden)
+                }
+            }
+            .background(theme.backgroundPrimary)
+            .navigationTitle("Members")
+            .navigationBarTitleDisplayMode(.large)
+            .searchable(text: $searchText, placement: .automatic, prompt: "Search members")
+            .searchToolbarBehavior(.automatic)
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
                     Button {
                         showAddMember = true
                     } label: {
                         Image(systemName: "plus.circle.fill")
-                            .font(.system(size: 26))
+                            .font(.system(size: 22))
                             .foregroundColor(theme.accentLight)
-                    }
-                }
-                .padding(.horizontal, 24)
-                .padding(.top, 16)
-                .padding(.bottom, 12)
-
-                // Search
-                HStack {
-                    Image(systemName: "magnifyingglass")
-                        .foregroundColor(theme.textTertiary)
-                    TextField("Search members...", text: $searchText)
-                        .foregroundColor(theme.textPrimary)
-                        .autocorrectionDisabled()
-                }
-                .padding(12)
-                .background(theme.backgroundCard)
-                .cornerRadius(12)
-                .padding(.horizontal, 24)
-                .padding(.bottom, 16)
-
-                if store.isLoading && store.members.isEmpty {
-                    Spacer()
-                    ProgressView().tint(theme.accentLight)
-                    Spacer()
-                } else {
-                    ScrollView {
-                        LazyVStack(spacing: 10) {
-                            ForEach(filtered) { member in
-                                MemberRow(member: member, isFronting: store.frontingMembers.contains(where: { $0.id == member.id })) {
-                                    selectedMember = member
-                                }
-                                .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                                    let isFronting = store.frontingMembers.contains(where: { $0.id == member.id })
-                                    if isFronting {
-                                        Button {
-                                            Task { await removeMemberFromFront(member) }
-                                        } label: {
-                                            Label("Remove Front", systemImage: "person.fill.xmark")
-                                        }
-                                        .tint(.orange)
-                                    } else {
-                                        Button {
-                                            Task { await store.switchFronting(to: store.frontingMembers.map { $0.id } + [member.id]) }
-                                        } label: {
-                                            Label("Add to Front", systemImage: "person.fill.checkmark")
-                                        }
-                                        .tint(Color(hex: "#8B5CF6")!)
-                                    }
-                                }
-                                .swipeActions(edge: .trailing) {
-                                    Button(role: .destructive) {
-                                        Task { await store.deleteMember(id: member.id) }
-                                    } label: {
-                                        Label("Delete", systemImage: "trash")
-                                    }
-                                }
-                            }
-                        }
-                        .padding(.horizontal, 24)
-                        .padding(.bottom, 100)
                     }
                 }
             }
@@ -127,10 +111,13 @@ struct MembersView: View {
 
 // MARK: - Member Row
 struct MemberRow: View {
+    @EnvironmentObject var store: SystemStore
     @Environment(\.theme) var theme
     let member: Member
     let isFronting: Bool
     let onTap: () -> Void
+
+    @State private var showDeleteConfirm = false
 
     var body: some View {
         Button(action: onTap) {
@@ -169,6 +156,69 @@ struct MemberRow: View {
                 .stroke(isFronting ? member.displayColor.opacity(0.3) : theme.backgroundCard, lineWidth: 1))
         }
         .buttonStyle(ScaleButtonStyle())
+        .confirmationDialog(
+            "Delete \(member.displayName ?? member.name)?",
+            isPresented: $showDeleteConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Delete", role: .destructive) {
+                Task { await store.deleteMember(id: member.id) }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This will permanently delete this member and cannot be undone.")
+        }
+        .contextMenu {
+            if isFronting {
+                Button {
+                    Task { await removeMemberFromFront() }
+                } label: {
+                    Label("Remove from Front", systemImage: "person.fill.xmark")
+                }
+            } else {
+                Button {
+                    Task { await store.switchFronting(to: store.frontingMembers.map { $0.id } + [member.id]) }
+                } label: {
+                    Label("Add to Front", systemImage: "person.fill.checkmark")
+                }
+                Button {
+                    Task { await store.switchFronting(to: [member.id]) }
+                } label: {
+                    Label("Switch Front to \(member.displayName ?? member.name)", systemImage: "arrow.left.arrow.right")
+                }
+            }
+
+            Divider()
+
+            Button { onTap() } label: {
+                Label("View Profile", systemImage: "person.crop.circle")
+            }
+
+            Divider()
+
+            Button(role: .destructive) {
+                showDeleteConfirm = true
+            } label: {
+                Label("Delete Member", systemImage: "trash")
+            }
+        }
+    }
+
+    private func removeMemberFromFront() async {
+        let remaining = store.frontingMembers
+            .filter { $0.id != member.id }
+            .map { $0.id }
+        if remaining.isEmpty {
+            for front in store.currentFronts where front.endedAt == nil {
+                _ = try? await store.api?.updateFront(
+                    id: front.id,
+                    update: FrontUpdate(endedAt: Date(), memberIDs: nil)
+                )
+            }
+            await MainActor.run { store.currentFronts = [] }
+        } else {
+            await store.switchFronting(to: remaining)
+        }
     }
 }
 

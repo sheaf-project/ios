@@ -144,6 +144,24 @@ class SystemStore: ObservableObject {
 
     // MARK: - Helpers
 
+    /// Members sorted by how often they appear in front history,
+    /// most frequent first. Falls back to member list order if no history.
+    var membersByFrontFrequency: [Member] {
+        guard !frontHistory.isEmpty else { return members }
+
+        // Count how many front entries each member appears in
+        var counts: [String: Int] = [:]
+        for entry in frontHistory {
+            for id in entry.memberIDs {
+                counts[id, default: 0] += 1
+            }
+        }
+
+        return members.sorted { a, b in
+            (counts[a.id] ?? 0) > (counts[b.id] ?? 0)
+        }
+    }
+
     func membersIn(group: SystemGroup) -> [Member] {
         // Groups don't embed member_ids in GroupRead — we use the /members endpoint
         // This is a local cache; call getGroupMembers for authoritative data
