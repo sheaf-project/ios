@@ -34,6 +34,17 @@ struct SheafShortcuts: AppShortcutsProvider {
             systemImageName: "person.fill.xmark"
         )
         AppShortcut(
+            intent: PurgeFrontIntent(),
+            phrases: [
+                "Purge front in \(.applicationName)",
+                "Clear front in \(.applicationName)",
+                "End front in \(.applicationName)",
+                "Remove everyone from front in \(.applicationName)",
+            ],
+            shortTitle: "Purge Front",
+            systemImageName: "person.fill.xmark"
+        )
+        AppShortcut(
             intent: GetCurrentFrontIntent(),
             phrases: [
                 "Who's fronting in \(.applicationName)",
@@ -211,6 +222,27 @@ struct RemoveFromFrontIntent: AppIntent {
             return .result(dialog: "\(name) has been removed from front. No one is now fronting.")
         }
         return .result(dialog: "\(name) has been removed from front.")
+    }
+}
+
+// MARK: - Purge Front Intent
+struct PurgeFrontIntent: AppIntent {
+    static var title: LocalizedStringResource = "Purge Front"
+    static var description = IntentDescription("End the current front entirely, removing everyone.")
+
+    func perform() async throws -> some IntentResult & ProvidesDialog {
+        let store = ShortcutsDataStore.shared
+        let currentIDs = await store.currentFrontingIDs
+
+        guard !currentIDs.isEmpty else {
+            return .result(dialog: "No one is currently fronting.")
+        }
+
+        let names = await store.frontingMemberNames
+        try await store.switchFronting(to: [])
+        let nameList = formatNameList(names)
+        let verb = names.count == 1 ? "has" : "have"
+        return .result(dialog: "\(nameList) \(verb) been removed from front.")
     }
 }
 

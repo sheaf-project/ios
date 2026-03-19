@@ -1,7 +1,9 @@
 import Foundation
 import SwiftUI
 import Combine
+#if os(iOS)
 import WatchConnectivity
+#endif
 
 // MARK: - AuthManager
 final class AuthManager: ObservableObject {
@@ -68,7 +70,9 @@ final class AuthManager: ObservableObject {
         UserDefaults.standard.set(tokens.accessToken,  forKey: accessKey)
         UserDefaults.standard.set(tokens.refreshToken, forKey: refreshKey)
         // Push updated credentials to Apple Watch
+        #if os(iOS)
         PhoneConnectivityManager.shared.syncCredentials()
+        #endif
     }
 
     func logout() {
@@ -81,10 +85,11 @@ final class AuthManager: ObservableObject {
         UserDefaults.standard.removeObject(forKey: accessKey)
         UserDefaults.standard.removeObject(forKey: refreshKey)
         UserDefaults.standard.removeObject(forKey: urlKey)
-        // Clear credentials on watch too
+        #if os(iOS)
         try? WCSession.default.updateApplicationContext(
             ["baseURL": "", "accessToken": "", "refreshToken": ""]
         )
+        #endif
     }
 }
 
@@ -329,6 +334,12 @@ class APIClient {
 
     func deleteField(id: String) async throws {
         _ = try await request("/v1/fields/\(id)", method: "DELETE")
+    }
+
+    func updateField(id: String, name: String, privacy: PrivacyLevel) async throws -> CustomField {
+        let body = try JSONEncoder.iso.encode(["name": name, "privacy": privacy.rawValue])
+        let data = try await request("/v1/fields/\(id)", method: "PATCH", body: body)
+        return try JSONDecoder.iso.decode(CustomField.self, from: data)
     }
 
     // MARK: - Custom Fields

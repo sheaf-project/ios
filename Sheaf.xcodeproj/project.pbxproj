@@ -43,8 +43,10 @@
 		2A20285A2F6BB4420084B22F /* Exceptions for "Sheaf" folder in "SheafWatch Watch App" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
+				APIClient.swift,
 				AvatarView.swift,
 				Models.swift,
+				SheafShortcuts.swift,
 			);
 			target = 2A2028272F6BB3070084B22F /* SheafWatch Watch App */;
 		};
@@ -59,9 +61,14 @@
 			path = Sheaf;
 			sourceTree = "<group>";
 		};
-		2A2028292F6BB3070084B22F /* SheafWatch Watch App */ = {
+		2A2028292F6BB3070084B22F /* WatchKitApp */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = "SheafWatch Watch App";
+			path = WatchKitApp;
+			sourceTree = "<group>";
+		};
+		2A2028902F6C6B540084B22F /* .github */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = .github;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -87,8 +94,9 @@
 		2A20278E2F6B92F10084B22F = {
 			isa = PBXGroup;
 			children = (
+				2A2028902F6C6B540084B22F /* .github */,
 				2A2027992F6B92F10084B22F /* Sheaf */,
-				2A2028292F6BB3070084B22F /* SheafWatch Watch App */,
+				2A2028292F6BB3070084B22F /* WatchKitApp */,
 				2A2027982F6B92F10084B22F /* Products */,
 			);
 			sourceTree = "<group>";
@@ -121,6 +129,7 @@
 			);
 			fileSystemSynchronizedGroups = (
 				2A2027992F6B92F10084B22F /* Sheaf */,
+				2A2028902F6C6B540084B22F /* .github */,
 			);
 			name = Sheaf;
 			packageProductDependencies = (
@@ -142,7 +151,7 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				2A2028292F6BB3070084B22F /* SheafWatch Watch App */,
+				2A2028292F6BB3070084B22F /* WatchKitApp */,
 			);
 			name = "SheafWatch Watch App";
 			packageProductDependencies = (
@@ -429,7 +438,7 @@
 				DEVELOPMENT_TEAM = 9KSQ5F39ZK;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = SheafWatch;
+				INFOPLIST_KEY_CFBundleDisplayName = Sheaf;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = systems.lupine.sheaf;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -462,7 +471,7 @@
 				DEVELOPMENT_TEAM = 9KSQ5F39ZK;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = SheafWatch;
+				INFOPLIST_KEY_CFBundleDisplayName = Sheaf;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = systems.lupine.sheaf;
 				LD_RUNPATH_SEARCH_PATHS = (

@@ -414,6 +414,7 @@ struct MemberEditSheet: View {
     @State private var description = ""
     @State private var avatarURL = ""
     @State private var colorHex = "#A78BFA"
+    @State private var privacy: PrivacyLevel = .private
     @State private var isSaving = false
     @State private var fieldValues: [String: String] = [:]  // fieldID -> string value
 
@@ -466,6 +467,19 @@ struct MemberEditSheet: View {
                         .background(theme.backgroundCard)
                         .cornerRadius(12)
 
+                        // Privacy picker
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Privacy")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundColor(theme.textSecondary)
+                            Picker("Privacy", selection: $privacy) {
+                                ForEach(PrivacyLevel.allCases, id: \.self) { level in
+                                    Text(level.rawValue.capitalized).tag(level)
+                                }
+                            }
+                            .pickerStyle(.segmented)
+                        }
+
                         // Custom fields
                         if !store.fields.isEmpty {
                             VStack(alignment: .leading, spacing: 6) {
@@ -495,6 +509,7 @@ struct MemberEditSheet: View {
         description = m.description ?? ""
         avatarURL   = m.avatarURL ?? ""
         colorHex    = m.color ?? "#A78BFA"
+        privacy     = m.privacy
         // Load existing field values
         Task {
             guard let api = store.api, let memberID = member?.id else { return }
@@ -535,7 +550,7 @@ struct MemberEditSheet: View {
             avatarURL: avatarURL.isEmpty ? nil : avatarURL,
             color: colorHex.isEmpty ? nil : colorHex,
             birthday: nil,
-            privacy: .private
+            privacy: privacy
         )
         Task {
             await store.saveMember(existing: member, create: create)

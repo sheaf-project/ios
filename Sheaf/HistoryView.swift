@@ -7,7 +7,6 @@ struct HistoryView: View {
     @State private var isLoading = false
     @State private var selectedEntry: FrontEntry?
     @State private var showAddEntry = false
-    @State private var entryToDelete: FrontEntry?
 
     var body: some View {
         ZStack {
@@ -69,16 +68,11 @@ struct HistoryView: View {
                         // Log entries
                         Section("Log") {
                             ForEach(store.frontHistory) { entry in
-                                FrontHistoryRow(entry: entry, members: membersFor(entry))
-                                    .listRowBackground(theme.backgroundCard)
-                                    .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
-                                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                        Button(role: .destructive) {
-                                            entryToDelete = entry
-                                        } label: {
-                                            Label("Delete", systemImage: "trash")
-                                        }
-                                    }
+                                DeletableFrontHistoryRow(entry: entry, members: membersFor(entry)) {
+                                    Task { await deleteFrontEntry(entry) }
+                                }
+                                .listRowBackground(theme.backgroundCard)
+                                .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
                             }
                         }
                     }
@@ -93,24 +87,7 @@ struct HistoryView: View {
             AddFrontEntrySheet()
                 .environmentObject(store)
         }
-        .confirmationDialog(
-            "Delete this front entry?",
-            isPresented: Binding(
-                get: { entryToDelete != nil },
-                set: { if !$0 { entryToDelete = nil } }
-            ),
-            titleVisibility: .visible
-        ) {
-            Button("Delete", role: .destructive) {
-                if let entry = entryToDelete {
-                    Task { await deleteFrontEntry(entry) }
-                }
-                entryToDelete = nil
-            }
-            Button("Cancel", role: .cancel) { entryToDelete = nil }
-        } message: {
-            Text("This cannot be undone.")
-        }
+
     }
 
 
@@ -357,5 +334,36 @@ struct FrontHistoryRow: View {
         .cornerRadius(14)
         .overlay(RoundedRectangle(cornerRadius: 14)
             .stroke(isActive ? theme.success.opacity(0.2) : theme.backgroundCard, lineWidth: 1))
+    }
+}
+
+// MARK: - Deletable Front History Row
+// Owns its own confirmation dialog so it anchors to the swiped row
+struct DeletableFrontHistoryRow: View {
+    let entry: FrontEntry
+    let members: [Member]
+    let onDelete: () -> Void
+
+    @State private var showConfirm = false
+
+    var body: some View {
+        FrontHistoryRow(entry: entry, members: members)
+            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                Button(role: .destructive) {
+                    showConfirm = true
+                } label: {
+                    Label("Delete", systemImage: "trash")
+                }
+            }
+            .confirmationDialog(
+                "Delete this front entry?",
+                isPresented: $showConfirm,
+                titleVisibility: .visible
+            ) {
+                Button("Delete", role: .destructive) { onDelete() }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This cannot be undone.")
+            }
     }
 }

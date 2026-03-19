@@ -79,31 +79,5 @@ class WatchAPIClient {
     }
 }
 
-// MARK: - JSON helpers (duplicated from APIClient.swift for watch target)
-extension JSONDecoder {
-    static let iso: JSONDecoder = {
-        let d = JSONDecoder()
-        d.dateDecodingStrategy = .custom { decoder in
-            let str = try decoder.singleValueContainer().decode(String.self)
-            let frac = ISO8601DateFormatter()
-            frac.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            if let date = frac.date(from: str) { return date }
-            let plain = ISO8601DateFormatter()
-            plain.formatOptions = [.withInternetDateTime]
-            if let date = plain.date(from: str) { return date }
-            throw DecodingError.dataCorruptedError(
-                in: try decoder.singleValueContainer(),
-                debugDescription: "Cannot decode date: \(str)"
-            )
-        }
-        return d
-    }()
-}
-
-extension JSONEncoder {
-    static let iso: JSONEncoder = {
-        let e = JSONEncoder()
-        e.dateEncodingStrategy = .iso8601
-        return e
-    }()
-}
+// JSON helpers are provided by APIClient.swift when both files are in the same target.
+// This file only defines them when compiled standalone (e.g. in a test target).

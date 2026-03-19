@@ -4,7 +4,8 @@ import SwiftUI
 struct CustomFieldsView: View {
     @EnvironmentObject var store: SystemStore
     @Environment(\.theme) var theme
-    @State private var showAddField = false
+    @State private var showAddField  = false
+    @State private var fieldToEdit: CustomField?
 
     var body: some View {
         List {
@@ -16,7 +17,7 @@ struct CustomFieldsView: View {
                     Text("No custom fields yet")
                         .font(.system(size: 15))
                         .foregroundColor(theme.textTertiary)
-                    Text("Custom fields let you store extra information on each member.")
+                    Text("Custom fields let you store extra info on each member.")
                         .font(.system(size: 13))
                         .foregroundColor(theme.textTertiary)
                         .multilineTextAlignment(.center)
@@ -26,26 +27,32 @@ struct CustomFieldsView: View {
                 .listRowBackground(Color.clear)
             } else {
                 ForEach(store.fields) { field in
-                    HStack(spacing: 12) {
-                        Image(systemName: fieldTypeIcon(field.fieldType))
-                            .foregroundColor(theme.accentLight)
-                            .frame(width: 20)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(field.name)
-                                .font(.system(size: 15, weight: .medium))
-                                .foregroundColor(theme.textPrimary)
-                            Text(field.fieldType.rawValue.capitalized)
-                                .font(.system(size: 12))
-                                .foregroundColor(theme.textSecondary)
+                    Button { fieldToEdit = field } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: fieldTypeIcon(field.fieldType))
+                                .foregroundColor(theme.accentLight)
+                                .frame(width: 20)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(field.name)
+                                    .font(.system(size: 15, weight: .medium))
+                                    .foregroundColor(theme.textPrimary)
+                                Text(field.fieldType.rawValue.capitalized)
+                                    .font(.system(size: 12))
+                                    .foregroundColor(theme.textSecondary)
+                            }
+                            Spacer()
+                            Text(field.privacy.rawValue.capitalized)
+                                .font(.system(size: 11))
+                                .foregroundColor(theme.textTertiary)
+                                .padding(.horizontal, 8).padding(.vertical, 3)
+                                .background(theme.backgroundCard)
+                                .cornerRadius(6)
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 11))
+                                .foregroundColor(theme.textTertiary)
                         }
-                        Spacer()
-                        Text(field.privacy.rawValue.capitalized)
-                            .font(.system(size: 11))
-                            .foregroundColor(theme.textTertiary)
-                            .padding(.horizontal, 8).padding(.vertical, 3)
-                            .background(theme.backgroundCard)
-                            .cornerRadius(6)
                     }
+                    .buttonStyle(.plain)
                     .listRowBackground(theme.backgroundCard)
                     .swipeActions(edge: .trailing) {
                         Button(role: .destructive) {
@@ -53,6 +60,14 @@ struct CustomFieldsView: View {
                         } label: {
                             Label("Delete", systemImage: "trash")
                         }
+                    }
+                    .swipeActions(edge: .leading) {
+                        Button {
+                            fieldToEdit = field
+                        } label: {
+                            Label("Edit", systemImage: "pencil")
+                        }
+                        .tint(theme.accentLight)
                     }
                 }
             }
@@ -63,11 +78,8 @@ struct CustomFieldsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                Button {
-                    showAddField = true
-                } label: {
-                    Image(systemName: "plus")
-                        .foregroundColor(theme.accentLight)
+                Button { showAddField = true } label: {
+                    Image(systemName: "plus").foregroundColor(theme.accentLight)
                 }
             }
         }
@@ -75,6 +87,10 @@ struct CustomFieldsView: View {
             Task { await refreshFields() }
         }) {
             AddCustomFieldSheet()
+                .environmentObject(store)
+        }
+        .sheet(item: $fieldToEdit) { field in
+            EditCustomFieldSheet(field: field)
                 .environmentObject(store)
         }
     }
@@ -108,6 +124,107 @@ struct CustomFieldsView: View {
     }
 }
 
+// MARK: - Edit Custom Field Sheet
+struct EditCustomFieldSheet: View {
+    @EnvironmentObject var store: SystemStore
+    @Environment(\.theme) var theme
+    @Environment(\.dismiss) var dismiss
+
+    let field: CustomField
+    @State private var name    = ""
+    @State private var privacy: PrivacyLevel = .private
+    @State private var isSaving = false
+    @State private var error: String?
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Field Details") {
+                    TextField("Name", text: $name)
+                        .foregroundColor(theme.textPrimary)
+                        .autocorrectionDisabled()
+                        .listRowBackground(theme.backgroundCard)
+
+                    // Type is read-only — can't change type after creation
+                    HStack {
+                        Text("Type")
+                            .foregroundColor(theme.textPrimary)
+                        Spacer()
+                        Text(field.fieldType.rawValue.capitalized)
+                            .foregroundColor(theme.textSecondary)
+                    }
+                    .listRowBackground(theme.backgroundCard)
+
+                    Picker("Privacy", selection: $privacy) {
+                        ForEach(PrivacyLevel.allCases, id: \.self) { level in
+                            Text(level.rawValue.capitalized).tag(level)
+                        }
+                    }
+                    .foregroundColor(theme.textPrimary)
+                    .listRowBackground(theme.backgroundCard)
+                }
+
+                if let error {
+                    Section {
+                        Text(error)
+                            .foregroundColor(theme.danger)
+                            .font(.system(size: 13))
+                            .listRowBackground(theme.backgroundCard)
+                    }
+                }
+            }
+            .scrollContentBackground(.hidden)
+            .background(theme.backgroundPrimary)
+            .navigationTitle("Edit Field")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                        .foregroundColor(theme.accentLight)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button {
+                        Task { await save() }
+                    } label: {
+                        if isSaving { ProgressView().tint(theme.accentLight) }
+                        else {
+                            Text("Save")
+                                .fontWeight(.semibold)
+                                .foregroundColor(name.isEmpty ? theme.textTertiary : theme.accentLight)
+                        }
+                    }
+                    .disabled(name.isEmpty || isSaving)
+                }
+            }
+        }
+        .onAppear {
+            name    = field.name
+            privacy = field.privacy
+        }
+    }
+
+    private func save() async {
+        guard let api = store.api else { return }
+        isSaving = true
+        error = nil
+        do {
+            let updated = try await api.updateField(id: field.id, name: name, privacy: privacy)
+            await MainActor.run {
+                if let idx = store.fields.firstIndex(where: { $0.id == field.id }) {
+                    store.fields[idx] = updated
+                }
+                isSaving = false
+            }
+            dismiss()
+        } catch {
+            await MainActor.run {
+                self.error = error.localizedDescription
+                isSaving = false
+            }
+        }
+    }
+}
+
 // MARK: - Add Custom Field Sheet
 struct AddCustomFieldSheet: View {
     @EnvironmentObject var store: SystemStore
@@ -124,10 +241,7 @@ struct AddCustomFieldSheet: View {
         NavigationStack {
             Form {
                 Section("Field Details") {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Name")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundColor(theme.textSecondary)
+                    VStack(alignment: .leading, spacing: 4) {
                         TextField("e.g. Age, Occupation", text: $name)
                             .autocorrectionDisabled()
                     }

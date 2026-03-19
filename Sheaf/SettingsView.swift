@@ -9,21 +9,22 @@ struct SettingsView: View {
     @EnvironmentObject var themeManager: ThemeManager
     @Environment(\.theme) var theme
     @State private var showLogoutConfirm = false
+    @State private var showEditSystem = false
     @State private var showImport = false
     @State private var showEditConnection = false
     @State private var showTOTPSetup = false
-    @State private var showSPImport = false
     @State private var newBaseURL = ""
     @State private var newToken = ""
     @State private var me: UserRead?
 
     var body: some View {
-        ZStack {
-            theme.backgroundPrimary.ignoresSafeArea()
+        NavigationStack {
+            ZStack {
+                theme.backgroundPrimary.ignoresSafeArea()
 
-            ScrollView {
-                VStack(spacing: 24) {
-                    Text("Settings")
+                ScrollView {
+                    VStack(spacing: 24) {
+                        Text("Settings")
                         .font(.system(size: 28, weight: .bold, design: .rounded))
                         .foregroundColor(theme.textPrimary)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -188,31 +189,54 @@ struct SettingsView: View {
                     }
 
                     // System info
-                    settingsSection(title: "System Info") {
+                    settingsSection(title: "System") {
                         VStack(spacing: 0) {
-                            statRow(label: "Members",          value: "\(store.members.count)")
+                            if let profile = store.systemProfile {
+                                HStack(spacing: 12) {
+                                    ZStack {
+                                    Circle()
+                                        .fill(Color(hex: profile.color ?? "#8B5CF6") ?? .purple)
+                                        .frame(width: 44, height: 44)
+                                    if let url = profile.avatarURL, !url.isEmpty,
+                                       let imageURL = URL(string: url) {
+                                        AsyncImage(url: imageURL) { img in
+                                            img.resizable().scaledToFill()
+                                                .frame(width: 44, height: 44)
+                                                .clipShape(Circle())
+                                        } placeholder: { EmptyView() }
+                                    } else {
+                                        Text(String(profile.name.prefix(1)).uppercased())
+                                            .font(.system(size: 18, weight: .bold))
+                                            .foregroundColor(.white)
+                                    }
+                                }
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(profile.name)
+                                            .font(.system(size: 15, weight: .semibold))
+                                            .foregroundColor(theme.textPrimary)
+                                        if let tag = profile.tag, !tag.isEmpty {
+                                            Text(tag)
+                                                .font(.system(size: 12))
+                                                .foregroundColor(theme.textSecondary)
+                                        }
+                                    }
+                                    Spacer()
+                                    Button {
+                                        showEditSystem = true
+                                    } label: {
+                                        Text("Edit")
+                                            .font(.system(size: 14, weight: .medium))
+                                            .foregroundColor(theme.accentLight)
+                                    }
+                                }
+                                .padding(.horizontal, 16).padding(.vertical, 14)
+                                Divider().background(theme.divider)
+                            }
+                            statRow(label: "Members",            value: "\(store.members.count)")
                             Divider().background(theme.backgroundCard)
-                            statRow(label: "Groups",           value: "\(store.groups.count)")
+                            statRow(label: "Groups",             value: "\(store.groups.count)")
                             Divider().background(theme.backgroundCard)
                             statRow(label: "Currently Fronting", value: "\(store.frontingMembers.count)")
-                        }
-                    }
-
-                    // Import
-                    settingsSection(title: "Import") {
-                        Button { showSPImport = true } label: {
-                            HStack {
-                                Image(systemName: "arrow.down.circle.fill")
-                                    .foregroundColor(theme.accentLight)
-                                Text("Import from Simply Plural")
-                                    .font(.system(size: 15, weight: .medium))
-                                    .foregroundColor(theme.textPrimary)
-                                Spacer()
-                                Image(systemName: "chevron.right")
-                                    .font(.system(size: 12))
-                                    .foregroundColor(theme.textTertiary)
-                            }
-                            .padding(.horizontal, 16).padding(.vertical, 14)
                         }
                     }
 
@@ -239,6 +263,10 @@ struct SettingsView: View {
                 }
             }
         }
+        .sheet(isPresented: $showEditSystem) {
+            EditSystemProfileSheet()
+                .environmentObject(store)
+        }
         .task { await loadMe() }
         .confirmationDialog("Log out?", isPresented: $showLogoutConfirm, titleVisibility: .visible) {
             Button("Disconnect", role: .destructive) { authManager.logout() }
@@ -263,10 +291,7 @@ struct SettingsView: View {
             TOTPSetupSheet()
                 .environmentObject(authManager)
         }
-        .sheet(isPresented: $showSPImport) {
-            SimplyPluralImportSheet()
-                .environmentObject(store)
-        }
+        } // NavigationStack
     }
 
     private func loadMe() async {

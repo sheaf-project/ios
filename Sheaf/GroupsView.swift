@@ -155,85 +155,88 @@ struct GroupDetailSheet: View {
     @State private var members: [Member] = []
 
     var body: some View {
-        ZStack {
-            theme.backgroundPrimary.ignoresSafeArea()
-
-            VStack(spacing: 0) {
-                Capsule().fill(theme.inputBorder).frame(width: 40, height: 4).padding(.top, 12)
-
-                HStack {
-                    Button("Close") { dismiss() }.foregroundColor(theme.textSecondary)
-                    Spacer()
-                    Button("Edit") { showEdit = true }
-                        .foregroundColor(theme.accentLight)
-                        .font(.system(size: 16, weight: .semibold))
-                }
-                .padding(.horizontal, 24).padding(.top, 16)
-
-                ScrollView {
-                    VStack(spacing: 20) {
-                        // Header
-                        VStack(spacing: 10) {
-                            ZStack {
-                                Circle()
-                                    .fill(group.displayColor.opacity(0.2))
-                                    .frame(width: 80, height: 80)
-                                Image(systemName: "square.grid.2x2.fill")
-                                    .font(.system(size: 34))
-                                    .foregroundColor(group.displayColor)
-                            }
-                            Text(group.name)
-                                .font(.system(size: 24, weight: .bold, design: .rounded))
-                                .foregroundColor(theme.textPrimary)
-                            if let desc = group.description, !desc.isEmpty {
-                                Text(desc)
-                                    .font(.system(size: 14))
-                                    .foregroundColor(theme.textSecondary)
-                                    .multilineTextAlignment(.center)
-                            }
+        NavigationStack {
+            List {
+                // Header section
+                Section {
+                    VStack(spacing: 10) {
+                        ZStack {
+                            Circle()
+                                .fill(group.displayColor.opacity(0.2))
+                                .frame(width: 72, height: 72)
+                            Image(systemName: "square.grid.2x2.fill")
+                                .font(.system(size: 30))
+                                .foregroundColor(group.displayColor)
                         }
-                        .padding(.top, 20)
-
-                        // Members
-                        if members.isEmpty {
-                            Text("No members in this group")
+                        if let desc = group.description, !desc.isEmpty {
+                            Text(desc)
                                 .font(.system(size: 14))
-                                .foregroundColor(theme.textTertiary)
-                                .padding(20)
-                        } else {
-                            VStack(alignment: .leading, spacing: 10) {
-                                Text("Members (\(members.count))")
-                                    .font(.system(size: 13, weight: .semibold))
-                                    .foregroundColor(theme.textSecondary)
-                                    .textCase(.uppercase)
-                                    .kerning(0.8)
-
-                                ForEach(members) { member in
-                                    HStack(spacing: 12) {
-                                        AvatarView(member: member, size: 40)
-                                        VStack(alignment: .leading, spacing: 2) {
-                                            Text(member.displayName ?? member.name)
-                                                .font(.system(size: 15, weight: .medium))
-                                                .foregroundColor(theme.textPrimary)
-                                            if let p = member.pronouns, !p.isEmpty {
-                                                Text(p).font(.system(size: 12)).foregroundColor(theme.textSecondary)
-                                            }
-                                        }
-                                        Spacer()
-                                        if store.frontingMembers.contains(where: { $0.id == member.id }) {
-                                            Circle().fill(theme.success).frame(width: 8, height: 8)
-                                        }
-                                    }
-                                    .padding(12)
-                                    .background(theme.backgroundCard)
-                                    .cornerRadius(12)
-                                }
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                                .foregroundColor(theme.textSecondary)
+                                .multilineTextAlignment(.center)
                         }
                     }
-                    .padding(.horizontal, 24)
-                    .padding(.bottom, 60)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+                    .listRowBackground(Color.clear)
+                }
+
+                // Members section
+                Section("Members (\(members.count))") {
+                    if members.isEmpty {
+                        Text("No members in this group")
+                            .font(.system(size: 14))
+                            .foregroundColor(theme.textTertiary)
+                            .listRowBackground(theme.backgroundCard)
+                    } else {
+                        ForEach(members) { member in
+                            HStack(spacing: 12) {
+                                AvatarView(member: member, size: 40)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(member.displayName ?? member.name)
+                                        .font(.system(size: 15, weight: .medium))
+                                        .foregroundColor(theme.textPrimary)
+                                    if let p = member.pronouns, !p.isEmpty {
+                                        Text(p).font(.system(size: 12)).foregroundColor(theme.textSecondary)
+                                    }
+                                }
+                                Spacer()
+                                if store.frontingMembers.contains(where: { $0.id == member.id }) {
+                                    Circle().fill(theme.success).frame(width: 8, height: 8)
+                                }
+                            }
+                            .listRowBackground(theme.backgroundCard)
+                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                Button(role: .destructive) {
+                                    Task { await removeFromGroup(member) }
+                                } label: {
+                                    Label("Remove", systemImage: "person.fill.xmark")
+                                }
+                            }
+                            .contextMenu {
+                                Button(role: .destructive) {
+                                    Task { await removeFromGroup(member) }
+                                } label: {
+                                    Label("Remove from Group", systemImage: "person.fill.xmark")
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .listStyle(.insetGrouped)
+            .scrollContentBackground(.hidden)
+            .background(theme.backgroundPrimary)
+            .navigationTitle(group.name)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Close") { dismiss() }
+                        .foregroundColor(theme.accentLight)
+                }
+                ToolbarItem(placement: .primaryAction) {
+                    Button("Edit") { showEdit = true }
+                        .foregroundColor(theme.accentLight)
+                        .fontWeight(.semibold)
                 }
             }
         }
@@ -245,6 +248,20 @@ struct GroupDetailSheet: View {
             if let fetched = try? await store.api?.getGroupMembers(groupID: group.id) {
                 members = fetched
             }
+        }
+    }
+
+    private func removeFromGroup(_ member: Member) async {
+        let newIDs = members
+            .filter { $0.id != member.id }
+            .map { $0.id }
+        do {
+            try await store.api?.setGroupMembers(groupID: group.id, memberIDs: newIDs)
+            await MainActor.run {
+                members.removeAll { $0.id == member.id }
+            }
+        } catch {
+            store.errorMessage = error.localizedDescription
         }
     }
 }
@@ -261,102 +278,94 @@ struct GroupEditSheet: View {
     @State private var colorHex = "#6366F1"
     @State private var selectedMemberIDs: Set<String> = []
     @State private var isSaving = false
+    @State private var isLoadingMembers = false
 
     var isNew: Bool { group == nil }
 
     var body: some View {
-        ZStack {
-            theme.backgroundPrimary.ignoresSafeArea()
+        NavigationStack {
+            Form {
+                Section("Details") {
+                    TextField("Group Name", text: $name)
+                        .foregroundColor(theme.textPrimary)
+                        .autocorrectionDisabled()
+                        .listRowBackground(theme.backgroundCard)
 
-            VStack(spacing: 0) {
-                Capsule().fill(theme.inputBorder).frame(width: 40, height: 4).padding(.top, 12)
+                    TextField("Description", text: $description)
+                        .foregroundColor(theme.textPrimary)
+                        .autocorrectionDisabled()
+                        .listRowBackground(theme.backgroundCard)
 
-                HStack {
-                    Button("Cancel") { dismiss() }.foregroundColor(theme.textSecondary)
-                    Spacer()
-                    Text(isNew ? "New Group" : "Edit Group")
-                        .font(.system(size: 17, weight: .semibold)).foregroundColor(theme.textPrimary)
-                    Spacer()
-                    Button(isSaving ? "" : "Save") { save() }
-                        .foregroundColor(theme.accentLight)
-                        .font(.system(size: 16, weight: .semibold))
-                        .overlay(isSaving ? AnyView(ProgressView().tint(theme.accentLight)) : AnyView(EmptyView()))
-                        .disabled(name.isEmpty || isSaving)
+                    HStack {
+                        Text("Color").foregroundColor(theme.textPrimary)
+                        Spacer()
+                        ColorPicker("", selection: Binding(
+                            get: { Color(hex: colorHex) ?? .indigo },
+                            set: { colorHex = $0.toHex() }
+                        )).labelsHidden()
+                    }
+                    .listRowBackground(theme.backgroundCard)
                 }
-                .padding(.horizontal, 24).padding(.top, 16).padding(.bottom, 8)
 
-                ScrollView {
-                    VStack(spacing: 16) {
-                        fieldView("Group Name *", value: $name, placeholder: "e.g. Inner Circle")
-                        fieldView("Description", value: $description, placeholder: "Optional description")
-
-                        // Color
+                Section {
+                    NavigationLink {
+                        GroupMemberPickerView(
+                            selectedMemberIDs: $selectedMemberIDs,
+                            members: store.members
+                        )
+                    } label: {
                         HStack {
-                            Text("Color").font(.system(size: 14, weight: .medium)).foregroundColor(theme.textSecondary)
-                            Spacer()
-                            ColorPicker("", selection: Binding(
-                                get: { Color(hex: colorHex) ?? .indigo },
-                                set: { colorHex = $0.toHex() }
-                            )).labelsHidden()
-                        }
-                        .padding(14).background(theme.backgroundCard).cornerRadius(12)
-
-                        // Members
-                        VStack(alignment: .leading, spacing: 10) {
                             Text("Members")
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundColor(theme.textSecondary)
-
-                            ForEach(store.members) { member in
-                                Button {
-                                    if selectedMemberIDs.contains(member.id) {
-                                        selectedMemberIDs.remove(member.id)
-                                    } else {
-                                        selectedMemberIDs.insert(member.id)
-                                    }
-                                } label: {
-                                    HStack(spacing: 12) {
-                                        AvatarView(member: member, size: 36)
-                                        Text(member.displayName ?? member.name)
-                                            .font(.system(size: 15))
-                                            .foregroundColor(theme.textPrimary)
-                                        Spacer()
-                                        Image(systemName: selectedMemberIDs.contains(member.id) ? "checkmark.circle.fill" : "circle")
-                                            .foregroundColor(selectedMemberIDs.contains(member.id) ? theme.accentLight : Color.white.opacity(0.3))
-                                            .font(.system(size: 20))
-                                    }
-                                    .padding(12)
-                                    .background(selectedMemberIDs.contains(member.id) ? theme.accentLight.opacity(0.08) : theme.backgroundCard)
-                                    .cornerRadius(12)
-                                }
-                                .buttonStyle(ScaleButtonStyle())
+                                .foregroundColor(theme.textPrimary)
+                            Spacer()
+                            if isLoadingMembers {
+                                ProgressView().tint(theme.accentLight)
+                            } else {
+                                Text("\(selectedMemberIDs.count) selected")
+                                    .foregroundColor(theme.textSecondary)
+                                    .font(.system(size: 14))
                             }
                         }
                     }
-                    .padding(.horizontal, 24)
-                    .padding(.top, 12)
-                    .padding(.bottom, 80)
+                    .listRowBackground(theme.backgroundCard)
+                }
+            }
+            .scrollContentBackground(.hidden)
+            .background(theme.backgroundPrimary)
+            .navigationTitle(isNew ? "New Group" : "Edit Group")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                        .foregroundColor(theme.accentLight)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(action: save) {
+                        if isSaving { ProgressView().tint(theme.accentLight) }
+                        else {
+                            Text("Save")
+                                .fontWeight(.semibold)
+                                .foregroundColor(name.isEmpty ? theme.textTertiary : theme.accentLight)
+                        }
+                    }
+                    .disabled(name.isEmpty || isSaving)
                 }
             }
         }
-        .onAppear { populateFields() }
+        .task { await populateFields() }
     }
 
-    func fieldView(_ label: String, value: Binding<String>, placeholder: String) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(label).font(.system(size: 13, weight: .semibold)).foregroundColor(theme.textSecondary)
-            TextField(placeholder, text: value)
-                .autocorrectionDisabled().autocapitalization(.none)
-                .padding(12).background(theme.backgroundCard).cornerRadius(12).foregroundColor(theme.textPrimary)
-        }
-    }
-
-    func populateFields() {
+    func populateFields() async {
         guard let g = group else { return }
-        name = g.name
+        name        = g.name
         description = g.description ?? ""
-        colorHex = g.color ?? "#6366F1"
-        // selectedMemberIDs loaded from API separately if needed
+        colorHex    = g.color ?? "#6366F1"
+        // Load existing members from API so selections are pre-filled
+        isLoadingMembers = true
+        if let fetched = try? await store.api?.getGroupMembers(groupID: g.id) {
+            selectedMemberIDs = Set(fetched.map { $0.id })
+        }
+        isLoadingMembers = false
     }
 
     func save() {
@@ -369,12 +378,76 @@ struct GroupEditSheet: View {
         )
         Task {
             await store.saveGroup(existing: group, create: create)
-            // Update group members separately after group is saved
-            if let savedGroup = store.groups.first(where: { $0.name == name }) {
+            if let savedGroup = store.groups.first(where: { $0.id == group?.id }) ?? store.groups.last {
                 await store.setGroupMembers(groupID: savedGroup.id, memberIDs: Array(selectedMemberIDs))
             }
             isSaving = false
             dismiss()
+        }
+    }
+}
+
+// MARK: - Group Member Picker
+struct GroupMemberPickerView: View {
+    @Environment(\.theme) var theme
+    @Binding var selectedMemberIDs: Set<String>
+    let members: [Member]
+
+    var body: some View {
+        List {
+            ForEach(members) { member in
+                Button {
+                    if selectedMemberIDs.contains(member.id) {
+                        selectedMemberIDs.remove(member.id)
+                    } else {
+                        selectedMemberIDs.insert(member.id)
+                    }
+                } label: {
+                    HStack(spacing: 12) {
+                        AvatarView(member: member, size: 36)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(member.displayName ?? member.name)
+                                .font(.system(size: 15, weight: .medium))
+                                .foregroundColor(theme.textPrimary)
+                            if let p = member.pronouns, !p.isEmpty {
+                                Text(p)
+                                    .font(.system(size: 12))
+                                    .foregroundColor(theme.textSecondary)
+                            }
+                        }
+                        Spacer()
+                        Image(systemName: selectedMemberIDs.contains(member.id)
+                              ? "checkmark.circle.fill" : "circle")
+                            .foregroundColor(selectedMemberIDs.contains(member.id)
+                                ? theme.accentLight : theme.textTertiary)
+                            .font(.system(size: 20))
+                    }
+                }
+                .buttonStyle(.plain)
+                .listRowBackground(theme.backgroundCard)
+            }
+        }
+        .scrollContentBackground(.hidden)
+        .background(theme.backgroundPrimary)
+        .navigationTitle("Members")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    selectedMemberIDs = Set(members.map { $0.id })
+                } label: {
+                    Text("All")
+                        .foregroundColor(theme.accentLight)
+                }
+            }
+            ToolbarItem(placement: .cancellationAction) {
+                Button {
+                    selectedMemberIDs = []
+                } label: {
+                    Text("None")
+                        .foregroundColor(theme.accentLight)
+                }
+            }
         }
     }
 }

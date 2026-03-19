@@ -17,9 +17,11 @@ struct HomeView: View {
                     // Header
                     HStack {
                         VStack(alignment: .leading, spacing: 4) {
-                            Text("Right Now")
-                                .font(.system(size: 28, weight: .bold, design: .rounded))
-                                .foregroundColor(theme.textPrimary)
+                            if let name = store.systemProfile?.name {
+                                Text("Welcome, \(name)!")
+                                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                                    .foregroundColor(theme.textPrimary)
+                            }
                             if let since = store.oldestCurrentFront?.startedAt {
                                 Text("Since \(since.formatted(date: .omitted, time: .shortened))")
                                     .font(.system(size: 13))
@@ -211,7 +213,7 @@ struct FrontingMemberCard: View {
             Button {
                 Task { await store.switchFronting(to: [member.id]) }
             } label: {
-                Label("Switch to only \(member.displayName ?? member.name)", systemImage: "arrow.left.arrow.right")
+                Label("Switch to Only \(member.displayName ?? member.name)", systemImage: "arrow.left.arrow.right")
             }
         }
     }
