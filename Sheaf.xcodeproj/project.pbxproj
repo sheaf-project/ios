@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		2A2028322F6BB3090084B22F /* SheafWatch Watch App.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 2A2028282F6BB3070084B22F /* SheafWatch Watch App.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		2A2028962F6C8D350084B22F /* .gitignore in Resources */ = {isa = PBXBuildFile; fileRef = 2A2028952F6C8D310084B22F /* .gitignore */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -37,6 +38,7 @@
 /* Begin PBXFileReference section */
 		2A2027972F6B92F10084B22F /* Sheaf.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Sheaf.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		2A2028282F6BB3070084B22F /* SheafWatch Watch App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "SheafWatch Watch App.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		2A2028952F6C8D310084B22F /* .gitignore */ = {isa = PBXFileReference; lastKnownFileType = text; path = .gitignore; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -98,6 +100,7 @@
 				2A2027992F6B92F10084B22F /* Sheaf */,
 				2A2028292F6BB3070084B22F /* WatchKitApp */,
 				2A2027982F6B92F10084B22F /* Products */,
+				2A2028952F6C8D310084B22F /* .gitignore */,
 			);
 			sourceTree = "<group>";
 		};
@@ -203,6 +206,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				2A2028962F6C8D350084B22F /* .gitignore in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
