@@ -515,10 +515,14 @@ struct TOTPSetupSheet: View {
             }
             .frame(maxWidth: .infinity)
             .padding(16)
-            .background(disabled
-                ? Color.white.opacity(0.1)
-                : LinearGradient(colors: [Color(hex: "#A78BFA")!, Color(hex: "#6366F1")!],
-                                 startPoint: .leading, endPoint: .trailing))
+            .background(Group {
+                if disabled {
+                    Color.white.opacity(0.1)
+                } else {
+                    LinearGradient(colors: [Color(hex: "#A78BFA")!, Color(hex: "#6366F1")!],
+                                   startPoint: .leading, endPoint: .trailing)
+                }
+            })
             .cornerRadius(14)
         }
         .disabled(disabled)
