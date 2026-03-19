@@ -2,24 +2,13 @@ import SwiftUI
 
 struct LoginView: View {
     @EnvironmentObject var authManager: AuthManager
-    @State private var baseURL  = ""
-    @State private var email    = ""
-    @State private var password = ""
-    @State private var error    = ""
-    @State private var isLoading = false
-    @FocusState private var focusedField: Field?
-
-    enum Field { case url, email, password }
+    @Environment(\.theme) var theme
+    @State private var isRegistering = false
 
     var body: some View {
         ZStack {
-            LinearGradient(
-                colors: [Color(hex: "#0F0C29") ?? .black,
-                         Color(hex: "#302B63") ?? .indigo,
-                         Color(hex: "#24243E") ?? .black],
-                startPoint: .topLeading, endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
+            theme.loginGradient
+                .ignoresSafeArea()
 
             ScrollView {
                 VStack(spacing: 0) {
@@ -30,154 +19,106 @@ struct LoginView: View {
                         ZStack {
                             Circle()
                                 .fill(LinearGradient(
-                                    colors: [Color(hex: "#A78BFA") ?? .purple, Color(hex: "#6366F1") ?? .indigo],
+                                    colors: [theme.accentLight, theme.accent],
                                     startPoint: .topLeading, endPoint: .bottomTrailing))
                                 .frame(width: 80, height: 80)
                             Text("✦")
                                 .font(.system(size: 36))
                                 .foregroundColor(.white)
                         }
-                        .shadow(color: Color(hex: "#A78BFA")!.opacity(0.6), radius: 20)
+                        .shadow(color: theme.accentLight.opacity(0.6), radius: 20)
 
                         Text("Sheaf")
                             .font(.system(size: 34, weight: .bold, design: .rounded))
-                            .foregroundColor(.white)
+                            .foregroundColor(theme.textPrimary)
 
-                        Text("Sign in to your system")
+                        Text(isRegistering ? "Create your account" : "Sign in to your system")
                             .font(.system(size: 15, weight: .medium))
-                            .foregroundColor(.white.opacity(0.55))
+                            .foregroundColor(theme.textSecondary)
+                            .animation(.default, value: isRegistering)
                     }
 
                     Spacer().frame(height: 48)
 
-                    // Form card
-                    VStack(spacing: 20) {
-                        formField(icon: "link", label: "API Base URL",
-                                  placeholder: "https://your-api.example.com",
-                                  value: $baseURL, field: .url, keyboard: .URL)
-
-                        formField(icon: "envelope.fill", label: "Email",
-                                  placeholder: "you@example.com",
-                                  value: $email, field: .email, keyboard: .emailAddress)
-
-                        secureField(icon: "lock.fill", label: "Password",
-                                    placeholder: "••••••••", value: $password)
-
-                        if !error.isEmpty {
-                            HStack(spacing: 8) {
-                                Image(systemName: "exclamationmark.triangle.fill")
-                                    .foregroundColor(Color(hex: "#F87171")!)
-                                Text(error)
-                                    .font(.system(size: 13))
-                                    .foregroundColor(Color(hex: "#F87171")!)
-                            }
-                            .padding(.horizontal, 4)
-                        }
-
-                        Button { connect() } label: {
-                            HStack {
-                                if isLoading { ProgressView().tint(.white) }
-                                else {
-                                    Text("Sign In")
-                                        .font(.system(size: 17, weight: .semibold))
-                                    Image(systemName: "arrow.right")
-                                }
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding(16)
-                            .background(
-                                LinearGradient(
-                                    colors: [Color(hex: "#A78BFA") ?? .purple, Color(hex: "#6366F1") ?? .indigo],
-                                    startPoint: .leading, endPoint: .trailing)
-                            )
-                            .cornerRadius(14)
-                            .shadow(color: Color(hex: "#A78BFA")!.opacity(0.4), radius: 12, y: 4)
-                        }
-                        .disabled(baseURL.isEmpty || email.isEmpty || password.isEmpty || isLoading)
-                        .opacity((baseURL.isEmpty || email.isEmpty || password.isEmpty) ? 0.5 : 1)
+                    // Form card — swaps between sign in and register
+                    if isRegistering {
+                        RegisterForm(onSwitch: { isRegistering = false })
+                    } else {
+                        SignInForm(onSwitch: { isRegistering = true })
                     }
-                    .padding(24)
-                    .background(Color.white.opacity(0.05))
-                    .cornerRadius(24)
-                    .overlay(RoundedRectangle(cornerRadius: 24).stroke(Color.white.opacity(0.1), lineWidth: 1))
-                    .padding(.horizontal, 24)
 
                     Spacer().frame(height: 60)
                 }
             }
         }
     }
+}
 
-    private func formField(icon: String, label: String, placeholder: String,
-                           value: Binding<String>, field: Field, keyboard: UIKeyboardType) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label(label, systemImage: icon)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(.white.opacity(0.7))
-            TextField(placeholder, text: value)
-                .focused($focusedField, equals: field)
-                .keyboardType(keyboard)
-                .autocapitalization(.none)
-                .autocorrectionDisabled()
-                .padding(14)
-                .background(Color.white.opacity(0.08))
-                .cornerRadius(12)
-                .overlay(RoundedRectangle(cornerRadius: 12)
-                    .stroke(focusedField == field ? Color(hex: "#A78BFA")! : Color.white.opacity(0.15), lineWidth: 1.5))
-                .foregroundColor(.white)
+// MARK: - Sign In Form
+struct SignInForm: View {
+    @EnvironmentObject var authManager: AuthManager
+    @Environment(\.theme) var theme
+    let onSwitch: () -> Void
+
+    @State private var baseURL  = ""
+    @State private var email    = ""
+    @State private var password = ""
+    @State private var error    = ""
+    @State private var isLoading = false
+    @FocusState private var focused: Field?
+    enum Field { case url, email, password }
+
+    var body: some View {
+        VStack(spacing: 20) {
+            formField(icon: "link",         label: "API Base URL",  placeholder: "https://your-api.example.com", value: $baseURL,   field: .url,      keyboard: .URL)
+            formField(icon: "envelope.fill", label: "Email",         placeholder: "you@example.com",              value: $email,    field: .email,    keyboard: .emailAddress)
+            secureField(                     label: "Password",       placeholder: "••••••••",                     value: $password)
+
+            if !error.isEmpty { errorLabel(error) }
+
+            // Sign In button
+            Button { signIn() } label: {
+                buttonContent(label: "Sign In", icon: "arrow.right", loading: isLoading)
+            }
+            .disabled(baseURL.isEmpty || email.isEmpty || password.isEmpty || isLoading)
+            .opacity(baseURL.isEmpty || email.isEmpty || password.isEmpty ? 0.5 : 1)
+
+            // Switch to register
+            Button(action: onSwitch) {
+                HStack(spacing: 4) {
+                    Text("Don't have an account?")
+                        .foregroundColor(theme.textSecondary)
+                    Text("Register")
+                        .foregroundColor(theme.accentLight)
+                        .fontWeight(.semibold)
+                }
+                .font(.system(size: 14))
+            }
         }
+        .padding(24)
+        .background(theme.backgroundCard)
+        .cornerRadius(24)
+        .overlay(RoundedRectangle(cornerRadius: 24).stroke(theme.border, lineWidth: 1))
+        .padding(.horizontal, 24)
     }
 
-    private func secureField(icon: String, label: String, placeholder: String, value: Binding<String>) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label(label, systemImage: icon)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(.white.opacity(0.7))
-            SecureField(placeholder, text: value)
-                .focused($focusedField, equals: .password)
-                .autocapitalization(.none)
-                .autocorrectionDisabled()
-                .padding(14)
-                .background(Color.white.opacity(0.08))
-                .cornerRadius(12)
-                .overlay(RoundedRectangle(cornerRadius: 12)
-                    .stroke(focusedField == .password ? Color(hex: "#A78BFA")! : Color.white.opacity(0.15), lineWidth: 1.5))
-                .foregroundColor(.white)
-        }
-    }
-
-    private func connect() {
-        guard !baseURL.isEmpty, !email.isEmpty, !password.isEmpty else { return }
+    private func signIn() {
         error = ""
-
         var cleanURL = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
         if cleanURL.hasSuffix("/") { cleanURL = String(cleanURL.dropLast()) }
-
-        guard cleanURL.lowercased().hasPrefix("http") else {
-            error = "URL must start with http:// or https://"
-            return
-        }
-        guard URL(string: cleanURL + "/v1/auth/login") != nil else {
-            error = "Invalid URL — check for spaces or special characters"
-            return
-        }
-
+        guard cleanURL.lowercased().hasPrefix("http") else { error = "URL must start with http:// or https://"; return }
+        guard URL(string: cleanURL + "/v1/auth/login") != nil else { error = "Invalid URL"; return }
         isLoading = true
-
-        // Use a temporary AuthManager so we never flip isAuthenticated until login succeeds
         let tempAuth = AuthManager()
         tempAuth.baseURL = cleanURL
         let api = APIClient(auth: tempAuth)
-
         Task {
             do {
                 let tokens = try await api.login(email: email, password: password)
-                // Briefly apply token so we can call /auth/me to check TOTP status
                 tempAuth.accessToken = tokens.accessToken
                 let me = try await api.getMe()
                 await MainActor.run {
                     if me.totpEnabled {
-                        // Park credentials — show TOTP screen before finalising
                         authManager.awaitTOTP(baseURL: cleanURL, tokens: tokens)
                     } else {
                         authManager.save(baseURL: cleanURL, tokens: tokens)
@@ -185,11 +126,266 @@ struct LoginView: View {
                     isLoading = false
                 }
             } catch {
+                await MainActor.run { self.error = error.localizedDescription; isLoading = false }
+            }
+        }
+    }
+
+    // MARK: Shared helpers
+    func formField(icon: String, label: String, placeholder: String,
+                   value: Binding<String>, field: Field, keyboard: UIKeyboardType) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label(label, systemImage: icon)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(theme.textSecondary)
+            TextField(placeholder, text: value)
+                .focused($focused, equals: field)
+                .keyboardType(keyboard)
+                .autocapitalization(.none)
+                .autocorrectionDisabled()
+                .padding(14)
+                .background(theme.inputBackground)
+                .cornerRadius(12)
+                .overlay(RoundedRectangle(cornerRadius: 12)
+                    .stroke(focused == field ? theme.accentLight : theme.inputBorder, lineWidth: 1.5))
+                .foregroundColor(theme.textPrimary)
+        }
+    }
+
+    func secureField(label: String, placeholder: String, value: Binding<String>) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label(label, systemImage: "lock.fill")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(theme.textSecondary)
+            SecureField(placeholder, text: value)
+                .focused($focused, equals: .password)
+                .autocapitalization(.none)
+                .autocorrectionDisabled()
+                .padding(14)
+                .background(theme.inputBackground)
+                .cornerRadius(12)
+                .overlay(RoundedRectangle(cornerRadius: 12)
+                    .stroke(focused == .password ? theme.accentLight : theme.inputBorder, lineWidth: 1.5))
+                .foregroundColor(theme.textPrimary)
+        }
+    }
+
+    func errorLabel(_ msg: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill").foregroundColor(theme.danger)
+            Text(msg).font(.system(size: 13)).foregroundColor(theme.danger)
+        }
+        .padding(.horizontal, 4)
+    }
+
+    func buttonContent(label: String, icon: String, loading: Bool) -> some View {
+        HStack {
+            if loading { ProgressView().tint(.white) }
+            else {
+                Text(label).font(.system(size: 17, weight: .semibold))
+                Image(systemName: icon)
+            }
+        }
+        .foregroundColor(.white)
+        .frame(maxWidth: .infinity)
+        .padding(16)
+        .background(LinearGradient(colors: [theme.accentLight, theme.accent],
+                                   startPoint: .leading, endPoint: .trailing))
+        .cornerRadius(14)
+        .shadow(color: theme.accentLight.opacity(0.4), radius: 12, y: 4)
+    }
+}
+
+// MARK: - Register Form
+struct RegisterForm: View {
+    @EnvironmentObject var authManager: AuthManager
+    @Environment(\.theme) var theme
+    let onSwitch: () -> Void
+
+    @State private var baseURL          = ""
+    @State private var email            = ""
+    @State private var password         = ""
+    @State private var confirmPassword  = ""
+    @State private var error            = ""
+    @State private var isLoading        = false
+    @FocusState private var focused: Field?
+    enum Field { case url, email, password, confirm }
+
+    var body: some View {
+        VStack(spacing: 20) {
+            formField(icon: "link",          label: "API Base URL",      placeholder: "https://your-api.example.com", value: $baseURL,         field: .url,     keyboard: .URL)
+            formField(icon: "envelope.fill", label: "Email",              placeholder: "you@example.com",              value: $email,           field: .email,   keyboard: .emailAddress)
+            secureField(                     label: "Password",            placeholder: "At least 8 characters",        value: $password,        field: .password)
+            secureField(                     label: "Confirm Password",    placeholder: "••••••••",                     value: $confirmPassword, field: .confirm)
+
+            // Password strength indicator
+            if !password.isEmpty {
+                PasswordStrengthBar(password: password)
+            }
+
+            if !error.isEmpty { errorLabel(error) }
+
+            // Register button
+            Button { register() } label: {
+                buttonContent(label: "Create Account", icon: "person.badge.plus", loading: isLoading)
+            }
+            .disabled(baseURL.isEmpty || email.isEmpty || password.isEmpty || confirmPassword.isEmpty || isLoading)
+            .opacity(baseURL.isEmpty || email.isEmpty || password.isEmpty || confirmPassword.isEmpty ? 0.5 : 1)
+
+            // Switch to sign in
+            Button(action: onSwitch) {
+                HStack(spacing: 4) {
+                    Text("Already have an account?")
+                        .foregroundColor(theme.textSecondary)
+                    Text("Sign In")
+                        .foregroundColor(theme.accentLight)
+                        .fontWeight(.semibold)
+                }
+                .font(.system(size: 14))
+            }
+        }
+        .padding(24)
+        .background(theme.backgroundCard)
+        .cornerRadius(24)
+        .overlay(RoundedRectangle(cornerRadius: 24).stroke(theme.border, lineWidth: 1))
+        .padding(.horizontal, 24)
+    }
+
+    private func register() {
+        error = ""
+        guard password == confirmPassword else { error = "Passwords don't match"; return }
+        guard password.count >= 8 else { error = "Password must be at least 8 characters"; return }
+        var cleanURL = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        if cleanURL.hasSuffix("/") { cleanURL = String(cleanURL.dropLast()) }
+        guard cleanURL.lowercased().hasPrefix("http") else { error = "URL must start with http:// or https://"; return }
+        guard URL(string: cleanURL + "/v1/auth/register") != nil else { error = "Invalid URL"; return }
+        isLoading = true
+        let tempAuth = AuthManager()
+        tempAuth.baseURL = cleanURL
+        let api = APIClient(auth: tempAuth)
+        Task {
+            do {
+                let tokens = try await api.register(email: email, password: password)
                 await MainActor.run {
-                    self.error = error.localizedDescription
+                    authManager.save(baseURL: cleanURL, tokens: tokens)
                     isLoading = false
                 }
+            } catch {
+                await MainActor.run { self.error = error.localizedDescription; isLoading = false }
             }
+        }
+    }
+
+    func formField(icon: String, label: String, placeholder: String,
+                   value: Binding<String>, field: Field, keyboard: UIKeyboardType) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label(label, systemImage: icon)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(theme.textSecondary)
+            TextField(placeholder, text: value)
+                .focused($focused, equals: field)
+                .keyboardType(keyboard)
+                .autocapitalization(.none)
+                .autocorrectionDisabled()
+                .padding(14)
+                .background(theme.inputBackground)
+                .cornerRadius(12)
+                .overlay(RoundedRectangle(cornerRadius: 12)
+                    .stroke(focused == field ? theme.accentLight : theme.inputBorder, lineWidth: 1.5))
+                .foregroundColor(theme.textPrimary)
+        }
+    }
+
+    func secureField(label: String, placeholder: String, value: Binding<String>, field: Field) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label(label, systemImage: "lock.fill")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(theme.textSecondary)
+            SecureField(placeholder, text: value)
+                .focused($focused, equals: field)
+                .autocapitalization(.none)
+                .autocorrectionDisabled()
+                .padding(14)
+                .background(theme.inputBackground)
+                .cornerRadius(12)
+                .overlay(RoundedRectangle(cornerRadius: 12)
+                    .stroke(focused == field ? theme.accentLight : theme.inputBorder, lineWidth: 1.5))
+                .foregroundColor(theme.textPrimary)
+        }
+    }
+
+    func errorLabel(_ msg: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill").foregroundColor(theme.danger)
+            Text(msg).font(.system(size: 13)).foregroundColor(theme.danger)
+        }
+        .padding(.horizontal, 4)
+    }
+
+    func buttonContent(label: String, icon: String, loading: Bool) -> some View {
+        HStack {
+            if loading { ProgressView().tint(.white) }
+            else {
+                Text(label).font(.system(size: 17, weight: .semibold))
+                Image(systemName: icon)
+            }
+        }
+        .foregroundColor(.white)
+        .frame(maxWidth: .infinity)
+        .padding(16)
+        .background(LinearGradient(colors: [theme.accentLight, theme.accent],
+                                   startPoint: .leading, endPoint: .trailing))
+        .cornerRadius(14)
+        .shadow(color: theme.accentLight.opacity(0.4), radius: 12, y: 4)
+    }
+}
+
+// MARK: - Password Strength Bar
+struct PasswordStrengthBar: View {
+    @Environment(\.theme) var theme
+    let password: String
+
+    private var strength: Int {
+        var score = 0
+        if password.count >= 8  { score += 1 }
+        if password.count >= 12 { score += 1 }
+        if password.range(of: "[A-Z]", options: .regularExpression) != nil { score += 1 }
+        if password.range(of: "[0-9]", options: .regularExpression) != nil { score += 1 }
+        if password.range(of: "[^A-Za-z0-9]", options: .regularExpression) != nil { score += 1 }
+        return score
+    }
+
+    private var label: String {
+        switch strength {
+        case 0, 1: return "Weak"
+        case 2, 3: return "Fair"
+        case 4:    return "Good"
+        default:   return "Strong"
+        }
+    }
+
+    private var color: Color {
+        switch strength {
+        case 0, 1: return theme.danger
+        case 2, 3: return theme.warning
+        case 4:    return theme.accentLight
+        default:   return theme.success
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 4) {
+                ForEach(0..<5, id: \.self) { i in
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(i < strength ? color : theme.backgroundElevated)
+                        .frame(height: 4)
+                        .animation(.spring(response: 0.3), value: strength)
+                }
+            }
+            Text(label)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(color)
         }
     }
 }

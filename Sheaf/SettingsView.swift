@@ -6,22 +6,26 @@ import CoreImage.CIFilterBuiltins
 struct SettingsView: View {
     @EnvironmentObject var authManager: AuthManager
     @EnvironmentObject var store: SystemStore
+    @EnvironmentObject var themeManager: ThemeManager
+    @Environment(\.theme) var theme
     @State private var showLogoutConfirm = false
+    @State private var showImport = false
     @State private var showEditConnection = false
     @State private var showTOTPSetup = false
+    @State private var showSPImport = false
     @State private var newBaseURL = ""
     @State private var newToken = ""
     @State private var me: UserRead?
 
     var body: some View {
         ZStack {
-            Color(hex: "#0F0C29")!.ignoresSafeArea()
+            theme.backgroundPrimary.ignoresSafeArea()
 
             ScrollView {
                 VStack(spacing: 24) {
                     Text("Settings")
                         .font(.system(size: 28, weight: .bold, design: .rounded))
-                        .foregroundColor(.white)
+                        .foregroundColor(theme.textPrimary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 24)
                         .padding(.top, 16)
@@ -30,22 +34,50 @@ struct SettingsView: View {
                     settingsSection(title: "Connection") {
                         VStack(spacing: 0) {
                             infoRow(icon: "link", label: "API URL", value: authManager.baseURL)
-                            Divider().background(Color.white.opacity(0.06))
+                            Divider().background(theme.backgroundCard)
                             infoRow(icon: "key.fill", label: "Token", value: maskedToken)
-                            Divider().background(Color.white.opacity(0.06))
+                            Divider().background(theme.backgroundCard)
                             Button {
                                 newBaseURL = authManager.baseURL
                                 newToken   = authManager.accessToken
                                 showEditConnection = true
                             } label: {
                                 HStack {
-                                    Image(systemName: "pencil").foregroundColor(Color(hex: "#A78BFA")!)
+                                    Image(systemName: "pencil").foregroundColor(theme.accentLight)
                                     Text("Edit Connection")
                                         .font(.system(size: 15, weight: .medium))
-                                        .foregroundColor(Color(hex: "#A78BFA")!)
+                                        .foregroundColor(theme.accentLight)
                                     Spacer()
                                 }
                                 .padding(.horizontal, 16).padding(.vertical, 14)
+                            }
+                        }
+                    }
+
+                    // Appearance
+                    settingsSection(title: "Appearance") {
+                        VStack(spacing: 0) {
+                            ForEach(ThemeMode.allCases, id: \.self) { mode in
+                                Button { themeManager.mode = mode } label: {
+                                    HStack(spacing: 12) {
+                                        Image(systemName: mode.icon)
+                                            .foregroundColor(themeManager.mode == mode ? theme.accentLight : theme.textTertiary)
+                                            .frame(width: 20)
+                                        Text(mode.label)
+                                            .font(.system(size: 15))
+                                            .foregroundColor(theme.textPrimary)
+                                        Spacer()
+                                        if themeManager.mode == mode {
+                                            Image(systemName: "checkmark")
+                                                .font(.system(size: 13, weight: .semibold))
+                                                .foregroundColor(theme.accentLight)
+                                        }
+                                    }
+                                    .padding(.horizontal, 16).padding(.vertical, 14)
+                                }
+                                if mode != ThemeMode.allCases.last {
+                                    Divider().background(theme.divider).padding(.leading, 52)
+                                }
                             }
                         }
                     }
@@ -57,44 +89,63 @@ struct SettingsView: View {
                             HStack(spacing: 12) {
                                 Image(systemName: "lock.shield.fill")
                                     .foregroundColor(me?.totpEnabled == true
-                                        ? Color(hex: "#4ADE80")!
+                                        ? theme.success
                                         : Color.white.opacity(0.4))
                                     .frame(width: 20)
                                 Text("Two-Factor Auth")
                                     .font(.system(size: 15))
-                                    .foregroundColor(.white.opacity(0.7))
+                                    .foregroundColor(theme.textSecondary)
                                 Spacer()
                                 if let me {
                                     Text(me.totpEnabled ? "Enabled" : "Disabled")
                                         .font(.system(size: 13, weight: .medium))
                                         .foregroundColor(me.totpEnabled
-                                            ? Color(hex: "#4ADE80")!
+                                            ? theme.success
                                             : Color.white.opacity(0.3))
                                 } else {
-                                    ProgressView().tint(Color(hex: "#A78BFA")!).scaleEffect(0.7)
+                                    ProgressView().tint(theme.accentLight).scaleEffect(0.7)
                                 }
                             }
                             .padding(.horizontal, 16).padding(.vertical, 14)
 
-                            Divider().background(Color.white.opacity(0.06))
+                            Divider().background(theme.backgroundCard)
 
                             // Setup / manage button
                             Button { showTOTPSetup = true } label: {
                                 HStack {
                                     Image(systemName: me?.totpEnabled == true
                                           ? "gearshape.fill" : "plus.circle.fill")
-                                        .foregroundColor(Color(hex: "#A78BFA")!)
+                                        .foregroundColor(theme.accentLight)
                                     Text(me?.totpEnabled == true
                                          ? "Manage Two-Factor Auth" : "Set Up Two-Factor Auth")
                                         .font(.system(size: 15, weight: .medium))
-                                        .foregroundColor(Color(hex: "#A78BFA")!)
+                                        .foregroundColor(theme.accentLight)
                                     Spacer()
                                     Image(systemName: "chevron.right")
                                         .font(.system(size: 12))
-                                        .foregroundColor(.white.opacity(0.2))
+                                        .foregroundColor(theme.textTertiary)
                                 }
                                 .padding(.horizontal, 16).padding(.vertical, 14)
                             }
+                        }
+                    }
+
+                    // Import
+                    settingsSection(title: "Import") {
+                        Button { showImport = true } label: {
+                            HStack {
+                                Image(systemName: "square.and.arrow.down.fill")
+                                    .foregroundColor(theme.accentLight)
+                                    .frame(width: 20)
+                                Text("Import from Simply Plural")
+                                    .font(.system(size: 15, weight: .medium))
+                                    .foregroundColor(theme.textPrimary)
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(theme.textTertiary)
+                            }
+                            .padding(.horizontal, 16).padding(.vertical, 14)
                         }
                     }
 
@@ -102,11 +153,11 @@ struct SettingsView: View {
                     settingsSection(title: "Data") {
                         Button { store.loadAll() } label: {
                             HStack {
-                                Image(systemName: "arrow.clockwise").foregroundColor(Color(hex: "#6366F1")!)
+                                Image(systemName: "arrow.clockwise").foregroundColor(theme.accent)
                                 Text("Refresh All Data")
-                                    .font(.system(size: 15, weight: .medium)).foregroundColor(.white)
+                                    .font(.system(size: 15, weight: .medium)).foregroundColor(theme.textPrimary)
                                 Spacer()
-                                if store.isLoading { ProgressView().tint(Color(hex: "#A78BFA")!) }
+                                if store.isLoading { ProgressView().tint(theme.accentLight) }
                             }
                             .padding(.horizontal, 16).padding(.vertical, 14)
                         }
@@ -116,10 +167,28 @@ struct SettingsView: View {
                     settingsSection(title: "System Info") {
                         VStack(spacing: 0) {
                             statRow(label: "Members",          value: "\(store.members.count)")
-                            Divider().background(Color.white.opacity(0.06))
+                            Divider().background(theme.backgroundCard)
                             statRow(label: "Groups",           value: "\(store.groups.count)")
-                            Divider().background(Color.white.opacity(0.06))
+                            Divider().background(theme.backgroundCard)
                             statRow(label: "Currently Fronting", value: "\(store.frontingMembers.count)")
+                        }
+                    }
+
+                    // Import
+                    settingsSection(title: "Import") {
+                        Button { showSPImport = true } label: {
+                            HStack {
+                                Image(systemName: "arrow.down.circle.fill")
+                                    .foregroundColor(theme.accentLight)
+                                Text("Import from Simply Plural")
+                                    .font(.system(size: 15, weight: .medium))
+                                    .foregroundColor(theme.textPrimary)
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(theme.textTertiary)
+                            }
+                            .padding(.horizontal, 16).padding(.vertical, 14)
                         }
                     }
 
@@ -128,10 +197,10 @@ struct SettingsView: View {
                         Button { showLogoutConfirm = true } label: {
                             HStack {
                                 Image(systemName: "rectangle.portrait.and.arrow.right")
-                                    .foregroundColor(Color(hex: "#F87171")!)
+                                    .foregroundColor(theme.danger)
                                 Text("Disconnect & Log Out")
                                     .font(.system(size: 15, weight: .medium))
-                                    .foregroundColor(Color(hex: "#F87171")!)
+                                    .foregroundColor(theme.danger)
                                 Spacer()
                             }
                             .padding(.horizontal, 16).padding(.vertical, 14)
@@ -139,8 +208,8 @@ struct SettingsView: View {
                     }
 
                     VStack(spacing: 4) {
-                        Text("Sheaf").font(.system(size: 13, weight: .semibold)).foregroundColor(.white.opacity(0.3))
-                        Text("v1.0.0").font(.system(size: 12)).foregroundColor(.white.opacity(0.2))
+                        Text("Sheaf").font(.system(size: 13, weight: .semibold)).foregroundColor(theme.textTertiary)
+                        Text("v1.0.0").font(.system(size: 12)).foregroundColor(theme.textTertiary)
                     }
                     .padding(.bottom, 80)
                 }
@@ -152,6 +221,10 @@ struct SettingsView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("You'll need to enter your API URL and email again.")
+        }
+        .sheet(isPresented: $showImport) {
+            SimplyPluralImportSheet()
+                .environmentObject(store)
         }
         .sheet(isPresented: $showEditConnection) {
             EditConnectionSheet(baseURL: $newBaseURL, token: $newToken) {
@@ -166,6 +239,10 @@ struct SettingsView: View {
             TOTPSetupSheet()
                 .environmentObject(authManager)
         }
+        .sheet(isPresented: $showSPImport) {
+            SimplyPluralImportSheet()
+                .environmentObject(store)
+        }
     }
 
     private func loadMe() async {
@@ -179,29 +256,30 @@ struct SettingsView: View {
         return String(t.prefix(6)) + "••••••••" + String(t.suffix(4))
     }
 
+
     func settingsSection<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(title)
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(.white.opacity(0.45))
+                .foregroundColor(theme.textSecondary)
                 .textCase(.uppercase)
                 .kerning(0.8)
                 .padding(.horizontal, 24)
             VStack(spacing: 0) { content() }
-                .background(Color.white.opacity(0.05))
+                .background(theme.backgroundCard)
                 .cornerRadius(16)
-                .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.white.opacity(0.07), lineWidth: 1))
+                .overlay(RoundedRectangle(cornerRadius: 16).stroke(theme.backgroundCard, lineWidth: 1))
                 .padding(.horizontal, 24)
         }
     }
 
     func infoRow(icon: String, label: String, value: String) -> some View {
         HStack(spacing: 12) {
-            Image(systemName: icon).foregroundColor(.white.opacity(0.4)).frame(width: 20)
-            Text(label).font(.system(size: 15)).foregroundColor(.white.opacity(0.7))
+            Image(systemName: icon).foregroundColor(theme.textTertiary).frame(width: 20)
+            Text(label).font(.system(size: 15)).foregroundColor(theme.textSecondary)
             Spacer()
             Text(value)
-                .font(.system(size: 13)).foregroundColor(.white.opacity(0.35))
+                .font(.system(size: 13)).foregroundColor(theme.textTertiary)
                 .lineLimit(1).truncationMode(.middle).frame(maxWidth: 160, alignment: .trailing)
         }
         .padding(.horizontal, 16).padding(.vertical, 14)
@@ -209,9 +287,9 @@ struct SettingsView: View {
 
     func statRow(label: String, value: String) -> some View {
         HStack {
-            Text(label).font(.system(size: 15)).foregroundColor(.white.opacity(0.7))
+            Text(label).font(.system(size: 15)).foregroundColor(theme.textSecondary)
             Spacer()
-            Text(value).font(.system(size: 15, weight: .semibold)).foregroundColor(Color(hex: "#A78BFA")!)
+            Text(value).font(.system(size: 15, weight: .semibold)).foregroundColor(theme.accentLight)
         }
         .padding(.horizontal, 16).padding(.vertical, 14)
     }
@@ -219,6 +297,7 @@ struct SettingsView: View {
 
 // MARK: - TOTP Setup Sheet
 struct TOTPSetupSheet: View {
+    @Environment(\.theme) var theme
     @EnvironmentObject var authManager: AuthManager
     @Environment(\.dismiss) var dismiss
 
@@ -236,49 +315,35 @@ struct TOTPSetupSheet: View {
     private var code: String { digits.joined() }
 
     var body: some View {
-        ZStack {
-            Color(hex: "#0F0C29")!.ignoresSafeArea()
-
-            VStack(spacing: 0) {
-                // Handle + header
-                Capsule().fill(Color.white.opacity(0.2)).frame(width: 40, height: 4).padding(.top, 12)
-
-                HStack {
-                    Button(step == .done ? "" : "Cancel") {
-                        if step != .done { dismiss() }
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 0) {
+                    switch step {
+                    case .loading:       loadingStep
+                    case .scan:          scanStep
+                    case .verify:        verifyStep
+                    case .recoveryCodes: recoveryCodesStep
+                    case .done:          doneStep
                     }
-                    .foregroundColor(.white.opacity(0.5))
-                    .opacity(step == .done ? 0 : 1)
-
-                    Spacer()
-
-                    Text(headerTitle)
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundColor(.white)
-
-                    Spacer()
-
-                    // Balance
-                    Color.clear.frame(width: 50)
                 }
-                .padding(.horizontal, 24).padding(.top, 16).padding(.bottom, 8)
-
-                // Step content
-                ScrollView {
-                    VStack(spacing: 0) {
-                        switch step {
-                        case .loading:       loadingStep
-                        case .scan:          scanStep
-                        case .verify:        verifyStep
-                        case .recoveryCodes: recoveryCodesStep
-                        case .done:          doneStep
-                        }
+                .padding(.horizontal, 24)
+                .padding(.top, 8)
+                .padding(.bottom, 40)
+                .frame(maxWidth: .infinity, alignment: .top)
+            }
+            .background(theme.backgroundPrimary)
+            .navigationTitle(headerTitle)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                if step != .done {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") { dismiss() }
+                            .foregroundColor(theme.accentLight)
                     }
-                    .padding(.horizontal, 24)
-                    .padding(.bottom, 60)
                 }
             }
         }
+        .presentationDetents([.large])
         .task { await beginSetup() }
     }
 
@@ -286,48 +351,47 @@ struct TOTPSetupSheet: View {
 
     var loadingStep: some View {
         VStack(spacing: 16) {
-            Spacer().frame(height: 80)
-            ProgressView().tint(Color(hex: "#A78BFA")!).scaleEffect(1.4)
+            Spacer().frame(height: 40)
+            ProgressView().tint(theme.accentLight).scaleEffect(1.4)
             Text("Generating your secret…")
-                .font(.system(size: 15)).foregroundColor(.white.opacity(0.5))
+                .font(.system(size: 15)).foregroundColor(theme.textSecondary)
         }
     }
 
     var scanStep: some View {
-        VStack(spacing: 24) {
-            Spacer().frame(height: 8)
-
-            Text("Scan this QR code with your authenticator app (e.g. Aegis, 1Password, Google Authenticator).")
-                .font(.system(size: 14))
-                .foregroundColor(.white.opacity(0.6))
+        VStack(spacing: 16) {
+            Text("Scan with your authenticator app (Aegis, 1Password, Google Authenticator).")
+                .font(.system(size: 13))
+                .foregroundColor(theme.textSecondary)
                 .multilineTextAlignment(.center)
 
-            // QR code
+            // QR code + secret side by side on wider screens, stacked on narrow
             if let uri = setupResponse?.provisioningUri,
                let qr = generateQR(from: uri) {
                 Image(uiImage: qr)
                     .interpolation(.none)
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 200, height: 200)
-                    .padding(16)
+                    .frame(width: 160, height: 160)
+                    .padding(12)
                     .background(Color.white)
-                    .cornerRadius(16)
+                    .cornerRadius(14)
             }
 
             // Manual entry secret
             if let secret = setupResponse?.secret {
-                VStack(spacing: 8) {
+                VStack(spacing: 6) {
                     Text("Or enter manually")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(.white.opacity(0.4))
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(theme.textTertiary)
                         .textCase(.uppercase).kerning(0.8)
 
                     HStack(spacing: 10) {
                         Text(secret)
-                            .font(.system(size: 14, weight: .semibold, design: .monospaced))
-                            .foregroundColor(.white)
+                            .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                            .foregroundColor(theme.textPrimary)
                             .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
 
                         Button {
                             UIPasteboard.general.string = secret
@@ -335,15 +399,15 @@ struct TOTPSetupSheet: View {
                             DispatchQueue.main.asyncAfter(deadline: .now() + 2) { copiedSecret = false }
                         } label: {
                             Image(systemName: copiedSecret ? "checkmark" : "doc.on.doc")
-                                .foregroundColor(copiedSecret ? Color(hex: "#4ADE80")! : Color(hex: "#A78BFA")!)
+                                .foregroundColor(copiedSecret ? theme.success : theme.accentLight)
                                 .font(.system(size: 15))
                         }
                     }
-                    .padding(14)
+                    .padding(12)
                     .frame(maxWidth: .infinity)
-                    .background(Color.white.opacity(0.07))
+                    .background(theme.backgroundCard)
                     .cornerRadius(12)
-                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.1), lineWidth: 1))
+                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(theme.backgroundElevated, lineWidth: 1))
                 }
             }
 
@@ -361,11 +425,11 @@ struct TOTPSetupSheet: View {
 
             Image(systemName: "checkmark.shield.fill")
                 .font(.system(size: 48))
-                .foregroundColor(Color(hex: "#A78BFA")!)
+                .foregroundColor(theme.accentLight)
 
             Text("Enter the 6-digit code from your authenticator app to confirm setup.")
                 .font(.system(size: 14))
-                .foregroundColor(.white.opacity(0.6))
+                .foregroundColor(theme.textSecondary)
                 .multilineTextAlignment(.center)
 
             // Digit boxes (reuse same style as TOTPView)
@@ -390,7 +454,7 @@ struct TOTPSetupSheet: View {
             Button { withAnimation { step = .scan } } label: {
                 Text("Back")
                     .font(.system(size: 14))
-                    .foregroundColor(.white.opacity(0.4))
+                    .foregroundColor(theme.textTertiary)
             }
         }
         .onAppear { focusedDigit = 0 }
@@ -402,15 +466,15 @@ struct TOTPSetupSheet: View {
 
             Image(systemName: "list.bullet.rectangle.portrait.fill")
                 .font(.system(size: 40))
-                .foregroundColor(Color(hex: "#FBBF24")!)
+                .foregroundColor(theme.warning)
 
             VStack(spacing: 6) {
                 Text("Save your recovery codes")
                     .font(.system(size: 20, weight: .bold, design: .rounded))
-                    .foregroundColor(.white)
+                    .foregroundColor(theme.textPrimary)
                 Text("If you lose access to your authenticator, these one-time codes are the only way in. Store them somewhere safe.")
                     .font(.system(size: 13))
-                    .foregroundColor(.white.opacity(0.55))
+                    .foregroundColor(theme.textSecondary)
                     .multilineTextAlignment(.center)
             }
 
@@ -421,22 +485,22 @@ struct TOTPSetupSheet: View {
                         HStack {
                             Text("\(i + 1).")
                                 .font(.system(size: 12))
-                                .foregroundColor(.white.opacity(0.3))
+                                .foregroundColor(theme.textTertiary)
                                 .frame(width: 20, alignment: .trailing)
                             Text(code)
                                 .font(.system(size: 14, weight: .semibold, design: .monospaced))
-                                .foregroundColor(.white)
+                                .foregroundColor(theme.textPrimary)
                             Spacer()
                         }
                         .padding(.horizontal, 16).padding(.vertical, 10)
                         if i < codes.count - 1 {
-                            Divider().background(Color.white.opacity(0.06))
+                            Divider().background(theme.backgroundCard)
                         }
                     }
                 }
-                .background(Color.white.opacity(0.05))
+                .background(theme.backgroundCard)
                 .cornerRadius(14)
-                .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.white.opacity(0.08), lineWidth: 1))
+                .overlay(RoundedRectangle(cornerRadius: 14).stroke(theme.backgroundElevated, lineWidth: 1))
 
                 // Copy all button
                 Button {
@@ -449,7 +513,7 @@ struct TOTPSetupSheet: View {
                         Text(copiedCodes ? "Copied!" : "Copy All Codes")
                             .font(.system(size: 14, weight: .medium))
                     }
-                    .foregroundColor(copiedCodes ? Color(hex: "#4ADE80")! : Color(hex: "#A78BFA")!)
+                    .foregroundColor(copiedCodes ? theme.success : theme.accentLight)
                 }
             }
 
@@ -465,21 +529,21 @@ struct TOTPSetupSheet: View {
 
             ZStack {
                 Circle()
-                    .fill(Color(hex: "#4ADE80")!.opacity(0.15))
+                    .fill(theme.success.opacity(0.15))
                     .frame(width: 100, height: 100)
                 Image(systemName: "lock.shield.fill")
                     .font(.system(size: 44))
-                    .foregroundColor(Color(hex: "#4ADE80")!)
+                    .foregroundColor(theme.success)
             }
-            .shadow(color: Color(hex: "#4ADE80")!.opacity(0.3), radius: 20)
+            .shadow(color: theme.success.opacity(0.3), radius: 20)
 
             Text("Two-factor auth enabled!")
                 .font(.system(size: 22, weight: .bold, design: .rounded))
-                .foregroundColor(.white)
+                .foregroundColor(theme.textPrimary)
 
             Text("Your account is now protected. You'll be asked for a code each time you sign in.")
                 .font(.system(size: 14))
-                .foregroundColor(.white.opacity(0.55))
+                .foregroundColor(theme.textSecondary)
                 .multilineTextAlignment(.center)
 
             Spacer().frame(height: 20)
@@ -503,7 +567,7 @@ struct TOTPSetupSheet: View {
     var errorLabel: some View {
         Text(error)
             .font(.system(size: 13))
-            .foregroundColor(Color(hex: "#F87171")!)
+            .foregroundColor(theme.danger)
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 
@@ -517,9 +581,9 @@ struct TOTPSetupSheet: View {
             .padding(16)
             .background(Group {
                 if disabled {
-                    Color.white.opacity(0.1)
+                    theme.backgroundElevated
                 } else {
-                    LinearGradient(colors: [Color(hex: "#A78BFA")!, Color(hex: "#6366F1")!],
+                    LinearGradient(colors: [theme.accentLight, theme.accent],
                                    startPoint: .leading, endPoint: .trailing)
                 }
             })
@@ -594,6 +658,7 @@ struct TOTPSetupSheet: View {
 
 // MARK: - Edit Connection Sheet
 struct EditConnectionSheet: View {
+    @Environment(\.theme) var theme
     @Binding var baseURL: String
     @Binding var token: String
     let onSave: () -> Void
@@ -601,16 +666,16 @@ struct EditConnectionSheet: View {
 
     var body: some View {
         ZStack {
-            Color(hex: "#0F0C29")!.ignoresSafeArea()
+            theme.backgroundPrimary.ignoresSafeArea()
             VStack(spacing: 0) {
-                Capsule().fill(Color.white.opacity(0.2)).frame(width: 40, height: 4).padding(.top, 12)
+                Capsule().fill(theme.inputBorder).frame(width: 40, height: 4).padding(.top, 12)
                 HStack {
-                    Button("Cancel") { dismiss() }.foregroundColor(.white.opacity(0.5))
+                    Button("Cancel") { dismiss() }.foregroundColor(theme.textSecondary)
                     Spacer()
-                    Text("Edit Connection").font(.system(size: 17, weight: .semibold)).foregroundColor(.white)
+                    Text("Edit Connection").font(.system(size: 17, weight: .semibold)).foregroundColor(theme.textPrimary)
                     Spacer()
                     Button("Save") { onSave(); dismiss() }
-                        .foregroundColor(Color(hex: "#A78BFA")!)
+                        .foregroundColor(theme.accentLight)
                         .font(.system(size: 16, weight: .semibold))
                         .disabled(baseURL.isEmpty || token.isEmpty)
                 }
@@ -618,16 +683,16 @@ struct EditConnectionSheet: View {
 
                 VStack(spacing: 16) {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("API Base URL").font(.system(size: 13, weight: .semibold)).foregroundColor(.white.opacity(0.55))
+                        Text("API Base URL").font(.system(size: 13, weight: .semibold)).foregroundColor(theme.textSecondary)
                         TextField("https://...", text: $baseURL)
                             .keyboardType(.URL).autocapitalization(.none).autocorrectionDisabled()
-                            .padding(14).background(Color.white.opacity(0.07)).cornerRadius(12).foregroundColor(.white)
+                            .padding(14).background(theme.backgroundCard).cornerRadius(12).foregroundColor(theme.textPrimary)
                     }
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Bearer Token").font(.system(size: 13, weight: .semibold)).foregroundColor(.white.opacity(0.55))
+                        Text("Bearer Token").font(.system(size: 13, weight: .semibold)).foregroundColor(theme.textSecondary)
                         SecureField("eyJ...", text: $token)
                             .autocapitalization(.none).autocorrectionDisabled()
-                            .padding(14).background(Color.white.opacity(0.07)).cornerRadius(12).foregroundColor(.white)
+                            .padding(14).background(theme.backgroundCard).cornerRadius(12).foregroundColor(theme.textPrimary)
                     }
                 }
                 .padding(.horizontal, 24).padding(.top, 24)

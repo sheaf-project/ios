@@ -2,6 +2,7 @@ import SwiftUI
 
 struct TOTPView: View {
     @EnvironmentObject var authManager: AuthManager
+    @Environment(\.theme) var theme
     @State private var digits: [String] = Array(repeating: "", count: 6)
     @State private var error: String = ""
     @State private var isVerifying = false
@@ -13,12 +14,7 @@ struct TOTPView: View {
 
     var body: some View {
         ZStack {
-            LinearGradient(
-                colors: [Color(hex: "#0F0C29") ?? .black,
-                         Color(hex: "#302B63") ?? .indigo,
-                         Color(hex: "#24243E") ?? .black],
-                startPoint: .topLeading, endPoint: .bottomTrailing
-            )
+            theme.loginGradient
             .ignoresSafeArea()
 
             VStack(spacing: 0) {
@@ -28,26 +24,26 @@ struct TOTPView: View {
                 ZStack {
                     Circle()
                         .fill(LinearGradient(
-                            colors: [Color(hex: "#A78BFA")!, Color(hex: "#6366F1")!],
+                            colors: [theme.accentLight, theme.accent],
                             startPoint: .topLeading, endPoint: .bottomTrailing))
                         .frame(width: 72, height: 72)
                     Image(systemName: "lock.shield.fill")
                         .font(.system(size: 30))
-                        .foregroundColor(.white)
+                        .foregroundColor(theme.textPrimary)
                 }
-                .shadow(color: Color(hex: "#A78BFA")!.opacity(0.5), radius: 20)
+                .shadow(color: theme.accentLight.opacity(0.5), radius: 20)
 
                 Spacer().frame(height: 24)
 
                 Text("Two-Factor Auth")
                     .font(.system(size: 26, weight: .bold, design: .rounded))
-                    .foregroundColor(.white)
+                    .foregroundColor(theme.textPrimary)
 
                 Spacer().frame(height: 8)
 
                 Text("Enter the 6-digit code from your authenticator app")
                     .font(.system(size: 14))
-                    .foregroundColor(.white.opacity(0.5))
+                    .foregroundColor(theme.textSecondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 48)
 
@@ -76,7 +72,7 @@ struct TOTPView: View {
                 if !error.isEmpty {
                     Text(error)
                         .font(.system(size: 13))
-                        .foregroundColor(Color(hex: "#F87171")!)
+                        .foregroundColor(theme.danger)
                         .transition(.opacity)
                 }
 
@@ -92,20 +88,21 @@ struct TOTPView: View {
                             Image(systemName: "checkmark")
                         }
                     }
+                    .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
                     .padding(16)
                     .background(
                         Group {
                             if isComplete {
-                                LinearGradient(colors: [Color(hex: "#A78BFA")!, Color(hex: "#6366F1")!],
+                                LinearGradient(colors: [theme.accentLight, theme.accent],
                                                startPoint: .leading, endPoint: .trailing)
                             } else {
-                                Color.white.opacity(0.1)
+                                theme.backgroundElevated
                             }
                         }
                     )
                     .cornerRadius(14)
-                    .shadow(color: isComplete ? Color(hex: "#A78BFA")!.opacity(0.4) : .clear, radius: 12, y: 4)
+                    .shadow(color: isComplete ? theme.accentLight.opacity(0.4) : .clear, radius: 12, y: 4)
                 }
                 .disabled(!isComplete || isVerifying)
                 .padding(.horizontal, 24)
@@ -118,7 +115,7 @@ struct TOTPView: View {
                 } label: {
                     Text("Back to login")
                         .font(.system(size: 14))
-                        .foregroundColor(.white.opacity(0.4))
+                        .foregroundColor(theme.textTertiary)
                 }
 
                 Spacer()
@@ -196,13 +193,14 @@ struct TOTPView: View {
 // MARK: - Digit Box
 
 struct DigitBox: View {
+    @Environment(\.theme) var theme
     @Binding var digit: String
     let isFocused: Bool
     let hasError: Bool
 
     var borderColor: Color {
-        if hasError { return Color(hex: "#F87171")! }
-        if isFocused { return Color(hex: "#A78BFA")! }
+        if hasError { return theme.danger }
+        if isFocused { return theme.accentLight }
         return Color.white.opacity(digit.isEmpty ? 0.15 : 0.35)
     }
 
@@ -215,13 +213,13 @@ struct DigitBox: View {
             if digit.isEmpty && isFocused {
                 // blinking cursor
                 RoundedRectangle(cornerRadius: 1)
-                    .fill(Color(hex: "#A78BFA")!)
+                    .fill(theme.accentLight)
                     .frame(width: 2, height: 22)
                     .opacity(isFocused ? 1 : 0)
             } else {
                 Text(digit)
                     .font(.system(size: 22, weight: .bold, design: .monospaced))
-                    .foregroundColor(.white)
+                    .foregroundColor(theme.textPrimary)
             }
 
             // Hidden text field driving the input

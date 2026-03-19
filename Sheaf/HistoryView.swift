@@ -3,26 +3,27 @@ import SwiftUI
 // MARK: - HistoryView
 struct HistoryView: View {
     @EnvironmentObject var store: SystemStore
+    @Environment(\.theme) var theme
     @State private var isLoading = false
     @State private var selectedEntry: FrontEntry?
 
     var body: some View {
         ZStack {
-            Color(hex: "#0F0C29")!.ignoresSafeArea()
+            theme.backgroundPrimary.ignoresSafeArea()
 
             VStack(spacing: 0) {
                 // Header
                 HStack {
                     Text("History")
                         .font(.system(size: 28, weight: .bold, design: .rounded))
-                        .foregroundColor(.white)
+                        .foregroundColor(theme.textPrimary)
                     Spacer()
                     Button {
                         Task { await reload() }
                     } label: {
                         Image(systemName: "arrow.clockwise")
                             .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(.white.opacity(0.6))
+                            .foregroundColor(theme.textSecondary)
                     }
                 }
                 .padding(.horizontal, 24)
@@ -31,17 +32,17 @@ struct HistoryView: View {
 
                 if isLoading && store.frontHistory.isEmpty {
                     Spacer()
-                    ProgressView().tint(Color(hex: "#A78BFA")!)
+                    ProgressView().tint(theme.accentLight)
                     Spacer()
                 } else if store.frontHistory.isEmpty {
                     Spacer()
                     VStack(spacing: 12) {
                         Image(systemName: "clock")
                             .font(.system(size: 44))
-                            .foregroundColor(.white.opacity(0.2))
+                            .foregroundColor(theme.textTertiary)
                         Text("No front history yet")
                             .font(.system(size: 18, weight: .medium, design: .rounded))
-                            .foregroundColor(.white.opacity(0.4))
+                            .foregroundColor(theme.textTertiary)
                     }
                     Spacer()
                 } else {
@@ -53,7 +54,7 @@ struct HistoryView: View {
 
                             // Divider
                             Rectangle()
-                                .fill(Color.white.opacity(0.07))
+                                .fill(theme.backgroundCard)
                                 .frame(height: 1)
                                 .padding(.horizontal, 24)
 
@@ -61,7 +62,7 @@ struct HistoryView: View {
                             VStack(alignment: .leading, spacing: 0) {
                                 Text("Log")
                                     .font(.system(size: 13, weight: .semibold))
-                                    .foregroundColor(.white.opacity(0.45))
+                                    .foregroundColor(theme.textSecondary)
                                     .textCase(.uppercase)
                                     .kerning(0.8)
                                     .padding(.horizontal, 24)
@@ -84,6 +85,7 @@ struct HistoryView: View {
         .task { await reload() }
     }
 
+
     func reload() async {
         isLoading = true
         await store.loadFrontHistory()
@@ -97,6 +99,7 @@ struct HistoryView: View {
 
 // MARK: - Front Timeline Graph
 struct FrontTimelineGraph: View {
+    @Environment(\.theme) var theme
     let entries: [FrontEntry]
     let members: [Member]
 
@@ -119,7 +122,7 @@ struct FrontTimelineGraph: View {
             HStack {
                 Text("Last 7 Days")
                     .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.7))
+                    .foregroundColor(theme.textSecondary)
                 Spacer()
                 // Mini legend
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -131,7 +134,7 @@ struct FrontTimelineGraph: View {
                                     .frame(width: 7, height: 7)
                                 Text(member.displayName ?? member.name)
                                     .font(.system(size: 10))
-                                    .foregroundColor(.white.opacity(0.55))
+                                    .foregroundColor(theme.textSecondary)
                             }
                         }
                     }
@@ -146,7 +149,7 @@ struct FrontTimelineGraph: View {
                         let day = Calendar.current.date(byAdding: .day, value: i - 6, to: Date()) ?? Date()
                         Text(day.formatted(.dateTime.weekday(.abbreviated)))
                             .font(.system(size: 9, weight: .medium))
-                            .foregroundColor(.white.opacity(0.35))
+                            .foregroundColor(theme.textTertiary)
                             .frame(maxWidth: .infinity)
                     }
                 }
@@ -168,22 +171,23 @@ struct FrontTimelineGraph: View {
                     ForEach([0, 6, 12, 18, 24], id: \.self) { h in
                         Text(h == 0 ? "12am" : h == 24 ? "now" : "\(h < 12 ? h : h - 12)\(h < 12 ? "am" : "pm")")
                             .font(.system(size: 8))
-                            .foregroundColor(.white.opacity(0.2))
+                            .foregroundColor(theme.textTertiary)
                             .frame(maxWidth: .infinity, alignment: h == 0 ? .leading : h == 24 ? .trailing : .center)
                     }
                 }
                 .padding(.top, 2)
             }
             .padding(16)
-            .background(Color.white.opacity(0.04))
+            .background(theme.backgroundCard)
             .cornerRadius(16)
-            .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.white.opacity(0.07), lineWidth: 1))
+            .overlay(RoundedRectangle(cornerRadius: 16).stroke(theme.backgroundCard, lineWidth: 1))
         }
     }
 }
 
 // MARK: - Swim Lane (one row per member)
 struct SwimLane: View {
+    @Environment(\.theme) var theme
     let member: Member
     let entries: [FrontEntry]
     let windowStart: Date
@@ -233,6 +237,7 @@ struct SwimLane: View {
 
 // MARK: - Front History Row
 struct FrontHistoryRow: View {
+    @Environment(\.theme) var theme
     let entry: FrontEntry
     let members: [Member]
 
@@ -254,7 +259,7 @@ struct FrontHistoryRow: View {
             ZStack {
                 ForEach(Array(members.prefix(3).enumerated()), id: \.offset) { i, member in
                     AvatarView(member: member, size: 36)
-                        .overlay(Circle().stroke(Color(hex: "#0F0C29")!, lineWidth: 1.5))
+                        .overlay(Circle().stroke(theme.backgroundPrimary, lineWidth: 1.5))
                         .offset(x: CGFloat(i) * 14)
                 }
             }
@@ -264,23 +269,23 @@ struct FrontHistoryRow: View {
                 // Names
                 Text(members.isEmpty ? "Unknown" : members.map { $0.displayName ?? $0.name }.joined(separator: ", "))
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.white)
+                    .foregroundColor(theme.textPrimary)
                     .lineLimit(1)
 
                 // Time range
                 HStack(spacing: 6) {
                     Text(entry.startedAt.formatted(date: .abbreviated, time: .shortened))
                         .font(.system(size: 11))
-                        .foregroundColor(.white.opacity(0.4))
+                        .foregroundColor(theme.textTertiary)
 
                     if isActive {
                         Text("· now")
                             .font(.system(size: 11, weight: .semibold))
-                            .foregroundColor(Color(hex: "#4ADE80")!)
+                            .foregroundColor(theme.success)
                     } else if let end = entry.endedAt {
                         Text("→ \(end.formatted(date: .omitted, time: .shortened))")
                             .font(.system(size: 11))
-                            .foregroundColor(.white.opacity(0.3))
+                            .foregroundColor(theme.textTertiary)
                     }
                 }
             }
@@ -292,23 +297,23 @@ struct FrontHistoryRow: View {
                 if isActive {
                     HStack(spacing: 4) {
                         Circle()
-                            .fill(Color(hex: "#4ADE80")!)
+                            .fill(theme.success)
                             .frame(width: 6, height: 6)
-                            .shadow(color: Color(hex: "#4ADE80")!.opacity(0.8), radius: 3)
+                            .shadow(color: theme.success.opacity(0.8), radius: 3)
                         Text("Active")
                             .font(.system(size: 11, weight: .semibold))
-                            .foregroundColor(Color(hex: "#4ADE80")!)
+                            .foregroundColor(theme.success)
                     }
                 }
                 Text(duration)
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.white.opacity(0.4))
+                    .foregroundColor(theme.textTertiary)
             }
         }
         .padding(14)
-        .background(Color.white.opacity(0.04))
+        .background(theme.backgroundCard)
         .cornerRadius(14)
         .overlay(RoundedRectangle(cornerRadius: 14)
-            .stroke(isActive ? Color(hex: "#4ADE80")!.opacity(0.2) : Color.white.opacity(0.06), lineWidth: 1))
+            .stroke(isActive ? theme.success.opacity(0.2) : theme.backgroundCard, lineWidth: 1))
     }
 }

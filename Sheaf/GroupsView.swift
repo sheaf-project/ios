@@ -2,25 +2,26 @@ import SwiftUI
 
 struct GroupsView: View {
     @EnvironmentObject var store: SystemStore
+    @Environment(\.theme) var theme
     @State private var showAddGroup = false
     @State private var selectedGroup: SystemGroup?
 
     var body: some View {
         ZStack {
-            Color(hex: "#0F0C29")!.ignoresSafeArea()
+            theme.backgroundPrimary.ignoresSafeArea()
 
             VStack(spacing: 0) {
                 HStack {
                     Text("Groups")
                         .font(.system(size: 28, weight: .bold, design: .rounded))
-                        .foregroundColor(.white)
+                        .foregroundColor(theme.textPrimary)
                     Spacer()
                     Button {
                         showAddGroup = true
                     } label: {
                         Image(systemName: "plus.circle.fill")
                             .font(.system(size: 26))
-                            .foregroundColor(Color(hex: "#A78BFA")!)
+                            .foregroundColor(theme.accentLight)
                     }
                 }
                 .padding(.horizontal, 24)
@@ -29,20 +30,20 @@ struct GroupsView: View {
 
                 if store.isLoading && store.groups.isEmpty {
                     Spacer()
-                    ProgressView().tint(Color(hex: "#A78BFA")!)
+                    ProgressView().tint(theme.accentLight)
                     Spacer()
                 } else if store.groups.isEmpty {
                     Spacer()
                     VStack(spacing: 12) {
                         Image(systemName: "square.grid.2x2")
                             .font(.system(size: 44))
-                            .foregroundColor(.white.opacity(0.2))
+                            .foregroundColor(theme.textTertiary)
                         Text("No groups yet")
                             .font(.system(size: 18, weight: .medium, design: .rounded))
-                            .foregroundColor(.white.opacity(0.4))
+                            .foregroundColor(theme.textTertiary)
                         Text("Tap + to create your first group")
                             .font(.system(size: 13))
-                            .foregroundColor(.white.opacity(0.25))
+                            .foregroundColor(theme.textTertiary)
                     }
                     Spacer()
                 } else {
@@ -80,6 +81,7 @@ struct GroupsView: View {
 
 // MARK: - Group Card
 struct GroupCard: View {
+    @Environment(\.theme) var theme
     let group: SystemGroup
     let members: [Member]
     let onTap: () -> Void
@@ -95,12 +97,12 @@ struct GroupCard: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(group.name)
                         .font(.system(size: 17, weight: .semibold))
-                        .foregroundColor(.white)
+                        .foregroundColor(theme.textPrimary)
 
                     if let desc = group.description, !desc.isEmpty {
                         Text(desc)
                             .font(.system(size: 13))
-                            .foregroundColor(.white.opacity(0.5))
+                            .foregroundColor(theme.textSecondary)
                             .lineLimit(1)
                     }
 
@@ -109,19 +111,19 @@ struct GroupCard: View {
                         HStack(spacing: -10) {
                             ForEach(members.prefix(5)) { m in
                                 AvatarView(member: m, size: 26)
-                                    .overlay(Circle().stroke(Color(hex: "#0F0C29")!, lineWidth: 1.5))
+                                    .overlay(Circle().stroke(theme.backgroundPrimary, lineWidth: 1.5))
                             }
                             if members.count > 5 {
                                 ZStack {
-                                    Circle().fill(Color.white.opacity(0.1)).frame(width: 26, height: 26)
+                                    Circle().fill(theme.backgroundElevated).frame(width: 26, height: 26)
                                     Text("+\(members.count - 5)")
                                         .font(.system(size: 9, weight: .bold))
-                                        .foregroundColor(.white)
+                                        .foregroundColor(theme.textPrimary)
                                 }
                             }
                             Text("\(members.count) member\(members.count == 1 ? "" : "s")")
                                 .font(.system(size: 12))
-                                .foregroundColor(.white.opacity(0.4))
+                                .foregroundColor(theme.textTertiary)
                                 .padding(.leading, 14)
                         }
                     }
@@ -131,13 +133,13 @@ struct GroupCard: View {
 
                 Image(systemName: "chevron.right")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.25))
+                    .foregroundColor(theme.textTertiary)
             }
             .padding(16)
-            .background(Color.white.opacity(0.05))
+            .background(theme.backgroundCard)
             .cornerRadius(18)
             .overlay(RoundedRectangle(cornerRadius: 18)
-                .stroke(Color.white.opacity(0.07), lineWidth: 1))
+                .stroke(theme.backgroundCard, lineWidth: 1))
         }
         .buttonStyle(ScaleButtonStyle())
     }
@@ -145,6 +147,7 @@ struct GroupCard: View {
 
 // MARK: - Group Detail Sheet
 struct GroupDetailSheet: View {
+    @Environment(\.theme) var theme
     @EnvironmentObject var store: SystemStore
     @Environment(\.dismiss) var dismiss
     let group: SystemGroup
@@ -153,16 +156,16 @@ struct GroupDetailSheet: View {
 
     var body: some View {
         ZStack {
-            Color(hex: "#0F0C29")!.ignoresSafeArea()
+            theme.backgroundPrimary.ignoresSafeArea()
 
             VStack(spacing: 0) {
-                Capsule().fill(Color.white.opacity(0.2)).frame(width: 40, height: 4).padding(.top, 12)
+                Capsule().fill(theme.inputBorder).frame(width: 40, height: 4).padding(.top, 12)
 
                 HStack {
-                    Button("Close") { dismiss() }.foregroundColor(.white.opacity(0.5))
+                    Button("Close") { dismiss() }.foregroundColor(theme.textSecondary)
                     Spacer()
                     Button("Edit") { showEdit = true }
-                        .foregroundColor(Color(hex: "#A78BFA")!)
+                        .foregroundColor(theme.accentLight)
                         .font(.system(size: 16, weight: .semibold))
                 }
                 .padding(.horizontal, 24).padding(.top, 16)
@@ -181,11 +184,11 @@ struct GroupDetailSheet: View {
                             }
                             Text(group.name)
                                 .font(.system(size: 24, weight: .bold, design: .rounded))
-                                .foregroundColor(.white)
+                                .foregroundColor(theme.textPrimary)
                             if let desc = group.description, !desc.isEmpty {
                                 Text(desc)
                                     .font(.system(size: 14))
-                                    .foregroundColor(.white.opacity(0.6))
+                                    .foregroundColor(theme.textSecondary)
                                     .multilineTextAlignment(.center)
                             }
                         }
@@ -195,13 +198,13 @@ struct GroupDetailSheet: View {
                         if members.isEmpty {
                             Text("No members in this group")
                                 .font(.system(size: 14))
-                                .foregroundColor(.white.opacity(0.35))
+                                .foregroundColor(theme.textTertiary)
                                 .padding(20)
                         } else {
                             VStack(alignment: .leading, spacing: 10) {
                                 Text("Members (\(members.count))")
                                     .font(.system(size: 13, weight: .semibold))
-                                    .foregroundColor(.white.opacity(0.5))
+                                    .foregroundColor(theme.textSecondary)
                                     .textCase(.uppercase)
                                     .kerning(0.8)
 
@@ -211,18 +214,18 @@ struct GroupDetailSheet: View {
                                         VStack(alignment: .leading, spacing: 2) {
                                             Text(member.displayName ?? member.name)
                                                 .font(.system(size: 15, weight: .medium))
-                                                .foregroundColor(.white)
+                                                .foregroundColor(theme.textPrimary)
                                             if let p = member.pronouns, !p.isEmpty {
-                                                Text(p).font(.system(size: 12)).foregroundColor(.white.opacity(0.45))
+                                                Text(p).font(.system(size: 12)).foregroundColor(theme.textSecondary)
                                             }
                                         }
                                         Spacer()
                                         if store.frontingMembers.contains(where: { $0.id == member.id }) {
-                                            Circle().fill(Color(hex: "#4ADE80")!).frame(width: 8, height: 8)
+                                            Circle().fill(theme.success).frame(width: 8, height: 8)
                                         }
                                     }
                                     .padding(12)
-                                    .background(Color.white.opacity(0.05))
+                                    .background(theme.backgroundCard)
                                     .cornerRadius(12)
                                 }
                             }
@@ -248,6 +251,7 @@ struct GroupDetailSheet: View {
 
 // MARK: - Group Edit Sheet
 struct GroupEditSheet: View {
+    @Environment(\.theme) var theme
     @EnvironmentObject var store: SystemStore
     @Environment(\.dismiss) var dismiss
     let group: SystemGroup?
@@ -262,21 +266,21 @@ struct GroupEditSheet: View {
 
     var body: some View {
         ZStack {
-            Color(hex: "#0F0C29")!.ignoresSafeArea()
+            theme.backgroundPrimary.ignoresSafeArea()
 
             VStack(spacing: 0) {
-                Capsule().fill(Color.white.opacity(0.2)).frame(width: 40, height: 4).padding(.top, 12)
+                Capsule().fill(theme.inputBorder).frame(width: 40, height: 4).padding(.top, 12)
 
                 HStack {
-                    Button("Cancel") { dismiss() }.foregroundColor(.white.opacity(0.5))
+                    Button("Cancel") { dismiss() }.foregroundColor(theme.textSecondary)
                     Spacer()
                     Text(isNew ? "New Group" : "Edit Group")
-                        .font(.system(size: 17, weight: .semibold)).foregroundColor(.white)
+                        .font(.system(size: 17, weight: .semibold)).foregroundColor(theme.textPrimary)
                     Spacer()
                     Button(isSaving ? "" : "Save") { save() }
-                        .foregroundColor(Color(hex: "#A78BFA")!)
+                        .foregroundColor(theme.accentLight)
                         .font(.system(size: 16, weight: .semibold))
-                        .overlay(isSaving ? AnyView(ProgressView().tint(Color(hex: "#A78BFA")!)) : AnyView(EmptyView()))
+                        .overlay(isSaving ? AnyView(ProgressView().tint(theme.accentLight)) : AnyView(EmptyView()))
                         .disabled(name.isEmpty || isSaving)
                 }
                 .padding(.horizontal, 24).padding(.top, 16).padding(.bottom, 8)
@@ -288,20 +292,20 @@ struct GroupEditSheet: View {
 
                         // Color
                         HStack {
-                            Text("Color").font(.system(size: 14, weight: .medium)).foregroundColor(.white.opacity(0.7))
+                            Text("Color").font(.system(size: 14, weight: .medium)).foregroundColor(theme.textSecondary)
                             Spacer()
                             ColorPicker("", selection: Binding(
                                 get: { Color(hex: colorHex) ?? .indigo },
                                 set: { colorHex = $0.toHex() }
                             )).labelsHidden()
                         }
-                        .padding(14).background(Color.white.opacity(0.06)).cornerRadius(12)
+                        .padding(14).background(theme.backgroundCard).cornerRadius(12)
 
                         // Members
                         VStack(alignment: .leading, spacing: 10) {
                             Text("Members")
                                 .font(.system(size: 13, weight: .semibold))
-                                .foregroundColor(.white.opacity(0.55))
+                                .foregroundColor(theme.textSecondary)
 
                             ForEach(store.members) { member in
                                 Button {
@@ -315,14 +319,14 @@ struct GroupEditSheet: View {
                                         AvatarView(member: member, size: 36)
                                         Text(member.displayName ?? member.name)
                                             .font(.system(size: 15))
-                                            .foregroundColor(.white)
+                                            .foregroundColor(theme.textPrimary)
                                         Spacer()
                                         Image(systemName: selectedMemberIDs.contains(member.id) ? "checkmark.circle.fill" : "circle")
-                                            .foregroundColor(selectedMemberIDs.contains(member.id) ? Color(hex: "#A78BFA")! : Color.white.opacity(0.3))
+                                            .foregroundColor(selectedMemberIDs.contains(member.id) ? theme.accentLight : Color.white.opacity(0.3))
                                             .font(.system(size: 20))
                                     }
                                     .padding(12)
-                                    .background(selectedMemberIDs.contains(member.id) ? Color(hex: "#A78BFA")!.opacity(0.08) : Color.white.opacity(0.04))
+                                    .background(selectedMemberIDs.contains(member.id) ? theme.accentLight.opacity(0.08) : theme.backgroundCard)
                                     .cornerRadius(12)
                                 }
                                 .buttonStyle(ScaleButtonStyle())
@@ -340,10 +344,10 @@ struct GroupEditSheet: View {
 
     func fieldView(_ label: String, value: Binding<String>, placeholder: String) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(label).font(.system(size: 13, weight: .semibold)).foregroundColor(.white.opacity(0.55))
+            Text(label).font(.system(size: 13, weight: .semibold)).foregroundColor(theme.textSecondary)
             TextField(placeholder, text: value)
                 .autocorrectionDisabled().autocapitalization(.none)
-                .padding(12).background(Color.white.opacity(0.06)).cornerRadius(12).foregroundColor(.white)
+                .padding(12).background(theme.backgroundCard).cornerRadius(12).foregroundColor(theme.textPrimary)
         }
     }
 

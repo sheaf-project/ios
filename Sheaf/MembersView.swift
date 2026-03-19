@@ -2,9 +2,28 @@ import SwiftUI
 
 struct MembersView: View {
     @EnvironmentObject var store: SystemStore
+    @Environment(\.theme) var theme
     @State private var searchText = ""
     @State private var showAddMember = false
     @State private var selectedMember: Member?
+
+
+    private func removeMemberFromFront(_ member: Member) async {
+        let remaining = store.frontingMembers
+            .filter { $0.id != member.id }
+            .map { $0.id }
+        if remaining.isEmpty {
+            for front in store.currentFronts where front.endedAt == nil {
+                _ = try? await store.api?.updateFront(
+                    id: front.id,
+                    update: FrontUpdate(endedAt: Date(), memberIDs: nil)
+                )
+            }
+            await MainActor.run { store.currentFronts = [] }
+        } else {
+            await store.switchFronting(to: remaining)
+        }
+    }
 
     var filtered: [Member] {
         if searchText.isEmpty { return store.members }
@@ -16,21 +35,21 @@ struct MembersView: View {
 
     var body: some View {
         ZStack {
-            Color(hex: "#0F0C29")!.ignoresSafeArea()
+            theme.backgroundPrimary.ignoresSafeArea()
 
             VStack(spacing: 0) {
                 // Header
                 HStack {
                     Text("Members")
                         .font(.system(size: 28, weight: .bold, design: .rounded))
-                        .foregroundColor(.white)
+                        .foregroundColor(theme.textPrimary)
                     Spacer()
                     Button {
                         showAddMember = true
                     } label: {
                         Image(systemName: "plus.circle.fill")
                             .font(.system(size: 26))
-                            .foregroundColor(Color(hex: "#A78BFA")!)
+                            .foregroundColor(theme.accentLight)
                     }
                 }
                 .padding(.horizontal, 24)
@@ -40,20 +59,20 @@ struct MembersView: View {
                 // Search
                 HStack {
                     Image(systemName: "magnifyingglass")
-                        .foregroundColor(.white.opacity(0.4))
+                        .foregroundColor(theme.textTertiary)
                     TextField("Search members...", text: $searchText)
-                        .foregroundColor(.white)
+                        .foregroundColor(theme.textPrimary)
                         .autocorrectionDisabled()
                 }
                 .padding(12)
-                .background(Color.white.opacity(0.07))
+                .background(theme.backgroundCard)
                 .cornerRadius(12)
                 .padding(.horizontal, 24)
                 .padding(.bottom, 16)
 
                 if store.isLoading && store.members.isEmpty {
                     Spacer()
-                    ProgressView().tint(Color(hex: "#A78BFA")!)
+                    ProgressView().tint(theme.accentLight)
                     Spacer()
                 } else {
                     ScrollView {
@@ -61,6 +80,24 @@ struct MembersView: View {
                             ForEach(filtered) { member in
                                 MemberRow(member: member, isFronting: store.frontingMembers.contains(where: { $0.id == member.id })) {
                                     selectedMember = member
+                                }
+                                .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                                    let isFronting = store.frontingMembers.contains(where: { $0.id == member.id })
+                                    if isFronting {
+                                        Button {
+                                            Task { await removeMemberFromFront(member) }
+                                        } label: {
+                                            Label("Remove Front", systemImage: "person.fill.xmark")
+                                        }
+                                        .tint(.orange)
+                                    } else {
+                                        Button {
+                                            Task { await store.switchFronting(to: store.frontingMembers.map { $0.id } + [member.id]) }
+                                        } label: {
+                                            Label("Add to Front", systemImage: "person.fill.checkmark")
+                                        }
+                                        .tint(Color(hex: "#8B5CF6")!)
+                                    }
                                 }
                                 .swipeActions(edge: .trailing) {
                                     Button(role: .destructive) {
@@ -90,6 +127,7 @@ struct MembersView: View {
 
 // MARK: - Member Row
 struct MemberRow: View {
+    @Environment(\.theme) var theme
     let member: Member
     let isFronting: Bool
     let onTap: () -> Void
@@ -101,20 +139,20 @@ struct MemberRow: View {
                     .overlay(alignment: .bottomTrailing) {
                         if isFronting {
                             Circle()
-                                .fill(Color(hex: "#4ADE80")!)
+                                .fill(theme.success)
                                 .frame(width: 12, height: 12)
-                                .overlay(Circle().stroke(Color(hex: "#0F0C29")!, lineWidth: 2))
+                                .overlay(Circle().stroke(theme.backgroundPrimary, lineWidth: 2))
                         }
                     }
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(member.displayName ?? member.name)
                         .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(.white)
+                        .foregroundColor(theme.textPrimary)
                     if let pronouns = member.pronouns, !pronouns.isEmpty {
                         Text(pronouns)
                             .font(.system(size: 12))
-                            .foregroundColor(.white.opacity(0.5))
+                            .foregroundColor(theme.textSecondary)
                     }
                 }
 
@@ -122,13 +160,13 @@ struct MemberRow: View {
 
                 Image(systemName: "chevron.right")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.25))
+                    .foregroundColor(theme.textTertiary)
             }
             .padding(14)
-            .background(Color.white.opacity(0.05))
+            .background(theme.backgroundCard)
             .cornerRadius(16)
             .overlay(RoundedRectangle(cornerRadius: 16)
-                .stroke(isFronting ? member.displayColor.opacity(0.3) : Color.white.opacity(0.07), lineWidth: 1))
+                .stroke(isFronting ? member.displayColor.opacity(0.3) : theme.backgroundCard, lineWidth: 1))
         }
         .buttonStyle(ScaleButtonStyle())
     }
@@ -136,6 +174,7 @@ struct MemberRow: View {
 
 // MARK: - Member Detail Sheet
 struct MemberDetailSheet: View {
+    @Environment(\.theme) var theme
     @EnvironmentObject var store: SystemStore
     @Environment(\.dismiss) var dismiss
     let member: Member
@@ -143,21 +182,21 @@ struct MemberDetailSheet: View {
 
     var body: some View {
         ZStack {
-            Color(hex: "#0F0C29")!.ignoresSafeArea()
+            theme.backgroundPrimary.ignoresSafeArea()
 
             VStack(spacing: 0) {
                 // Handle
                 Capsule()
-                    .fill(Color.white.opacity(0.2))
+                    .fill(theme.inputBorder)
                     .frame(width: 40, height: 4)
                     .padding(.top, 12)
 
                 HStack {
                     Button("Close") { dismiss() }
-                        .foregroundColor(.white.opacity(0.5))
+                        .foregroundColor(theme.textSecondary)
                     Spacer()
                     Button("Edit") { showEdit = true }
-                        .foregroundColor(Color(hex: "#A78BFA")!)
+                        .foregroundColor(theme.accentLight)
                         .font(.system(size: 16, weight: .semibold))
                 }
                 .padding(.horizontal, 24)
@@ -170,7 +209,7 @@ struct MemberDetailSheet: View {
                             AvatarView(member: member, size: 96)
                             Text(member.displayName ?? member.name)
                                 .font(.system(size: 26, weight: .bold, design: .rounded))
-                                .foregroundColor(.white)
+                                .foregroundColor(theme.textPrimary)
                             if let p = member.pronouns, !p.isEmpty {
                                 Text(p)
                                     .padding(.horizontal, 14).padding(.vertical, 5)
@@ -186,9 +225,9 @@ struct MemberDetailSheet: View {
                         if store.frontingMembers.contains(where: { $0.id == member.id }) {
                             Label("Currently Fronting", systemImage: "checkmark.seal.fill")
                                 .font(.system(size: 14, weight: .semibold))
-                                .foregroundColor(Color(hex: "#4ADE80")!)
+                                .foregroundColor(theme.success)
                                 .padding(.horizontal, 16).padding(.vertical, 8)
-                                .background(Color(hex: "#4ADE80")!.opacity(0.1))
+                                .background(theme.success.opacity(0.1))
                                 .cornerRadius(12)
                         }
 
@@ -196,10 +235,10 @@ struct MemberDetailSheet: View {
                         if let desc = member.description, !desc.isEmpty {
                             Text(desc)
                                 .font(.system(size: 15))
-                                .foregroundColor(.white.opacity(0.7))
+                                .foregroundColor(theme.textSecondary)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(16)
-                                .background(Color.white.opacity(0.05))
+                                .background(theme.backgroundCard)
                                 .cornerRadius(14)
                         }
 
@@ -214,11 +253,11 @@ struct MemberDetailSheet: View {
                         } label: {
                             Label("Switch to \(member.displayName ?? member.name)", systemImage: "arrow.left.arrow.right")
                                 .font(.system(size: 16, weight: .semibold))
-                                .foregroundColor(.white)
+                                .foregroundColor(theme.textPrimary)
                                 .frame(maxWidth: .infinity)
                                 .padding(16)
                                 .background(LinearGradient(
-                                    colors: [Color(hex: "#A78BFA")!, Color(hex: "#6366F1")!],
+                                    colors: [theme.accentLight, theme.accent],
                                     startPoint: .leading, endPoint: .trailing))
                                 .cornerRadius(14)
                         }
@@ -238,7 +277,7 @@ struct MemberDetailSheet: View {
         VStack(alignment: .leading, spacing: 10) {
             Text(title)
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(.white.opacity(0.5))
+                .foregroundColor(theme.textSecondary)
                 .textCase(.uppercase)
                 .kerning(0.8)
             content()
@@ -249,6 +288,7 @@ struct MemberDetailSheet: View {
 
 // MARK: - Member Edit Sheet
 struct MemberEditSheet: View {
+    @Environment(\.theme) var theme
     @EnvironmentObject var store: SystemStore
     @Environment(\.dismiss) var dismiss
     let member: Member?
@@ -265,23 +305,23 @@ struct MemberEditSheet: View {
 
     var body: some View {
         ZStack {
-            Color(hex: "#0F0C29")!.ignoresSafeArea()
+            theme.backgroundPrimary.ignoresSafeArea()
 
             VStack(spacing: 0) {
-                Capsule().fill(Color.white.opacity(0.2)).frame(width: 40, height: 4).padding(.top, 12)
+                Capsule().fill(theme.inputBorder).frame(width: 40, height: 4).padding(.top, 12)
 
                 HStack {
-                    Button("Cancel") { dismiss() }.foregroundColor(.white.opacity(0.5))
+                    Button("Cancel") { dismiss() }.foregroundColor(theme.textSecondary)
                     Spacer()
                     Text(isNew ? "Add Member" : "Edit Member")
-                        .font(.system(size: 17, weight: .semibold)).foregroundColor(.white)
+                        .font(.system(size: 17, weight: .semibold)).foregroundColor(theme.textPrimary)
                     Spacer()
                     Button(isSaving ? "" : "Save") {
                         save()
                     }
-                    .foregroundColor(Color(hex: "#A78BFA")!)
+                    .foregroundColor(theme.accentLight)
                     .font(.system(size: 16, weight: .semibold))
-                    .overlay(isSaving ? AnyView(ProgressView().tint(Color(hex: "#A78BFA")!)) : AnyView(EmptyView()))
+                    .overlay(isSaving ? AnyView(ProgressView().tint(theme.accentLight)) : AnyView(EmptyView()))
                     .disabled(name.isEmpty || isSaving)
                 }
                 .padding(.horizontal, 24).padding(.top, 16).padding(.bottom, 8)
@@ -298,7 +338,7 @@ struct MemberEditSheet: View {
                         HStack {
                             Text("Color")
                                 .font(.system(size: 14, weight: .medium))
-                                .foregroundColor(.white.opacity(0.7))
+                                .foregroundColor(theme.textSecondary)
                             Spacer()
                             ColorPicker("", selection: Binding(
                                 get: { Color(hex: colorHex) ?? .purple },
@@ -307,7 +347,7 @@ struct MemberEditSheet: View {
                             .labelsHidden()
                         }
                         .padding(14)
-                        .background(Color.white.opacity(0.06))
+                        .background(theme.backgroundCard)
                         .cornerRadius(12)
                     }
                     .padding(.horizontal, 24)
@@ -331,15 +371,15 @@ struct MemberEditSheet: View {
 
     func formField(_ label: String, value: Binding<String>, placeholder: String, multiline: Bool = false) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(label).font(.system(size: 13, weight: .semibold)).foregroundColor(.white.opacity(0.55))
+            Text(label).font(.system(size: 13, weight: .semibold)).foregroundColor(theme.textSecondary)
             if multiline {
                 TextField(placeholder, text: value, axis: .vertical)
                     .lineLimit(3...6)
-                    .padding(12).background(Color.white.opacity(0.06)).cornerRadius(12).foregroundColor(.white)
+                    .padding(12).background(theme.backgroundCard).cornerRadius(12).foregroundColor(theme.textPrimary)
             } else {
                 TextField(placeholder, text: value)
                     .autocorrectionDisabled().autocapitalization(.none)
-                    .padding(12).background(Color.white.opacity(0.06)).cornerRadius(12).foregroundColor(.white)
+                    .padding(12).background(theme.backgroundCard).cornerRadius(12).foregroundColor(theme.textPrimary)
             }
         }
     }
