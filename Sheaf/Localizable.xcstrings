@@ -1,0 +1,201 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "Add Member" : {
+      "comment" : "Quick action to add a new member"
+    },
+    "Add to Front" : {
+      "comment" : "Quick action to switch fronting member"
+    },
+    "Already have an account?" : {
+      "comment" : "Prompt to switch to sign in"
+    },
+    "API Base URL" : {
+      "comment" : "Label for API URL input field"
+    },
+    "API URL" : {
+      "comment" : "Short label for API URL"
+    },
+    "Appearance" : {
+      "comment" : "Settings section for appearance"
+    },
+    "At least 8 characters" : {
+      "comment" : "Placeholder for password field"
+    },
+    "Back to login" : {
+      "comment" : "Button to return to login screen"
+    },
+    "Cancel" : {
+      "comment" : "Cancel button"
+    },
+    "Confirm Password" : {
+      "comment" : "Confirm password field label"
+    },
+    "Connection" : {
+      "comment" : "Settings section for connection"
+    },
+    "Create Account" : {
+      "comment" : "Button to create new account"
+    },
+    "Create your account" : {
+      "comment" : "Registration screen subtitle"
+    },
+    "Dark" : {
+      "comment" : "Dark theme option"
+    },
+    "Delete" : {
+      "comment" : "Delete button"
+    },
+    "Disabled" : {
+      "comment" : "Two-factor auth disabled status"
+    },
+    "Done" : {
+      "comment" : "Done button"
+    },
+    "Don't have an account?" : {
+      "comment" : "Prompt to switch to registration"
+    },
+    "Edit" : {
+      "comment" : "Edit button"
+    },
+    "Edit Connection" : {
+      "comment" : "Button to edit connection settings"
+    },
+    "Email" : {
+      "comment" : "Email input field label"
+    },
+    "Enabled" : {
+      "comment" : "Two-factor auth enabled status"
+    },
+    "Enter the 6-digit code from your authenticator app" : {
+      "comment" : "Two-factor auth prompt"
+    },
+    "Error" : {
+      "comment" : "Error alert title"
+    },
+    "Fair" : {
+      "comment" : "Password strength: fair"
+    },
+    "Good" : {
+      "comment" : "Password strength: good"
+    },
+    "Groups" : {
+      "comment" : "Groups tab label"
+    },
+    "History" : {
+      "comment" : "History tab label"
+    },
+    "Home" : {
+      "comment" : "Home tab label"
+    },
+    "https://your-api.example.com" : {
+      "comment" : "Placeholder for API URL"
+    },
+    "Import" : {
+      "comment" : "Settings section for import"
+    },
+    "Import from Simply Plural" : {
+      "comment" : "Button to import data"
+    },
+    "Incorrect code — please try again" : {
+      "comment" : "TOTP verification error message"
+    },
+    "Invalid URL" : {
+      "comment" : "Error message for invalid URL"
+    },
+    "Light" : {
+      "comment" : "Light theme option"
+    },
+    "Manage Two-Factor Auth" : {
+      "comment" : "Button to manage 2FA when enabled"
+    },
+    "Members" : {
+      "comment" : "Members tab label"
+    },
+    "More" : {
+      "comment" : "More button in quick switch"
+    },
+    "No" : {
+      "comment" : "No button"
+    },
+    "OK" : {
+      "comment" : "OK button"
+    },
+    "Password" : {
+      "comment" : "Password input field label"
+    },
+    "Password must be at least 8 characters" : {
+      "comment" : "Error message for short password"
+    },
+    "Passwords don't match" : {
+      "comment" : "Error message when passwords don't match"
+    },
+    "Quick Switch" : {
+      "comment" : "Section title for quick switching"
+    },
+    "Register" : {
+      "comment" : "Button to switch to registration screen"
+    },
+    "Remove" : {
+      "comment" : "Remove button"
+    },
+    "Save" : {
+      "comment" : "Save button"
+    },
+    "Security" : {
+      "comment" : "Settings section for security"
+    },
+    "Set Up Two-Factor Auth" : {
+      "comment" : "Button to set up 2FA"
+    },
+    "Settings" : {
+      "comment" : "Settings tab label"
+    },
+    "Sheaf" : {
+      "comment" : "App name"
+    },
+    "Sign In" : {
+      "comment" : "Sign in button label"
+    },
+    "Sign in to your system" : {
+      "comment" : "Login screen subtitle"
+    },
+    "Since %@" : {
+      "comment" : "Time indicator (e.g., Since 3:00 PM)"
+    },
+    "Strong" : {
+      "comment" : "Password strength: strong"
+    },
+    "System" : {
+      "comment" : "System theme option"
+    },
+    "Token" : {
+      "comment" : "Token label"
+    },
+    "Two-Factor Auth" : {
+      "comment" : "Two-factor authentication label"
+    },
+    "URL must start with http:// or https://" : {
+      "comment" : "Error message for URL without protocol"
+    },
+    "Verify" : {
+      "comment" : "Verify button for TOTP"
+    },
+    "Weak" : {
+      "comment" : "Password strength: weak"
+    },
+    "Welcome, %@!" : {
+      "comment" : "Welcome message with name"
+    },
+    "Yes" : {
+      "comment" : "Yes button"
+    },
+    "you@example.com" : {
+      "comment" : "Placeholder for email"
+    },
+    "••••••••" : {
+      "comment" : "Password field placeholder"
+    }
+  },
+  "version" : "1.0"
+}
