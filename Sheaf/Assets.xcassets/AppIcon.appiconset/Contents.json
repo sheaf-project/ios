@@ -1,6 +1,7 @@
 {
   "images" : [
     {
+      "filename" : "Sheaf Icon - iOS-watchOS 1.png",
       "idiom" : "universal",
       "platform" : "ios",
       "size" : "1024x1024"
@@ -25,6 +26,12 @@
       ],
       "idiom" : "universal",
       "platform" : "ios",
+      "size" : "1024x1024"
+    },
+    {
+      "filename" : "Sheaf Icon - iOS-watchOS.png",
+      "idiom" : "universal",
+      "platform" : "watchos",
       "size" : "1024x1024"
     }
   ],
