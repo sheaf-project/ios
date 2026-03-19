@@ -1,0 +1,51 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "✦" : {
+      "comment" : "App logo symbol"
+    },
+    "Add Member" : {
+      "comment" : "Quick action to add a new member"
+    },
+    "Add to Front" : {
+      "comment" : "Quick action to switch fronting member"
+    },
+    "API Base URL" : {
+      "comment" : "Label for API URL input field"
+    },
+    "Create your account" : {
+      "comment" : "Registration screen subtitle"
+    },
+    "Don't have an account?" : {
+      "comment" : "Prompt to switch to registration"
+    },
+    "Email" : {
+      "comment" : "Email input field label"
+    },
+    "Password" : {
+      "comment" : "Password input field label"
+    },
+    "Register" : {
+      "comment" : "Button to switch to registration screen"
+    },
+    "Sheaf" : {
+      "comment" : "App name"
+    },
+    "Sign In" : {
+      "comment" : "Sign in button label"
+    },
+    "Sign in to your system" : {
+      "comment" : "Login screen subtitle"
+    },
+    "https://your-api.example.com" : {
+      "comment" : "Placeholder for API URL"
+    },
+    "you@example.com" : {
+      "comment" : "Placeholder for email"
+    },
+    "••••••••" : {
+      "comment" : "Password field placeholder"
+    }
+  },
+  "version" : "1.0"
+}
