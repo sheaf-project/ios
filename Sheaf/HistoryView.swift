@@ -7,6 +7,7 @@ struct HistoryView: View {
     @State private var isLoading = false
     @State private var selectedEntry: FrontEntry?
     @State private var showAddEntry = false
+    @State private var entryToDelete: FrontEntry?
 
     var body: some View {
         ZStack {
@@ -56,47 +57,34 @@ struct HistoryView: View {
                     }
                     Spacer()
                 } else {
-                    ScrollView {
-                        VStack(spacing: 20) {
-                            // Time graph
+                    List {
+                        // Time graph as a non-swipeable header row
+                        Section {
                             FrontTimelineGraph(entries: store.frontHistory, members: store.members)
-                                .padding(.horizontal, 24)
-
-                            // Divider
-                            Rectangle()
-                                .fill(theme.backgroundCard)
-                                .frame(height: 1)
-                                .padding(.horizontal, 24)
-
-                            // Log list
-                            VStack(alignment: .leading, spacing: 0) {
-                                Text("Log")
-                                    .font(.system(size: 13, weight: .semibold))
-                                    .foregroundColor(theme.textSecondary)
-                                    .textCase(.uppercase)
-                                    .kerning(0.8)
-                                    .padding(.horizontal, 24)
-                                    .padding(.bottom, 12)
-
-                                LazyVStack(spacing: 10) {
-                                    ForEach(store.frontHistory) { entry in
-                                        FrontHistoryRow(entry: entry, members: membersFor(entry))
-                                            .padding(.horizontal, 24)
-                                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                                Button(role: .destructive) {
-                                                    Task { await deleteFrontEntry(entry) }
-                                                } label: {
-                                                    Label("Delete", systemImage: "trash")
-                                                }
-                                            }
-                                    }
-                                }
-                            }
-
-                            Spacer().frame(height: 100)
+                                .padding(.vertical, 8)
+                                .listRowBackground(Color.clear)
+                                .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
                         }
-                        .padding(.top, 4)
+
+                        // Log entries
+                        Section("Log") {
+                            ForEach(store.frontHistory) { entry in
+                                FrontHistoryRow(entry: entry, members: membersFor(entry))
+                                    .listRowBackground(theme.backgroundCard)
+                                    .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                        Button(role: .destructive) {
+                                            entryToDelete = entry
+                                        } label: {
+                                            Label("Delete", systemImage: "trash")
+                                        }
+                                    }
+                            }
+                        }
                     }
+                    .listStyle(.insetGrouped)
+                    .scrollContentBackground(.hidden)
+                    .background(theme.backgroundPrimary)
                 }
             }
         }
@@ -104,6 +92,24 @@ struct HistoryView: View {
         .sheet(isPresented: $showAddEntry, onDismiss: { Task { await reload() } }) {
             AddFrontEntrySheet()
                 .environmentObject(store)
+        }
+        .confirmationDialog(
+            "Delete this front entry?",
+            isPresented: Binding(
+                get: { entryToDelete != nil },
+                set: { if !$0 { entryToDelete = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Delete", role: .destructive) {
+                if let entry = entryToDelete {
+                    Task { await deleteFrontEntry(entry) }
+                }
+                entryToDelete = nil
+            }
+            Button("Cancel", role: .cancel) { entryToDelete = nil }
+        } message: {
+            Text("This cannot be undone.")
         }
     }
 

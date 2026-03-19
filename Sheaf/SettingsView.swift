@@ -151,15 +151,39 @@ struct SettingsView: View {
 
                     // Data
                     settingsSection(title: "Data") {
-                        Button { store.loadAll() } label: {
-                            HStack {
-                                Image(systemName: "arrow.clockwise").foregroundColor(theme.accent)
-                                Text("Refresh All Data")
-                                    .font(.system(size: 15, weight: .medium)).foregroundColor(theme.textPrimary)
-                                Spacer()
-                                if store.isLoading { ProgressView().tint(theme.accentLight) }
+                        VStack(spacing: 0) {
+                            NavigationLink {
+                                CustomFieldsView()
+                                    .environmentObject(store)
+                            } label: {
+                                HStack {
+                                    Image(systemName: "list.bullet.rectangle")
+                                        .foregroundColor(theme.accentLight)
+                                        .frame(width: 20)
+                                    Text("Custom Fields")
+                                        .font(.system(size: 15, weight: .medium))
+                                        .foregroundColor(theme.textPrimary)
+                                    Spacer()
+                                    Text("\(store.fields.count)")
+                                        .font(.system(size: 14))
+                                        .foregroundColor(theme.textTertiary)
+                                }
+                                .padding(.horizontal, 16).padding(.vertical, 14)
                             }
-                            .padding(.horizontal, 16).padding(.vertical, 14)
+                            .buttonStyle(.plain)
+
+                            Divider().background(theme.divider)
+
+                            Button { store.loadAll() } label: {
+                                HStack {
+                                    Image(systemName: "arrow.clockwise").foregroundColor(theme.accent)
+                                    Text("Refresh All Data")
+                                        .font(.system(size: 15, weight: .medium)).foregroundColor(theme.textPrimary)
+                                    Spacer()
+                                    if store.isLoading { ProgressView().tint(theme.accentLight) }
+                                }
+                                .padding(.horizontal, 16).padding(.vertical, 14)
+                            }
                         }
                     }
 

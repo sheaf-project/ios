@@ -229,6 +229,8 @@ struct MemberDetailSheet: View {
     @Environment(\.dismiss) var dismiss
     let member: Member
     @State private var showEdit = false
+    @State private var fieldValues: [CustomFieldValue] = []
+    @State private var loadingFields = false
 
     var body: some View {
         ZStack {
@@ -294,6 +296,45 @@ struct MemberDetailSheet: View {
 
 
 
+                        // Custom fields
+                        if !fieldValues.isEmpty {
+                            VStack(alignment: .leading, spacing: 10) {
+                                Text("Custom Fields")
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundColor(theme.textSecondary)
+                                    .textCase(.uppercase)
+                                    .kerning(0.8)
+
+                                VStack(spacing: 0) {
+                                    ForEach(Array(fieldValues.enumerated()), id: \.offset) { i, fv in
+                                        if let field = store.fields.first(where: { $0.id == fv.fieldID }) {
+                                            HStack(alignment: .top, spacing: 12) {
+                                                Text(field.name)
+                                                    .font(.system(size: 14))
+                                                    .foregroundColor(theme.textSecondary)
+                                                    .frame(width: 100, alignment: .leading)
+                                                Text(displayValue(fv.value, field: field))
+                                                    .font(.system(size: 14, weight: .medium))
+                                                    .foregroundColor(theme.textPrimary)
+                                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                            }
+                                            .padding(.horizontal, 16)
+                                            .padding(.vertical, 10)
+                                            if i < fieldValues.count - 1 {
+                                                Divider().background(theme.divider).padding(.leading, 16)
+                                            }
+                                        }
+                                    }
+                                }
+                                .background(theme.backgroundCard)
+                                .cornerRadius(14)
+                                .overlay(RoundedRectangle(cornerRadius: 14).stroke(theme.border, lineWidth: 1))
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        } else if loadingFields {
+                            ProgressView().tint(theme.accentLight)
+                        }
+
                         // Switch to button
                         Button {
                             Task {
@@ -321,6 +362,30 @@ struct MemberDetailSheet: View {
             MemberEditSheet(member: member)
                 .environmentObject(store)
         }
+        .task {
+            await loadFieldValues()
+        }
+    }
+
+    private func loadFieldValues() async {
+        guard let api = store.api else { return }
+        loadingFields = true
+        fieldValues = (try? await api.getMemberFieldValues(memberID: member.id)) ?? []
+        loadingFields = false
+    }
+
+    private func displayValue(_ value: AnyCodable, field: CustomField) -> String {
+        switch field.fieldType {
+        case .boolean:
+            if let b = value.value as? Bool { return b ? "Yes" : "No" }
+        case .date:
+            if let s = value.value as? String { return s }
+        default: break
+        }
+        if let s = value.value as? String, !s.isEmpty { return s }
+        if let n = value.value as? Int { return "\(n)" }
+        if let d = value.value as? Double { return String(format: "%g", d) }
+        return "—"
     }
 
     func infoSection<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
@@ -350,6 +415,7 @@ struct MemberEditSheet: View {
     @State private var avatarURL = ""
     @State private var colorHex = "#A78BFA"
     @State private var isSaving = false
+    @State private var fieldValues: [String: String] = [:]  // fieldID -> string value
 
     var isNew: Bool { member == nil }
 
@@ -399,6 +465,18 @@ struct MemberEditSheet: View {
                         .padding(14)
                         .background(theme.backgroundCard)
                         .cornerRadius(12)
+
+                        // Custom fields
+                        if !store.fields.isEmpty {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("Custom Fields")
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundColor(theme.textSecondary)
+                                ForEach(store.fields) { field in
+                                    customFieldEditor(field)
+                                }
+                            }
+                        }
                     }
                     .padding(.horizontal, 24)
                     .padding(.top, 12)
@@ -417,6 +495,19 @@ struct MemberEditSheet: View {
         description = m.description ?? ""
         avatarURL   = m.avatarURL ?? ""
         colorHex    = m.color ?? "#A78BFA"
+        // Load existing field values
+        Task {
+            guard let api = store.api, let memberID = member?.id else { return }
+            let values = (try? await api.getMemberFieldValues(memberID: memberID)) ?? []
+            await MainActor.run {
+                for v in values {
+                    if let s = v.value.value as? String { fieldValues[v.fieldID] = s }
+                    else if let n = v.value.value as? Int { fieldValues[v.fieldID] = "\(n)" }
+                    else if let d = v.value.value as? Double { fieldValues[v.fieldID] = String(format: "%g", d) }
+                    else if let b = v.value.value as? Bool { fieldValues[v.fieldID] = b ? "true" : "false" }
+                }
+            }
+        }
     }
 
     func formField(_ label: String, value: Binding<String>, placeholder: String, multiline: Bool = false) -> some View {
@@ -448,8 +539,61 @@ struct MemberEditSheet: View {
         )
         Task {
             await store.saveMember(existing: member, create: create)
+            // Save custom field values if editing existing member
+            if let memberID = member?.id ?? store.members.last?.id,
+               let api = store.api, !fieldValues.isEmpty {
+                let sets: [CustomFieldValueSet] = store.fields.compactMap { field in
+                    guard let val = fieldValues[field.id], !val.isEmpty else { return nil }
+                    return CustomFieldValueSet(
+                        fieldID: field.id,
+                        value: AnyCodable(val)
+                    )
+                }
+                if !sets.isEmpty {
+                    _ = try? await api.setMemberFieldValues(memberID: memberID, values: sets)
+                }
+            }
             isSaving = false
             dismiss()
+        }
+    }
+
+    @ViewBuilder
+    func customFieldEditor(_ field: CustomField) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(field.name)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(theme.textSecondary)
+            switch field.fieldType {
+            case .boolean:
+                Toggle("", isOn: Binding(
+                    get: { fieldValues[field.id] == "true" },
+                    set: { fieldValues[field.id] = $0 ? "true" : "false" }
+                ))
+                .tint(theme.accentLight)
+                .labelsHidden()
+            case .number:
+                TextField("0", text: Binding(
+                    get: { fieldValues[field.id] ?? "" },
+                    set: { fieldValues[field.id] = $0 }
+                ))
+                .keyboardType(.decimalPad)
+                .padding(12).background(theme.backgroundCard).cornerRadius(12).foregroundColor(theme.textPrimary)
+            case .date:
+                TextField("YYYY-MM-DD", text: Binding(
+                    get: { fieldValues[field.id] ?? "" },
+                    set: { fieldValues[field.id] = $0 }
+                ))
+                .keyboardType(.numbersAndPunctuation)
+                .padding(12).background(theme.backgroundCard).cornerRadius(12).foregroundColor(theme.textPrimary)
+            default:
+                TextField(field.name, text: Binding(
+                    get: { fieldValues[field.id] ?? "" },
+                    set: { fieldValues[field.id] = $0 }
+                ))
+                .autocorrectionDisabled()
+                .padding(12).background(theme.backgroundCard).cornerRadius(12).foregroundColor(theme.textPrimary)
+            }
         }
     }
 }
