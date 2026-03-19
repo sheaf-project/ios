@@ -71,7 +71,7 @@ struct HomeView: View {
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 12) {
                                 Spacer().frame(width: 12)
-                                ForEach(store.members.prefix(8)) { member in
+                                ForEach(store.membersByFrontFrequency.prefix(8)) { member in
                                     QuickSwitchChip(member: member) {
                                         Task { await store.switchFronting(to: [member.id]) }
                                     }
@@ -108,8 +108,19 @@ struct HomeView: View {
             SwitchFrontingSheet()
                 .environmentObject(store)
         }
+        .task {
+            await loadHistoryForFrequency()
+        }
     }
 
+
+    func loadHistoryForFrequency() async {
+        // Load history in background to power the frequency sort —
+        // only fetch if we don't already have it
+        if store.frontHistory.isEmpty {
+            await store.loadFrontHistory()
+        }
+    }
 
     func removeMemberFromFront(_ member: Member) async {
         let remaining = store.frontingMembers
@@ -141,6 +152,7 @@ struct FrontingMemberCard: View {
     @EnvironmentObject var store: SystemStore
     @Environment(\.theme) var theme
     let member: Member
+
     var body: some View {
         HStack(spacing: 16) {
             AvatarView(member: member, size: 64)
@@ -187,10 +199,39 @@ struct FrontingMemberCard: View {
             RoundedRectangle(cornerRadius: 20)
                 .stroke(member.displayColor.opacity(0.3), lineWidth: 1.5)
         )
+        .contextMenu {
+            Button {
+                Task { await removeFromFront() }
+            } label: {
+                Label("Remove from Front", systemImage: "person.fill.xmark")
+            }
 
+            Divider()
+
+            Button {
+                Task { await store.switchFronting(to: [member.id]) }
+            } label: {
+                Label("Switch to only \(member.displayName ?? member.name)", systemImage: "arrow.left.arrow.right")
+            }
+        }
     }
 
-
+    private func removeFromFront() async {
+        let remaining = store.frontingMembers
+            .filter { $0.id != member.id }
+            .map { $0.id }
+        if remaining.isEmpty {
+            for front in store.currentFronts where front.endedAt == nil {
+                _ = try? await store.api?.updateFront(
+                    id: front.id,
+                    update: FrontUpdate(endedAt: Date(), memberIDs: nil)
+                )
+            }
+            await MainActor.run { store.currentFronts = [] }
+        } else {
+            await store.switchFronting(to: remaining)
+        }
+    }
 }
 
 // MARK: - No One Fronting

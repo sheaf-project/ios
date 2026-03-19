@@ -5,24 +5,38 @@ struct WatchTabView: View {
     @EnvironmentObject var store: WatchStore
 
     var body: some View {
-        TabView {
-            WatchHomeView()
-                .environmentObject(store)
-                .tag(0)
+        NavigationStack {
+            List {
+                NavigationLink {
+                    WatchHomeView()
+                        .environmentObject(store)
+                } label: {
+                    Label("Fronting", systemImage: "person.2.fill")
+                }
 
-            WatchMembersView()
-                .environmentObject(store)
-                .tag(1)
+                NavigationLink {
+                    WatchMembersView()
+                        .environmentObject(store)
+                } label: {
+                    Label("Members", systemImage: "list.bullet")
+                }
 
-            WatchSwitchView()
-                .environmentObject(store)
-                .tag(2)
+                NavigationLink {
+                    WatchSwitchView()
+                        .environmentObject(store)
+                } label: {
+                    Label("Switch Front", systemImage: "arrow.left.arrow.right")
+                }
 
-            WatchSettingsView()
-                .environmentObject(authManager)
-                .environmentObject(store)
-                .tag(3)
+                NavigationLink {
+                    WatchSettingsView()
+                        .environmentObject(authManager)
+                        .environmentObject(store)
+                } label: {
+                    Label("Settings", systemImage: "gearshape.fill")
+                }
+            }
+            .navigationTitle("Sheaf")
         }
-        .tabViewStyle(.page)
     }
 }
