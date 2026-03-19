@@ -327,6 +327,10 @@ class APIClient {
         _ = try await request("/v1/tags/\(id)", method: "DELETE")
     }
 
+    func deleteField(id: String) async throws {
+        _ = try await request("/v1/fields/\(id)", method: "DELETE")
+    }
+
     // MARK: - Custom Fields
 
     func getFields() async throws -> [CustomField] {
