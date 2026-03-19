@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import Combine
+import WatchConnectivity
 
 // MARK: - AuthManager
 final class AuthManager: ObservableObject {
@@ -66,6 +67,8 @@ final class AuthManager: ObservableObject {
         UserDefaults.standard.set(cleanURL,            forKey: urlKey)
         UserDefaults.standard.set(tokens.accessToken,  forKey: accessKey)
         UserDefaults.standard.set(tokens.refreshToken, forKey: refreshKey)
+        // Push updated credentials to Apple Watch
+        PhoneConnectivityManager.shared.syncCredentials()
     }
 
     func logout() {
@@ -78,6 +81,10 @@ final class AuthManager: ObservableObject {
         UserDefaults.standard.removeObject(forKey: accessKey)
         UserDefaults.standard.removeObject(forKey: refreshKey)
         UserDefaults.standard.removeObject(forKey: urlKey)
+        // Clear credentials on watch too
+        try? WCSession.default.updateApplicationContext(
+            ["baseURL": "", "accessToken": "", "refreshToken": ""]
+        )
     }
 }
 
@@ -351,6 +358,62 @@ class APIClient {
     }
 
     // MARK: - File Upload
+
+
+    // MARK: - Simply Plural Import
+
+    func previewSimplyPluralImport(fileData: Data, filename: String) async throws -> SPPreviewSummary {
+        let data = try await multipartRequest(
+            path: "/v1/import/simplyplural/preview",
+            fileData: fileData,
+            filename: filename
+        )
+        return try JSONDecoder.iso.decode(SPPreviewSummary.self, from: data)
+    }
+
+    func doSimplyPluralImport(
+        fileData: Data,
+        filename: String,
+        systemProfile: Bool = true,
+        memberIDs: [String]? = nil,
+        customFronts: Bool = true,
+        customFields: Bool = true,
+        groups: Bool = true,
+        frontHistory: Bool = false,
+        notes: Bool = false
+    ) async throws -> SPImportResult {
+        var path = "/v1/import/simplyplural?system_profile=\(systemProfile)&custom_fronts=\(customFronts)&custom_fields=\(customFields)&groups=\(groups)&front_history=\(frontHistory)&notes=\(notes)"
+        if let ids = memberIDs, !ids.isEmpty {
+            path += "&member_ids=\(ids.joined(separator: ","))"
+        }
+        let data = try await multipartRequest(path: path, fileData: fileData, filename: filename)
+        return try JSONDecoder.iso.decode(SPImportResult.self, from: data)
+    }
+
+    /// Shared multipart/form-data helper for file uploads
+    private func multipartRequest(path: String, fileData: Data, filename: String) async throws -> Data {
+        guard let url = URL(string: auth.baseURL + path) else { throw URLError(.badURL) }
+        let boundary = "Boundary-\(UUID().uuidString)"
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("Bearer \(auth.accessToken)", forHTTPHeaderField: "Authorization")
+        req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        var body = Data()
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"file\"; filename=\"\(filename)\"\r\n".data(using: .utf8)!)
+        body.append("Content-Type: application/octet-stream\r\n\r\n".data(using: .utf8)!)
+        body.append(fileData)
+        body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
+        req.httpBody = body
+        let (data, response) = try await URLSession.shared.data(for: req)
+        guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
+        guard (200...299).contains(http.statusCode) else {
+            let msg = String(data: data, encoding: .utf8) ?? "(no body)"
+            throw NSError(domain: "APIError", code: http.statusCode,
+                          userInfo: [NSLocalizedDescriptionKey: "HTTP \(http.statusCode): \(msg)"])
+        }
+        return data
+    }
 
     func uploadFile(imageData: Data, mimeType: String = "image/jpeg") async throws -> String {
         guard let url = URL(string: auth.baseURL + "/v1/files/upload") else {

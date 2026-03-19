@@ -2,18 +2,15 @@ import SwiftUI
 
 struct HomeView: View {
     @EnvironmentObject var store: SystemStore
+    @Environment(\.theme) var theme
     @State private var showSwitchSheet = false
     @State private var isRefreshing = false
 
     var body: some View {
         ZStack {
             // Background
-            LinearGradient(
-                colors: [Color(hex: "#0F0C29") ?? .black,
-                         Color(hex: "#1A1535") ?? .black],
-                startPoint: .top, endPoint: .bottom
-            )
-            .ignoresSafeArea()
+            theme.backgroundGradient
+                .ignoresSafeArea()
 
             ScrollView {
                 VStack(spacing: 24) {
@@ -22,11 +19,11 @@ struct HomeView: View {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("Right Now")
                                 .font(.system(size: 28, weight: .bold, design: .rounded))
-                                .foregroundColor(.white)
+                                .foregroundColor(theme.textPrimary)
                             if let since = store.oldestCurrentFront?.startedAt {
                                 Text("Since \(since.formatted(date: .omitted, time: .shortened))")
                                     .font(.system(size: 13))
-                                    .foregroundColor(.white.opacity(0.5))
+                                    .foregroundColor(theme.textSecondary)
                             }
                         }
                         Spacer()
@@ -35,7 +32,7 @@ struct HomeView: View {
                         } label: {
                             Image(systemName: "arrow.clockwise")
                                 .font(.system(size: 16, weight: .semibold))
-                                .foregroundColor(.white.opacity(0.6))
+                                .foregroundColor(theme.textSecondary)
                                 .rotationEffect(.degrees(isRefreshing ? 360 : 0))
                                 .animation(isRefreshing ? .linear(duration: 0.8).repeatForever(autoreverses: false) : .default, value: isRefreshing)
                         }
@@ -52,6 +49,13 @@ struct HomeView: View {
                         ForEach(store.frontingMembers) { member in
                             FrontingMemberCard(member: member)
                                 .padding(.horizontal, 24)
+                                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                    Button(role: .destructive) {
+                                        Task { await removeMemberFromFront(member) }
+                                    } label: {
+                                        Label("Remove", systemImage: "person.fill.xmark")
+                                    }
+                                }
                         }
                     }
 
@@ -61,7 +65,7 @@ struct HomeView: View {
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Quick Switch")
                             .font(.system(size: 17, weight: .semibold))
-                            .foregroundColor(.white.opacity(0.8))
+                            .foregroundColor(theme.textPrimary.opacity(0.8))
                             .padding(.horizontal, 24)
 
                         ScrollView(.horizontal, showsIndicators: false) {
@@ -78,20 +82,22 @@ struct HomeView: View {
                                     VStack(spacing: 6) {
                                         ZStack {
                                             Circle()
-                                                .stroke(Color.white.opacity(0.2), style: StrokeStyle(lineWidth: 1.5, dash: [4]))
+                                                .stroke(theme.inputBorder, style: StrokeStyle(lineWidth: 1.5, dash: [4]))
                                                 .frame(width: 52, height: 52)
                                             Image(systemName: "plus")
-                                                .foregroundColor(.white.opacity(0.5))
+                                                .foregroundColor(theme.textSecondary)
                                                 .font(.system(size: 18))
                                         }
                                         Text("More")
                                             .font(.system(size: 11))
-                                            .foregroundColor(.white.opacity(0.4))
+                                            .foregroundColor(theme.textTertiary)
                                     }
                                 }
                                 Spacer().frame(width: 12)
                             }
                         }
+                        .background(Color.clear)
+                        .scrollContentBackground(.hidden)
                     }
 
                     Spacer().frame(height: 80)
@@ -101,6 +107,24 @@ struct HomeView: View {
         .sheet(isPresented: $showSwitchSheet) {
             SwitchFrontingSheet()
                 .environmentObject(store)
+        }
+    }
+
+
+    func removeMemberFromFront(_ member: Member) async {
+        let remaining = store.frontingMembers
+            .filter { $0.id != member.id }
+            .map { $0.id }
+        if remaining.isEmpty {
+            for front in store.currentFronts where front.endedAt == nil {
+                _ = try? await store.api?.updateFront(
+                    id: front.id,
+                    update: FrontUpdate(endedAt: Date(), memberIDs: nil)
+                )
+            }
+            await MainActor.run { store.currentFronts = [] }
+        } else {
+            await store.switchFronting(to: remaining)
         }
     }
 
@@ -114,8 +138,9 @@ struct HomeView: View {
 
 // MARK: - Fronting Member Card
 struct FrontingMemberCard: View {
+    @EnvironmentObject var store: SystemStore
+    @Environment(\.theme) var theme
     let member: Member
-
     var body: some View {
         HStack(spacing: 16) {
             AvatarView(member: member, size: 64)
@@ -123,7 +148,7 @@ struct FrontingMemberCard: View {
             VStack(alignment: .leading, spacing: 6) {
                 Text(member.displayName ?? member.name)
                     .font(.system(size: 22, weight: .bold, design: .rounded))
-                    .foregroundColor(.white)
+                    .foregroundColor(theme.textPrimary)
 
                 if let pronouns = member.pronouns, !pronouns.isEmpty {
                     Text(pronouns)
@@ -134,21 +159,18 @@ struct FrontingMemberCard: View {
                         .background(member.displayColor.opacity(0.15))
                         .cornerRadius(8)
                 }
-
-
             }
 
             Spacer()
 
-            // Fronting indicator
             VStack(spacing: 4) {
                 Circle()
-                    .fill(Color(hex: "#4ADE80")!)
+                    .fill(theme.success)
                     .frame(width: 10, height: 10)
-                    .shadow(color: Color(hex: "#4ADE80")!.opacity(0.8), radius: 4)
+                    .shadow(color: theme.success.opacity(0.8), radius: 4)
                 Text("front")
                     .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(Color(hex: "#4ADE80")!)
+                    .foregroundColor(theme.success)
             }
         }
         .padding(20)
@@ -165,35 +187,40 @@ struct FrontingMemberCard: View {
             RoundedRectangle(cornerRadius: 20)
                 .stroke(member.displayColor.opacity(0.3), lineWidth: 1.5)
         )
+
     }
+
+
 }
 
 // MARK: - No One Fronting
 struct NoOneFrontingCard: View {
+    @Environment(\.theme) var theme
     var body: some View {
         VStack(spacing: 12) {
             Image(systemName: "moon.stars.fill")
                 .font(.system(size: 40))
-                .foregroundColor(.white.opacity(0.25))
+                .foregroundColor(theme.textTertiary)
             Text("No one is fronting")
                 .font(.system(size: 18, weight: .medium, design: .rounded))
-                .foregroundColor(.white.opacity(0.5))
+                .foregroundColor(theme.textSecondary)
             Text("Use Quick Switch below to set who's fronting")
                 .font(.system(size: 13))
-                .foregroundColor(.white.opacity(0.3))
+                .foregroundColor(theme.textTertiary)
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
         .padding(40)
-        .background(Color.white.opacity(0.04))
+        .background(theme.backgroundCard)
         .cornerRadius(20)
-        .overlay(RoundedRectangle(cornerRadius: 20).stroke(Color.white.opacity(0.07), lineWidth: 1))
+        .overlay(RoundedRectangle(cornerRadius: 20).stroke(theme.border, lineWidth: 1))
         .padding(.horizontal, 24)
     }
 }
 
 // MARK: - Quick Switch Chip
 struct QuickSwitchChip: View {
+    @Environment(\.theme) var theme
     let member: Member
     let onTap: () -> Void
     @State private var pressed = false
@@ -204,7 +231,7 @@ struct QuickSwitchChip: View {
                 AvatarView(member: member, size: 52)
                 Text(member.displayName ?? member.name)
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(.white.opacity(0.75))
+                    .foregroundColor(theme.textSecondary)
                     .lineLimit(1)
                     .frame(width: 64)
             }
@@ -215,11 +242,12 @@ struct QuickSwitchChip: View {
 
 // MARK: - Skeleton
 struct FrontingSkeletonView: View {
+    @Environment(\.theme) var theme
     @State private var shimmer = false
 
     var body: some View {
         RoundedRectangle(cornerRadius: 20)
-            .fill(Color.white.opacity(0.06))
+            .fill(theme.backgroundCard)
             .frame(height: 110)
             .padding(.horizontal, 24)
             .overlay(
@@ -227,7 +255,7 @@ struct FrontingSkeletonView: View {
                     .fill(
                         LinearGradient(
                             colors: [Color.white.opacity(0),
-                                     Color.white.opacity(0.06),
+                                     theme.backgroundCard,
                                      Color.white.opacity(0)],
                             startPoint: shimmer ? .topLeading : .bottomTrailing,
                             endPoint: shimmer ? .bottomTrailing : .topLeading
@@ -255,6 +283,7 @@ struct ScaleButtonStyle: ButtonStyle {
 // MARK: - Switch Fronting Sheet
 struct SwitchFrontingSheet: View {
     @EnvironmentObject var store: SystemStore
+    @Environment(\.theme) var theme
     @Environment(\.dismiss) var dismiss
     @State private var selectedIDs: Set<String> = []
     @State private var note = ""
@@ -262,32 +291,56 @@ struct SwitchFrontingSheet: View {
 
     var body: some View {
         ZStack {
-            Color(hex: "#0F0C29")!.ignoresSafeArea()
+            theme.backgroundPrimary.ignoresSafeArea()
 
             VStack(spacing: 0) {
                 // Handle
                 Capsule()
-                    .fill(Color.white.opacity(0.2))
+                    .fill(theme.inputBorder)
                     .frame(width: 40, height: 4)
                     .padding(.top, 12)
 
                 HStack {
                     Text("Switch Fronting")
                         .font(.system(size: 20, weight: .bold, design: .rounded))
-                        .foregroundColor(.white)
+                        .foregroundColor(theme.textPrimary)
                     Spacer()
                     Button("Cancel") { dismiss() }
-                        .foregroundColor(.white.opacity(0.5))
+                        .foregroundColor(theme.textSecondary)
                 }
                 .padding(.horizontal, 24)
                 .padding(.top, 20)
 
-                Text("Select who is fronting")
-                    .font(.system(size: 14))
-                    .foregroundColor(.white.opacity(0.5))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 24)
-                    .padding(.top, 4)
+                HStack(spacing: 6) {
+                    Text(selectedIDs.isEmpty
+                         ? "Select one or more"
+                         : "\(selectedIDs.count) selected")
+                        .font(.system(size: 14))
+                        .foregroundColor(selectedIDs.isEmpty
+                            ? .white.opacity(0.5)
+                            : theme.accentLight)
+
+                    Spacer()
+
+                    // Select all / clear toggle
+                    Button {
+                        if selectedIDs.count == store.members.count {
+                            selectedIDs.removeAll()
+                        } else {
+                            selectedIDs = Set(store.members.map { $0.id })
+                        }
+                    } label: {
+                        Text(selectedIDs.count == store.members.count ? "Clear All" : "Select All")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(theme.accentLight)
+                            .padding(.horizontal, 10).padding(.vertical, 4)
+                            .background(theme.accentLight.opacity(0.12))
+                            .cornerRadius(8)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 24)
+                .padding(.top, 4)
 
                 ScrollView {
                     VStack(spacing: 10) {
@@ -320,17 +373,20 @@ struct SwitchFrontingSheet: View {
                         if isSwitching { ProgressView().tint(.white) }
                         else {
                             Image(systemName: "arrow.left.arrow.right")
-                            Text("Switch Now")
+                            Text(selectedIDs.count > 1
+                                 ? "Co-front (\(selectedIDs.count))"
+                                 : "Switch Now")
                                 .font(.system(size: 17, weight: .semibold))
                         }
                     }
+                    .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
                     .padding(16)
                     .background(Group {
                         if selectedIDs.isEmpty {
-                            Color.white.opacity(0.1)
+                            theme.backgroundElevated
                         } else {
-                            LinearGradient(colors: [Color(hex: "#A78BFA")!, Color(hex: "#6366F1")!],
+                            LinearGradient(colors: [theme.accentLight, theme.accent],
                                            startPoint: .leading, endPoint: .trailing)
                         }
                     })
@@ -348,6 +404,7 @@ struct SwitchFrontingSheet: View {
 }
 
 struct MemberSelectRow: View {
+    @Environment(\.theme) var theme
     let member: Member
     let isSelected: Bool
     let onTap: () -> Void
@@ -359,23 +416,23 @@ struct MemberSelectRow: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(member.displayName ?? member.name)
                         .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(.white)
+                        .foregroundColor(theme.textPrimary)
                     if let p = member.pronouns, !p.isEmpty {
                         Text(p)
                             .font(.system(size: 12))
-                            .foregroundColor(.white.opacity(0.5))
+                            .foregroundColor(theme.textSecondary)
                     }
                 }
                 Spacer()
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .foregroundColor(isSelected ? Color(hex: "#A78BFA")! : Color.white.opacity(0.3))
+                    .foregroundColor(isSelected ? theme.accentLight : Color.white.opacity(0.3))
                     .font(.system(size: 22))
             }
             .padding(14)
-            .background(isSelected ? Color(hex: "#A78BFA")!.opacity(0.1) : Color.white.opacity(0.05))
+            .background(isSelected ? theme.accentLight.opacity(0.1) : theme.backgroundCard)
             .cornerRadius(14)
             .overlay(RoundedRectangle(cornerRadius: 14)
-                .stroke(isSelected ? Color(hex: "#A78BFA")!.opacity(0.4) : Color.white.opacity(0.07), lineWidth: 1.5))
+                .stroke(isSelected ? theme.accentLight.opacity(0.4) : theme.border, lineWidth: 1.5))
         }
         .buttonStyle(ScaleButtonStyle())
     }

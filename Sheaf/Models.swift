@@ -420,3 +420,58 @@ extension Color {
         return String(format: "#%02X%02X%02X", Int(r*255), Int(g*255), Int(b*255))
     }
 }
+
+// MARK: - Simply Plural Import Models
+struct SPPreviewMember: Codable, Identifiable {
+    let id: String
+    let name: String
+}
+
+struct SPPreviewCustomFront: Codable, Identifiable {
+    let id: String
+    let name: String
+}
+
+struct SPPreviewSummary: Codable {
+    var systemName: String?
+    var memberCount: Int
+    var members: [SPPreviewMember]
+    var customFrontCount: Int
+    var customFronts: [SPPreviewCustomFront]
+    var frontHistoryCount: Int
+    var groupCount: Int
+    var customFieldCount: Int
+    var noteCount: Int
+
+    enum CodingKeys: String, CodingKey {
+        case members
+        case customFronts      = "custom_fronts"
+        case systemName        = "system_name"
+        case memberCount       = "member_count"
+        case customFrontCount  = "custom_front_count"
+        case frontHistoryCount = "front_history_count"
+        case groupCount        = "group_count"
+        case customFieldCount  = "custom_field_count"
+        case noteCount         = "note_count"
+    }
+}
+
+struct SPImportResult: Codable {
+    var membersImported:      Int
+    var customFrontsImported: Int
+    var frontsImported:       Int
+    var groupsImported:       Int
+    var customFieldsImported: Int
+    var notesSkipped:         Int
+    var warnings:             [String]
+
+    enum CodingKeys: String, CodingKey {
+        case warnings
+        case membersImported      = "members_imported"
+        case customFrontsImported = "custom_fronts_imported"
+        case frontsImported       = "fronts_imported"
+        case groupsImported       = "groups_imported"
+        case customFieldsImported = "custom_fields_imported"
+        case notesSkipped         = "notes_skipped"
+    }
+}
