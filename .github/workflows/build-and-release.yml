@@ -41,8 +41,8 @@ jobs:
       
       - name: Build iOS app only (unsigned)
         run: |
-          # Build ONLY the Sheaf target, do NOT build implicit dependencies (Watch app)
-          # The -skipDependencies flag (if available) or we build with careful settings
+          # Build ONLY the Sheaf target without dependencies or embed phases
+          # This skips building AND copying the Watch app
           xcodebuild \
             -project Sheaf.xcodeproj \
             -target Sheaf \
@@ -57,6 +57,8 @@ jobs:
             CODE_SIGN_ENTITLEMENTS="" \
             DEVELOPMENT_TEAM="" \
             DONT_BUILD_DEPENDENCIES=YES \
+            DONT_EMBED_DEPENDENCIES=YES \
+            DISABLE_XCFRAMEWORKS=YES \
             build
       
       - name: Find built app
