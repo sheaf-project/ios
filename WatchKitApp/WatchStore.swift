@@ -1,6 +1,9 @@
 import Foundation
 import SwiftUI
 import Combine
+#if os(watchOS)
+import WidgetKit
+#endif
 
 /// Thin observable store for the watch — same shape as iOS SystemStore
 /// but using WatchAuthManager so it compiles without UIKit dependencies.
@@ -27,6 +30,9 @@ class WatchStore: ObservableObject {
                 async let fr = api?.getCurrentFronts() ?? []
                 members       = try await m
                 currentFronts = try await fr
+                
+                // Update complication data
+                updateComplicationData()
             } catch {
                 errorMessage = error.localizedDescription
             }
@@ -51,8 +57,45 @@ class WatchStore: ObservableObject {
             }
             let created = try await api.createFront(FrontCreate(memberIDs: memberIDs, startedAt: now))
             currentFronts = [created]
+            
+            // Update complication data
+            updateComplicationData()
         } catch {
             errorMessage = error.localizedDescription
         }
     }
+    
+    // MARK: - Complication Support
+    
+    private func updateComplicationData() {
+        guard let sharedDefaults = UserDefaults(suiteName: "group.systems.lupine.sheaf") else {
+            return
+        }
+        
+        let primarySharedMember = frontingMembers.first.map { member in
+            SharedMember(
+                id: member.id,
+                name: member.name,
+                displayName: member.displayName,
+                color: member.color,
+                avatarURL: member.avatarURL  // Include avatar URL
+            )
+        }
+        
+        let frontingData = SharedFrontingData(
+            primaryMember: primarySharedMember,
+            totalCount: frontingMembers.count,
+            updatedAt: Date()
+        )
+        
+        if let encoded = try? JSONEncoder().encode(frontingData) {
+            sharedDefaults.set(encoded, forKey: "currentFronting")
+        }
+        
+        // Request complication update
+        #if os(watchOS)
+        WidgetCenter.shared.reloadAllTimelines()
+        #endif
+    }
 }
+

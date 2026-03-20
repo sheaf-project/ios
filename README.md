@@ -54,6 +54,13 @@ A native iOS and watchOS companion app for managing plural systems. Sheaf provid
   - Independent authentication state
   - Native watchOS UI patterns
 
+- **Complications**
+  - Show current fronter on watch face
+  - Multiple complication styles (circular, rectangular, inline, corner)
+  - Auto-updates when fronting changes
+  - Co-fronting count display
+  - Works with most watch faces
+
 ### 🔄 Cross-Platform Features
 
 - **Watch Connectivity**

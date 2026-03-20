@@ -4,4 +4,13 @@
    <FileRef
       location = "self:">
    </FileRef>
+   <FileRef
+      location = "group:WIDGET_TROUBLESHOOTING.md">
+   </FileRef>
+   <FileRef
+      location = "group:WIDGET_INTEGRITY_FIX.md">
+   </FileRef>
+   <FileRef
+      location = "group:TestMinimalWidget.swift">
+   </FileRef>
 </Workspace>

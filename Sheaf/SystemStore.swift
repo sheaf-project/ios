@@ -1,6 +1,10 @@
 import Foundation
 import SwiftUI
 import Combine
+#if canImport(WidgetKit)
+import WidgetKit
+#endif
+
 
 @MainActor
 class SystemStore: ObservableObject {
@@ -37,6 +41,9 @@ class SystemStore: ObservableObject {
                 fields        = try await f
                 currentFronts = try await fr
                 systemProfile = try await s
+                
+                // Update complication with the latest fronting data
+                updateWatchComplication()
             } catch {
                 errorMessage = error.localizedDescription
             }
@@ -67,6 +74,9 @@ class SystemStore: ObservableObject {
             // Create new front
             let created = try await api.createFront(FrontCreate(memberIDs: memberIDs, startedAt: now))
             currentFronts = [created]
+            
+            // Update Watch complication
+            updateWatchComplication()
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -170,4 +180,59 @@ class SystemStore: ObservableObject {
             false
         }
     }
+    
+    // MARK: - Watch Complication Support
+    
+    private func updateWatchComplication() {
+        print("🔄 SystemStore: Updating watch complication...")
+        print("   Fronting members count: \(frontingMembers.count)")
+        
+        guard let sharedDefaults = UserDefaults(suiteName: "group.systems.lupine.sheaf") else {
+            print("❌ SystemStore: FAILED to access App Group 'group.systems.lupine.sheaf'")
+            print("   Make sure App Groups capability is enabled for the main app target!")
+            return
+        }
+        
+        print("✅ SystemStore: App Group accessible")
+        
+        let primarySharedMember = frontingMembers.first.map { member in
+            SharedMember(
+                id: member.id,
+                name: member.name,
+                displayName: member.displayName,
+                color: member.color,
+                avatarURL: member.avatarURL  // Include avatar URL
+            )
+        }
+        
+        let frontingData = SharedFrontingData(
+            primaryMember: primarySharedMember,
+            totalCount: frontingMembers.count,
+            updatedAt: Date()
+        )
+        
+        if let encoded = try? JSONEncoder().encode(frontingData) {
+            sharedDefaults.set(encoded, forKey: "currentFronting")
+            sharedDefaults.synchronize() // Force write to disk
+            print("✅ SystemStore: Wrote fronting data to App Group")
+            if let primary = primarySharedMember {
+                print("   Primary member: \(primary.displayName ?? primary.name)")
+                print("   Total fronting: \(frontingMembers.count)")
+            } else {
+                print("   No one fronting")
+            }
+        } else {
+            print("❌ SystemStore: Failed to encode fronting data")
+        }
+        
+        // Reload all widgets/complications to show the new data
+        #if canImport(WidgetKit)
+        WidgetKit.WidgetCenter.shared.reloadAllTimelines()
+        print("🔄 SystemStore: Requested widget reload")
+        #endif
+        
+        // Notify Watch to update complication
+        PhoneConnectivityManager.shared.syncCredentials()
+    }
 }
+

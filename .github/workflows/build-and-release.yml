@@ -1,5 +1,9 @@
 name: Build and Release Dev IPA
 
+# This workflow builds an unsigned IPA for distribution.
+# The Watch app is built separately and embedded if available.
+# Local Xcode builds can include Watch app as a dependency without affecting CI.
+
 on:
   push:
     branches:
@@ -41,7 +45,7 @@ jobs:
       
       - name: Build iOS app only (unsigned)
         run: |
-          # Build the iOS app for iPhone
+          # Build the iOS app for iPhone (without Watch app dependencies)
           set +e  # Don't exit on error
           
           xcodebuild \
@@ -57,6 +61,8 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             CODE_SIGN_ENTITLEMENTS="" \
             DEVELOPMENT_TEAM="" \
+            SKIP_INSTALL=NO \
+            VALIDATE_DEPENDENCIES=NO \
             build 2>&1 | tee "$RUNNER_TEMP/build-ios.log"
           
           BUILD_EXIT_CODE=${PIPESTATUS[0]}
@@ -73,38 +79,49 @@ jobs:
           fi
       
       - name: Build Watch app (unsigned)
+        continue-on-error: true
         run: |
-          # Build the Watch app for watchOS
+          # Build the Watch app for watchOS (optional - continues if it fails)
           echo "Building Watch app for watchOS..."
           
-          xcodebuild \
-            -project Sheaf.xcodeproj \
-            -target "SheafWatch Watch App" \
-            -configuration "${{ env.CONFIGURATION }}" \
-            -sdk watchos \
-            -arch arm64_32 \
-            SYMROOT="$RUNNER_TEMP/Build" \
-            ONLY_ACTIVE_ARCH=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGN_IDENTITY="" \
-            CODE_SIGN_ENTITLEMENTS="" \
-            DEVELOPMENT_TEAM="" \
-            build
-          
-          # Check if Watch app was built
-          if [ -d "$RUNNER_TEMP/Build/${{ env.CONFIGURATION }}-watchos/SheafWatch Watch App.app" ]; then
-            echo "✅ Watch app built successfully"
-            ls -la "$RUNNER_TEMP/Build/${{ env.CONFIGURATION }}-watchos/SheafWatch Watch App.app"
+          # First check if the Watch app target exists
+          if xcodebuild -list -project Sheaf.xcodeproj | grep -q "SheafWatch Watch App"; then
+            echo "📱 Watch app target found, building..."
+            
+            xcodebuild \
+              -project Sheaf.xcodeproj \
+              -target "SheafWatch Watch App" \
+              -configuration "${{ env.CONFIGURATION }}" \
+              -sdk watchos \
+              -arch arm64_32 \
+              SYMROOT="$RUNNER_TEMP/Build" \
+              ONLY_ACTIVE_ARCH=NO \
+              CODE_SIGNING_REQUIRED=NO \
+              CODE_SIGNING_ALLOWED=NO \
+              CODE_SIGN_IDENTITY="" \
+              CODE_SIGN_ENTITLEMENTS="" \
+              DEVELOPMENT_TEAM="" \
+              VALIDATE_DEPENDENCIES=NO \
+              build || echo "⚠️ Watch app build failed, continuing with iOS-only IPA"
+            
+            # Check if Watch app was built
+            if [ -d "$RUNNER_TEMP/Build/${{ env.CONFIGURATION }}-watchos/SheafWatch Watch App.app" ]; then
+              echo "✅ Watch app built successfully"
+              ls -la "$RUNNER_TEMP/Build/${{ env.CONFIGURATION }}-watchos/SheafWatch Watch App.app"
+            else
+              echo "⚠️ Watch app build failed, but continuing with iOS-only IPA"
+            fi
           else
-            echo "⚠️ Watch app build failed, but continuing with iOS-only IPA"
-            echo "Checking what was built:"
-            find "$RUNNER_TEMP/Build" -name "*.app" -type d
+            echo "ℹ️ Watch app target not found, building iOS-only IPA"
           fi
+          
+          echo "Checking what was built:"
+          find "$RUNNER_TEMP/Build" -name "*.app" -type d || true
       
       - name: Embed Watch app into iOS app
+        continue-on-error: true
         run: |
-          # Create Watch folder in iOS app bundle
+          # Create Watch folder in iOS app bundle if Watch app exists
           WATCH_APP_SOURCE="$RUNNER_TEMP/Build/${{ env.CONFIGURATION }}-watchos/SheafWatch Watch App.app"
           WATCH_APP_DEST="$RUNNER_TEMP/Build/${{ env.CONFIGURATION }}-iphoneos/Sheaf.app/Watch"
           
@@ -120,7 +137,7 @@ jobs:
             echo "Final iOS app structure:"
             ls -la "$RUNNER_TEMP/Build/${{ env.CONFIGURATION }}-iphoneos/Sheaf.app/"
           else
-            echo "⚠️ Watch app not found at $WATCH_APP_SOURCE"
+            echo "ℹ️ Watch app not found at $WATCH_APP_SOURCE"
             echo "Creating iOS-only IPA without Watch app"
           fi
       

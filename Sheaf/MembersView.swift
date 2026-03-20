@@ -184,7 +184,7 @@ struct MemberRow: View {
                 Button {
                     Task { await store.switchFronting(to: [member.id]) }
                 } label: {
-                    Label("Switch Front to \(member.displayName ?? member.name)", systemImage: "arrow.left.arrow.right")
+                    Label("Switch to \(member.displayName ?? member.name) as the only fronter", systemImage: "arrow.left.arrow.right")
                 }
             }
 
