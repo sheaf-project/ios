@@ -8,6 +8,7 @@ on:
   workflow_dispatch:
 
 env:
+  XCODE_VERSION: '26.2'
   IOS_SCHEME: 'Sheaf'
   CONFIGURATION: 'Release'
 
@@ -21,7 +22,7 @@ jobs:
         uses: actions/checkout@v4
       
       - name: Select Xcode version
-        run: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+        run: sudo xcode-select -s /Applications/Xcode_${{ env.XCODE_VERSION }}.app/Contents/Developer
       
       - name: Show Xcode version
         run: xcodebuild -version
