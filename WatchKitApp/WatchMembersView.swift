@@ -38,7 +38,7 @@ struct WatchMembersView: View {
                             Button {
                                 Task { await switchToOnly(member) }
                             } label: {
-                                Label("Switch to \(member.displayName ?? member.name)", systemImage: "arrow.left.arrow.right")
+                                Label("Switch to \(member.displayName ?? member.name) as the only fronter", systemImage: "arrow.left.arrow.right")
                             }
                         }
                     }
@@ -165,7 +165,7 @@ struct WatchMemberDetailView: View {
                     Button {
                         Task { await store.switchFronting(to: [member.id]) }
                     } label: {
-                        Label("Switch Front", systemImage: "arrow.left.arrow.right")
+                        Label("Switch to Only Fronter", systemImage: "arrow.left.arrow.right")
                             .font(.system(size: 13))
                     }
                     .buttonStyle(.bordered)

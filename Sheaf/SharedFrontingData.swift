@@ -13,6 +13,7 @@ struct SharedMember: Codable {
     let name: String
     let displayName: String?
     let color: String?
+    let avatarURL: String?  // Added to support image avatars
 }
 
 // MARK: - Shared Data Model for Complication

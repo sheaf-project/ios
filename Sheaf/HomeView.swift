@@ -4,7 +4,6 @@ struct HomeView: View {
     @EnvironmentObject var store: SystemStore
     @Environment(\.theme) var theme
     @State private var showSwitchSheet = false
-    @State private var isRefreshing = false
 
     var body: some View {
         ZStack {
@@ -29,15 +28,6 @@ struct HomeView: View {
                             }
                         }
                         Spacer()
-                        Button {
-                            Task { await refresh() }
-                        } label: {
-                            Image(systemName: "arrow.clockwise")
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundColor(theme.textSecondary)
-                                .rotationEffect(.degrees(isRefreshing ? 360 : 0))
-                                .animation(isRefreshing ? .linear(duration: 0.8).repeatForever(autoreverses: false) : .default, value: isRefreshing)
-                        }
                     }
                     .padding(.horizontal, 24)
                     .padding(.top, 16)
@@ -105,6 +95,9 @@ struct HomeView: View {
                     Spacer().frame(height: 80)
                 }
             }
+            .refreshable {
+                await refresh()
+            }
         }
         .sheet(isPresented: $showSwitchSheet) {
             SwitchFrontingSheet()
@@ -142,10 +135,9 @@ struct HomeView: View {
     }
 
     func refresh() async {
-        isRefreshing = true
         store.loadAll()
-        try? await Task.sleep(nanoseconds: 800_000_000)
-        isRefreshing = false
+        // Wait briefly for the load to initiate
+        try? await Task.sleep(nanoseconds: 500_000_000)
     }
 }
 
@@ -213,7 +205,7 @@ struct FrontingMemberCard: View {
             Button {
                 Task { await store.switchFronting(to: [member.id]) }
             } label: {
-                Label("Switch to \(member.displayName ?? member.name)", systemImage: "arrow.left.arrow.right")
+                Label("Switch to \(member.displayName ?? member.name) as the only fronter", systemImage: "arrow.left.arrow.right")
             }
         }
     }

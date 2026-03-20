@@ -6,14 +6,19 @@ struct FrontingComplicationProvider: TimelineProvider {
     typealias Entry = FrontingEntry
     
     func placeholder(in context: Context) -> FrontingEntry {
-        FrontingEntry(date: Date(), frontingMember: nil, frontCount: 0)
+        // Return example data for placeholder instead of empty state
+        FrontingEntry(
+            date: Date(),
+            frontingMember: SharedMember.example,
+            frontCount: 1
+        )
     }
     
     func getSnapshot(in context: Context, completion: @escaping (FrontingEntry) -> Void) {
         // For previews in the widget gallery
         let entry = FrontingEntry(
             date: Date(),
-            frontingMember: Member.example,
+            frontingMember: SharedMember.example,
             frontCount: 1
         )
         completion(entry)
@@ -33,15 +38,24 @@ struct FrontingComplicationProvider: TimelineProvider {
     
     private func getCurrentFrontingEntry() async -> FrontingEntry {
         // Try to get current fronting info from shared data
-        if let sharedData = UserDefaults(suiteName: "group.com.yourdomain.sheaf") {
-            if let frontingData = sharedData.data(forKey: "currentFronting"),
-               let decoded = try? JSONDecoder().decode(SharedFrontingData.self, from: frontingData) {
+        guard let sharedData = UserDefaults(suiteName: "group.systems.lupine.sheaf") else {
+            print("⚠️ Widget: Unable to access App Group - check entitlements")
+            return FrontingEntry(date: Date(), frontingMember: nil, frontCount: 0)
+        }
+        
+        if let frontingData = sharedData.data(forKey: "currentFronting") {
+            if let decoded = try? JSONDecoder().decode(SharedFrontingData.self, from: frontingData) {
+                print("✅ Widget: Loaded fronting data - \(decoded.totalCount) fronting")
                 return FrontingEntry(
                     date: Date(),
                     frontingMember: decoded.primaryMember,
                     frontCount: decoded.totalCount
                 )
+            } else {
+                print("⚠️ Widget: Failed to decode fronting data")
             }
+        } else {
+            print("⚠️ Widget: No fronting data found in App Group")
         }
         
         // Fallback: no one fronting
@@ -52,15 +66,96 @@ struct FrontingComplicationProvider: TimelineProvider {
 // MARK: - Timeline Entry
 struct FrontingEntry: TimelineEntry {
     let date: Date
-    let frontingMember: Member?
+    let frontingMember: SharedMember?
     let frontCount: Int
 }
 
-// MARK: - Shared Data Model
-struct SharedFrontingData: Codable {
-    let primaryMember: Member?
-    let totalCount: Int
-    let updatedAt: Date
+// MARK: - Shared Member Extensions
+extension SharedMember {
+    var displayColor: Color {
+        Color(hex: color ?? "#8B5CF6") ?? .purple
+    }
+    
+    var initials: String {
+        let n = displayName ?? name
+        let parts = n.split(separator: " ")
+        if parts.count >= 2 {
+            return String(parts[0].prefix(1)) + String(parts[1].prefix(1))
+        }
+        return String(n.prefix(2)).uppercased()
+    }
+    
+    /// Short name for compact display (first name only)
+    var shortName: String {
+        let n = displayName ?? name
+        if let firstName = n.split(separator: " ").first {
+            return String(firstName)
+        }
+        return n
+    }
+}
+
+// MARK: - Widget-Specific Avatar View
+struct WidgetAvatarView: View {
+    let member: SharedMember
+    let size: CGFloat
+
+    var body: some View {
+        Group {
+            if let avatarURLString = member.avatarURL,
+               !avatarURLString.isEmpty,
+               let url = URL(string: avatarURLString) {
+                // Show image avatar if available
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                    case .failure:
+                        // Fallback to color avatar with initials on error
+                        ColorAvatarView(member: member, size: size)
+                    case .empty:
+                        // Show loading state with color background
+                        ZStack {
+                            ColorAvatarView(member: member, size: size)
+                            ProgressView()
+                                .tint(.white)
+                        }
+                    @unknown default:
+                        ColorAvatarView(member: member, size: size)
+                    }
+                }
+            } else {
+                // No avatar URL, use color avatar with initials
+                ColorAvatarView(member: member, size: size)
+            }
+        }
+        .frame(width: size, height: size)
+        .clipShape(Circle())
+    }
+}
+
+// MARK: - Color Avatar (Initials)
+private struct ColorAvatarView: View {
+    let member: SharedMember
+    let size: CGFloat
+    
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(LinearGradient(
+                    colors: [member.displayColor, member.displayColor.opacity(0.7)],
+                    startPoint: .topLeading, endPoint: .bottomTrailing
+                ))
+            
+            Text(member.initials)
+                .font(.system(size: size * 0.35, weight: .bold, design: .rounded))
+                .foregroundColor(.white)
+                .minimumScaleFactor(0.5)
+                .lineLimit(1)
+        }
+    }
 }
 
 // MARK: - Widget Views
@@ -76,8 +171,10 @@ struct FrontingComplicationView: View {
             RectangularComplicationView(entry: entry)
         case .accessoryInline:
             InlineComplicationView(entry: entry)
+        #if os(watchOS)
         case .accessoryCorner:
             CornerComplicationView(entry: entry)
+        #endif
         default:
             Text("Sheaf")
         }
@@ -92,8 +189,7 @@ struct CircularComplicationView: View {
         ZStack {
             if let member = entry.frontingMember {
                 // Show avatar with count badge if co-fronting
-                AvatarView(member: member, size: 42)
-                    .clipShape(Circle())
+                WidgetAvatarView(member: member, size: 42)
                 
                 if entry.frontCount > 1 {
                     VStack {
@@ -108,6 +204,7 @@ struct CircularComplicationView: View {
                                 .clipShape(Circle())
                         }
                     }
+                    .padding(2)
                 }
             } else {
                 // No one fronting
@@ -115,6 +212,9 @@ struct CircularComplicationView: View {
                     .font(.system(size: 20))
                     .foregroundColor(.secondary)
             }
+        }
+        .containerBackground(for: .widget) {
+            Color.clear
         }
         .widgetLabel {
             if entry.frontCount > 1 {
@@ -135,11 +235,10 @@ struct RectangularComplicationView: View {
     var body: some View {
         HStack(spacing: 8) {
             if let member = entry.frontingMember {
-                AvatarView(member: member, size: 32)
-                    .clipShape(Circle())
+                WidgetAvatarView(member: member, size: 32)
                 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(member.displayName ?? member.name)
+                    Text(member.shortName)
                         .font(.system(size: 14, weight: .semibold))
                         .lineLimit(1)
                     
@@ -170,6 +269,9 @@ struct RectangularComplicationView: View {
             Spacer()
         }
         .padding(.vertical, 4)
+        .containerBackground(for: .widget) {
+            Color.clear
+        }
     }
 }
 
@@ -180,9 +282,9 @@ struct InlineComplicationView: View {
     var body: some View {
         if let member = entry.frontingMember {
             if entry.frontCount > 1 {
-                Text("\(member.displayName ?? member.name) +\(entry.frontCount - 1)")
+                Text("\(member.shortName) +\(entry.frontCount - 1)")
             } else {
-                Text(member.displayName ?? member.name)
+                Text(member.shortName)
             }
         } else {
             Text("No front")
@@ -196,8 +298,11 @@ struct CornerComplicationView: View {
     
     var body: some View {
         if let member = entry.frontingMember {
-            Text(String((member.displayName ?? member.name).prefix(3)))
+            Text(member.initials)
                 .font(.system(size: 16, weight: .bold))
+                .containerBackground(for: .widget) {
+                    Color.clear
+                }
                 .widgetLabel {
                     if entry.frontCount > 1 {
                         Text("\(entry.frontCount) fronting")
@@ -207,6 +312,9 @@ struct CornerComplicationView: View {
                 }
         } else {
             Image(systemName: "moon.stars")
+                .containerBackground(for: .widget) {
+                    Color.clear
+                }
                 .widgetLabel {
                     Text("No front")
                 }
@@ -215,7 +323,6 @@ struct CornerComplicationView: View {
 }
 
 // MARK: - Widget Configuration
-@main
 struct FrontingComplication: Widget {
     let kind: String = "FrontingComplication"
     
@@ -225,12 +332,20 @@ struct FrontingComplication: Widget {
         }
         .configurationDisplayName("Fronting Status")
         .description("Shows who's currently fronting")
+        #if os(watchOS)
         .supportedFamilies([
             .accessoryCircular,
             .accessoryRectangular,
             .accessoryInline,
             .accessoryCorner
         ])
+        #else
+        .supportedFamilies([
+            .accessoryCircular,
+            .accessoryRectangular,
+            .accessoryInline
+        ])
+        #endif
     }
 }
 
@@ -242,7 +357,7 @@ struct FrontingComplication_Previews: PreviewProvider {
             // Circular - with member
             FrontingComplicationView(entry: FrontingEntry(
                 date: Date(),
-                frontingMember: Member.example,
+                frontingMember: SharedMember.example,
                 frontCount: 1
             ))
             .previewContext(WidgetPreviewContext(family: .accessoryCircular))
@@ -251,7 +366,7 @@ struct FrontingComplication_Previews: PreviewProvider {
             // Circular - co-fronting
             FrontingComplicationView(entry: FrontingEntry(
                 date: Date(),
-                frontingMember: Member.example,
+                frontingMember: SharedMember.example,
                 frontCount: 3
             ))
             .previewContext(WidgetPreviewContext(family: .accessoryCircular))
@@ -260,7 +375,7 @@ struct FrontingComplication_Previews: PreviewProvider {
             // Rectangular
             FrontingComplicationView(entry: FrontingEntry(
                 date: Date(),
-                frontingMember: Member.example,
+                frontingMember: SharedMember.example,
                 frontCount: 2
             ))
             .previewContext(WidgetPreviewContext(family: .accessoryRectangular))
@@ -269,7 +384,7 @@ struct FrontingComplication_Previews: PreviewProvider {
             // Inline
             FrontingComplicationView(entry: FrontingEntry(
                 date: Date(),
-                frontingMember: Member.example,
+                frontingMember: SharedMember.example,
                 frontCount: 1
             ))
             .previewContext(WidgetPreviewContext(family: .accessoryInline))
@@ -289,25 +404,14 @@ struct FrontingComplication_Previews: PreviewProvider {
 #endif
 
 // MARK: - Example Data
-extension Member {
-    static var example: Member {
-        Member(
+extension SharedMember {
+    static var example: SharedMember {
+        SharedMember(
             id: "example",
             name: "Alice",
             displayName: "Alice",
-            pronouns: "she/her",
-            avatarURL: nil,
             color: "#9B59B6",
-            description: nil,
-            birthday: nil,
-            privacy: nil,
-            proxyTags: nil,
-            keepProxy: nil,
-            autoproxyEnabled: nil,
-            messageCount: nil,
-            lastMessageTimestamp: nil,
-            created: nil,
-            bannerImage: nil
+            avatarURL: nil  // Example uses color avatar
         )
     }
 }
