@@ -1,77 +1,379 @@
-name: Build
+name: Build and Release Dev IPA
 
 on:
   push:
-    branches: [ main, develop ]
-  pull_request:
-    branches: [ main ]
+    branches:
+      - main
+      - develop
+  workflow_dispatch:
+
+env:
+  XCODE_VERSION: '16.0'
+  IOS_SCHEME: 'Sheaf'
+  CONFIGURATION: 'Release'
 
 jobs:
   build:
     name: Build Unsigned IPA
     runs-on: macos-26
-
+    
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
-
-      - name: Show build environment
+      
+      - name: Select Xcode version
+        run: sudo xcode-select -s /Applications/Xcode_${{ env.XCODE_VERSION }}.app/Contents/Developer
+      
+      - name: Show Xcode version
+        run: xcodebuild -version
+      
+      - name: Clean build folder
         run: |
-          xcodebuild -version
-          swift --version
-
-      - name: Resolve dependencies
+          xcodebuild clean \
+            -scheme "${{ env.IOS_SCHEME }}" \
+            -configuration "${{ env.CONFIGURATION }}"
+      
+      - name: Build for iOS device (unsigned)
         run: |
-          xcodebuild -resolvePackageDependencies \
-            -project Sheaf.xcodeproj \
-            -scheme Sheaf
-
-      # Build for generic iOS device — produces a .app we can package
-      - name: Build iOS (unsigned)
-        run: |
-          xcodebuild build \
-            -project Sheaf.xcodeproj \
-            -scheme Sheaf \
+          xcodebuild \
+            -scheme "${{ env.IOS_SCHEME }}" \
+            -configuration "${{ env.CONFIGURATION }}" \
+            -sdk iphoneos \
             -destination 'generic/platform=iOS' \
-            -configuration Release \
-            -derivedDataPath build/DerivedData \
-            CODE_SIGNING_ALLOWED=NO \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
             CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
             CODE_SIGN_IDENTITY="" \
-            AD_HOC_CODE_SIGNING_ALLOWED=YES \
-            | xcpretty --color || exit 1
-
-      # Package the .app into an unsigned IPA
-      # Users can sign this themselves with AltStore, Sideloadly, or their own cert
-      - name: Package IPA
+            CODE_SIGN_ENTITLEMENTS="" \
+            ONLY_ACTIVE_ARCH=NO \
+            build
+      
+      - name: Find built app
+        id: find_app
         run: |
-          APP_PATH=$(find build/DerivedData -name "Sheaf.app" -not -path "*/WatchKitApp/*" | head -1)
-          echo "Found .app at: $APP_PATH"
-
-          mkdir -p build/Payload
-          cp -r "$APP_PATH" build/Payload/Sheaf.app
-
-          cd build
+          APP_PATH=$(find "$RUNNER_TEMP/DerivedData" -name "Sheaf.app" -type d -path "*/Build/Products/${{ env.CONFIGURATION }}-iphoneos/*" | head -n 1)
+          echo "app_path=$APP_PATH" >> $GITHUB_OUTPUT
+          echo "Found app at: $APP_PATH"
+          ls -la "$APP_PATH"
+      
+      - name: Create Payload directory
+        run: |
+          mkdir -p "$RUNNER_TEMP/Payload"
+          cp -r "${{ steps.find_app.outputs.app_path }}" "$RUNNER_TEMP/Payload/"
+      
+      - name: Create unsigned IPA
+        id: create_ipa
+        run: |
+          cd "$RUNNER_TEMP"
+          
+          # Create IPA (which is just a zip file with .ipa extension)
           zip -r Sheaf-unsigned.ipa Payload
-          cd ..
-
-          echo "IPA created at build/Sheaf-unsigned.ipa"
-          ls -lh build/Sheaf-unsigned.ipa
-
-      - name: Upload IPA artifact
-        uses: actions/upload-artifact@v4
+          
+          # Add timestamp and commit to filename
+          TIMESTAMP=$(date +"%Y%m%d-%H%M%S")
+          COMMIT_SHORT=$(echo ${{ github.sha }} | cut -c1-7)
+          IPA_NAME="Sheaf-unsigned-${TIMESTAMP}-${COMMIT_SHORT}.ipa"
+          
+          mv Sheaf-unsigned.ipa "$IPA_NAME"
+          
+          echo "ipa_name=$IPA_NAME" >> $GITHUB_OUTPUT
+          echo "ipa_path=$RUNNER_TEMP/$IPA_NAME" >> $GITHUB_OUTPUT
+          
+          # Show IPA info
+          ls -lh "$IPA_NAME"
+          echo "Created unsigned IPA: $IPA_NAME"
+      
+      - name: Generate build info
+        id: build_info
+        run: |
+          cat > "$RUNNER_TEMP/BUILD_INFO.txt" <<EOF
+          Sheaf iOS Development Build (Unsigned)
+          
+          Build Date: $(date +"%Y-%m-%d %H:%M:%S UTC")
+          Commit: ${{ github.sha }}
+          Branch: ${{ github.ref_name }}
+          Workflow: ${{ github.workflow }}
+          Run Number: ${{ github.run_number }}
+          
+          Configuration: ${{ env.CONFIGURATION }}
+          Xcode Version: ${{ env.XCODE_VERSION }}
+          Signing: UNSIGNED - Users must sign with their own certificates
+          
+          Installation Instructions:
+          
+          This IPA is UNSIGNED and must be signed before installation.
+          
+          Option 1: AltStore / SideStore
+          1. Install AltStore or SideStore on your device
+          2. Open the app and sign in with your Apple ID
+          3. Tap "+" and select the downloaded IPA
+          4. AltStore will sign and install automatically
+          
+          Option 2: Sideloadly
+          1. Download Sideloadly (https://sideloadly.io/)
+          2. Connect your device via USB
+          3. Drag the IPA into Sideloadly
+          4. Enter your Apple ID credentials
+          5. Click "Start" to sign and install
+          
+          Option 3: iOS App Signer + Xcode
+          1. Download iOS App Signer
+          2. Select the IPA file
+          3. Choose your signing certificate
+          4. Choose your provisioning profile
+          5. Click "Start" to create a signed IPA
+          6. Install via Xcode Devices window
+          
+          Option 4: Command Line (Advanced)
+          1. Unzip the IPA: unzip Sheaf-unsigned.ipa
+          2. Sign the app bundle: codesign -f -s "Your Identity" Payload/Sheaf.app
+          3. Re-zip: zip -r Sheaf-signed.ipa Payload
+          4. Install via Xcode or other tools
+          
+          Note: Free Apple Developer accounts are limited to 3 apps and 7-day validity.
+          Paid accounts have no app limit and apps are valid for 1 year.
+          EOF
+          
+          cat "$RUNNER_TEMP/BUILD_INFO.txt"
+      
+      - name: Generate signing instructions
+        run: |
+          cat > "$RUNNER_TEMP/SIGNING_GUIDE.md" <<'EOF'
+          # How to Sign and Install This IPA
+          
+          This is an **unsigned IPA** that you need to sign with your own Apple Developer certificate before installing.
+          
+          ## 🚀 Quick Methods (Recommended)
+          
+          ### Method 1: AltStore (Easiest - Free)
+          
+          **What you need:**
+          - Any Apple ID (even free accounts work)
+          - AltStore installed on your iPhone
+          - AltServer running on your computer
+          
+          **Steps:**
+          1. Download AltStore from https://altstore.io/
+          2. Install AltServer on your Mac/PC
+          3. Install AltStore on your iPhone via AltServer
+          4. Open AltStore on your iPhone
+          5. Tap "My Apps" → "+" button
+          6. Select the downloaded IPA file
+          7. AltStore will sign and install automatically!
+          
+          **Note:** Free accounts require refreshing every 7 days (AltStore does this automatically when on WiFi).
+          
+          ### Method 2: SideStore (Alternative - Free)
+          
+          Similar to AltStore but doesn't require a computer after initial setup.
+          
+          1. Download from https://sidestore.io/
+          2. Follow installation instructions
+          3. Import and install the IPA
+          
+          ### Method 3: Sideloadly (Popular - Free)
+          
+          **What you need:**
+          - Any Apple ID
+          - Computer with Sideloadly installed
+          - iPhone connected via USB
+          
+          **Steps:**
+          1. Download Sideloadly from https://sideloadly.io/
+          2. Connect your iPhone via USB
+          3. Drag the IPA file into Sideloadly
+          4. Enter your Apple ID and password
+          5. Click "Start"
+          6. Sideloadly will sign and install the app
+          
+          ## 🔧 Advanced Methods
+          
+          ### Method 4: iOS App Signer + Your Own Certificate
+          
+          **What you need:**
+          - Paid Apple Developer account ($99/year)
+          - Valid signing certificate and provisioning profile
+          - iOS App Signer tool
+          
+          **Steps:**
+          1. Download iOS App Signer
+          2. Select Input File: Choose the unsigned IPA
+          3. Select Signing Certificate: Choose your certificate from the dropdown
+          4. Select Provisioning Profile: Choose your profile
+          5. Click "Start" to create a signed IPA
+          6. Install the signed IPA via Xcode Devices window
+          
+          ### Method 5: Command Line (Expert)
+          
+          ```bash
+          # Unzip the IPA
+          unzip Sheaf-unsigned.ipa
+          
+          # Sign the app with your certificate
+          codesign -f -s "Apple Development: Your Name (ABC123XYZ)" Payload/Sheaf.app
+          
+          # Verify signing
+          codesign -v Payload/Sheaf.app
+          
+          # Re-package as IPA
+          zip -r Sheaf-signed.ipa Payload
+          
+          # Install via Xcode or ideviceinstaller
+          ideviceinstaller -i Sheaf-signed.ipa
+          ```
+          
+          ### Method 6: Xcode
+          
+          1. Open the project in Xcode
+          2. Select your development team
+          3. Connect your device
+          4. Click Run (⌘R)
+          
+          ## ❓ FAQ
+          
+          **Q: Do I need a paid Apple Developer account?**
+          A: No! Free accounts work with AltStore, SideStore, and Sideloadly. Paid accounts are only needed if you want apps to last 1 year instead of 7 days.
+          
+          **Q: Why does the app expire after 7 days?**
+          A: Free Apple Developer accounts sign apps with certificates that expire after 7 days. Paid accounts get 1-year certificates. Tools like AltStore auto-refresh for you.
+          
+          **Q: Is this safe?**
+          A: Yes! This is the standard way to sideload iOS apps. You're signing with your own Apple ID, so you're trusting yourself. Always download IPAs from trusted sources only.
+          
+          **Q: Can I use someone else's signed IPA?**
+          A: No. Signed IPAs only work on devices registered in the provisioning profile. Each user must sign with their own Apple ID.
+          
+          **Q: What's the difference between signed and unsigned?**
+          A: Unsigned IPAs are universal - anyone can sign them. Signed IPAs only work on specific devices and expire after 7 days (free) or 1 year (paid).
+          
+          **Q: Will I get banned for sideloading?**
+          A: No. Apple officially allows this for personal use. Millions of people use AltStore and similar tools.
+          
+          ## 🆘 Troubleshooting
+          
+          **"Unable to install app" error**
+          - Make sure your device is registered with your Apple ID
+          - Check that your signing certificate is valid
+          - Try revoking certificates in developer.apple.com and sign again (only works for accounts enrolled in the Apple Developer Program)
+          
+          **"Untrusted Developer" warning**
+          - Go to Settings → General → VPN & Device Management
+          - Tap your Apple ID under "Developer App"
+          - Tap "Trust [Your Apple ID]"
+          
+          **App crashes on launch**
+          - The build might be incompatible with your iOS version
+          - Check the minimum iOS version requirement (iOS 17+)
+          - Try reinstalling the app
+          
+          ## 📱 Supported Devices
+          
+          - iPhone running iOS 17.0 or later
+          - Apple Watch running watchOS 10.0 or later (requires iPhone)
+          
+          ## 🔗 Helpful Resources
+          
+          - AltStore: https://altstore.io/
+          - SideStore: https://sidestore.io/
+          - Sideloadly: https://sideloadly.io/
+          - iOS App Signer: https://dantheman827.github.io/ios-app-signer/
+          - r/sideloaded: https://reddit.com/r/sideloaded
+          
+          ---
+          
+          **Need help?** Open an issue on GitHub or check the documentation.
+          EOF
+      
+      - name: Delete existing dev release
+        continue-on-error: true
+        run: |
+          gh release delete dev --yes --cleanup-tag
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Create fresh "dev" release
+        uses: softprops/action-gh-release@v1
         with:
-          name: Sheaf-unsigned-ipa
-          path: build/Sheaf-unsigned.ipa
+          tag_name: dev
+          name: Development Build (Unsigned)
+          body: |
+            ## 🚀 Latest Development Build (Unsigned)
+            
+            **This IPA is unsigned and must be signed before installation.**
+            
+            ### 📋 Build Information
+            
+            - **Commit**: `${{ github.sha }}`
+            - **Branch**: `${{ github.ref_name }}`
+            - **Build Date**: $(date +"%Y-%m-%d %H:%M:%S UTC")
+            - **Workflow Run**: [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            - **Signing**: ⚠️ **UNSIGNED** - Must be signed by user
+            
+            ### 📦 Quick Installation (Recommended)
+            
+            **Option 1: AltStore (Easiest)**
+            1. Install [AltStore](https://altstore.io/) on your iPhone
+            2. Download the `.ipa` file below
+            3. Open in AltStore → It will sign and install automatically
+            4. Done! (No paid developer account needed)
+            
+            **Option 2: Sideloadly**
+            1. Download [Sideloadly](https://sideloadly.io/)
+            2. Connect your iPhone
+            3. Drag the `.ipa` into Sideloadly
+            4. Enter your Apple ID → Install
+            
+            **Option 3: SideStore**
+            1. Install [SideStore](https://sidestore.io/)
+            2. Import the IPA
+            3. Sign and install
+            
+            ### 📥 Downloads
+            
+            Download the latest build below ⬇️
+            
+            ### ⚠️ Important Notes
+            
+            - This is an **unsigned development build**
+            - You must sign it with your own Apple ID before installation
+            - Free Apple IDs work fine (7-day validity, auto-refresh with AltStore)
+            - Paid developer accounts get 1-year validity
+            - Works on any iPhone running iOS 17+ (no UDID restrictions!)
+            
+            ### 🔒 Trust After Installation
+            
+            After installing, you'll need to trust the app:
+            1. Go to **Settings** → **General** → **VPN & Device Management**
+            2. Tap on your Apple ID under "Developer App"
+            3. Tap **Trust**
+            
+            ---
+            
+            *This release is automatically updated with each push to `${{ github.ref_name }}`*
+            
+            **Latest commit message:**
+            ```
+            ${{ github.event.head_commit.message }}
+            ```
+          files: |
+            ${{ steps.create_ipa.outputs.ipa_path }}
+            ${{ runner.temp }}/BUILD_INFO.txt
+            ${{ runner.temp }}/SIGNING_GUIDE.md
+          draft: false
+          prerelease: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+          generate_release_notes: false
+          make_latest: false
+      
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: unsigned-build-${{ github.run_number }}
+          path: |
+            ${{ steps.create_ipa.outputs.ipa_path }}
+            ${{ runner.temp }}/BUILD_INFO.txt
+            ${{ runner.temp }}/SIGNING_GUIDE.md
+            ${{ steps.find_app.outputs.app_path }}
           retention-days: 30
 
-      - name: Upload build logs on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-logs
-          path: ~/Library/Logs/DiagnosticReports/
-          retention-days: 7

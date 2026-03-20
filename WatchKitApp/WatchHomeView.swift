@@ -33,7 +33,7 @@ struct WatchHomeView: View {
                                 Button {
                                     Task { await store.switchFronting(to: [member.id]) }
                                 } label: {
-                                    Label("Switch to Only \(member.displayName ?? member.name)", systemImage: "arrow.left.arrow.right")
+                                    Label("Switch to only \(member.displayName ?? member.name)", systemImage: "arrow.left.arrow.right")
                                 }
                             }
                             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
