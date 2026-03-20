@@ -8,14 +8,14 @@ on:
   workflow_dispatch:
 
 env:
-  XCODE_VERSION: '16.0'
+  XCODE_VERSION: '26.2'
   IOS_SCHEME: 'Sheaf'
   CONFIGURATION: 'Release'
 
 jobs:
   build:
     name: Build Unsigned IPA
-    runs-on: macos-14
+    runs-on: macos-26
     
     steps:
       - name: Checkout repository
@@ -245,7 +245,6 @@ jobs:
           
           ### Method 6: Xcode (If you have the source)
           
-          If you have access to the source code, just build directly:
           1. Open the project in Xcode
           2. Select your development team
           3. Connect your device
