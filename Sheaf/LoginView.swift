@@ -28,11 +28,11 @@ struct LoginView: View {
                         }
                         .shadow(color: theme.accentLight.opacity(0.6), radius: 20)
 
-                        Text("Sheaf")
+                        Text(LocalizedStrings.appName)
                             .font(.system(size: 34, weight: .bold, design: .rounded))
                             .foregroundColor(theme.textPrimary)
 
-                        Text(isRegistering ? "Create your account" : "Sign in to your system")
+                        Text(isRegistering ? LocalizedStrings.createYourAccount : LocalizedStrings.signInToYourSystem)
                             .font(.system(size: 15, weight: .medium))
                             .foregroundColor(theme.textSecondary)
                             .animation(.default, value: isRegistering)
@@ -70,15 +70,15 @@ struct SignInForm: View {
 
     var body: some View {
         VStack(spacing: 20) {
-            formField(icon: "link",         label: "API Base URL",  placeholder: "https://your-api.example.com", value: $baseURL,   field: .url,      keyboard: .URL)
-            formField(icon: "envelope.fill", label: "Email",         placeholder: "you@example.com",              value: $email,    field: .email,    keyboard: .emailAddress)
-            secureField(                     label: "Password",       placeholder: "••••••••",                     value: $password)
+            formField(icon: "link",         label: LocalizedStrings.apiBaseURL,  placeholder: LocalizedStrings.apiURLPlaceholder, value: $baseURL,   field: .url,      keyboard: .URL)
+            formField(icon: "envelope.fill", label: LocalizedStrings.email,         placeholder: LocalizedStrings.emailPlaceholder,              value: $email,    field: .email,    keyboard: .emailAddress)
+            secureField(                     label: LocalizedStrings.password,       placeholder: LocalizedStrings.passwordPlaceholder,                     value: $password)
 
             if !error.isEmpty { errorLabel(error) }
 
             // Sign In button
             Button { signIn() } label: {
-                buttonContent(label: "Sign In", icon: "arrow.right", loading: isLoading)
+                buttonContent(label: LocalizedStrings.signIn, icon: "arrow.right", loading: isLoading)
             }
             .disabled(baseURL.isEmpty || email.isEmpty || password.isEmpty || isLoading)
             .opacity(baseURL.isEmpty || email.isEmpty || password.isEmpty ? 0.5 : 1)
@@ -86,9 +86,9 @@ struct SignInForm: View {
             // Switch to register
             Button(action: onSwitch) {
                 HStack(spacing: 4) {
-                    Text("Don't have an account?")
+                    Text(LocalizedStrings.dontHaveAccount)
                         .foregroundColor(theme.textSecondary)
-                    Text("Register")
+                    Text(LocalizedStrings.register)
                         .foregroundColor(theme.accentLight)
                         .fontWeight(.semibold)
                 }
@@ -106,8 +106,8 @@ struct SignInForm: View {
         error = ""
         var cleanURL = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
         if cleanURL.hasSuffix("/") { cleanURL = String(cleanURL.dropLast()) }
-        guard cleanURL.lowercased().hasPrefix("http") else { error = "URL must start with http:// or https://"; return }
-        guard URL(string: cleanURL + "/v1/auth/login") != nil else { error = "Invalid URL"; return }
+        guard cleanURL.lowercased().hasPrefix("http") else { error = LocalizedStrings.urlMustStartWithHTTP; return }
+        guard URL(string: cleanURL + "/v1/auth/login") != nil else { error = LocalizedStrings.invalidURL; return }
         isLoading = true
         let tempAuth = AuthManager()
         tempAuth.baseURL = cleanURL
@@ -213,10 +213,10 @@ struct RegisterForm: View {
 
     var body: some View {
         VStack(spacing: 20) {
-            formField(icon: "link",          label: "API Base URL",      placeholder: "https://your-api.example.com", value: $baseURL,         field: .url,     keyboard: .URL)
-            formField(icon: "envelope.fill", label: "Email",              placeholder: "you@example.com",              value: $email,           field: .email,   keyboard: .emailAddress)
-            secureField(                     label: "Password",            placeholder: "At least 8 characters",        value: $password,        field: .password)
-            secureField(                     label: "Confirm Password",    placeholder: "••••••••",                     value: $confirmPassword, field: .confirm)
+            formField(icon: "link",          label: LocalizedStrings.apiBaseURL,      placeholder: LocalizedStrings.apiURLPlaceholder, value: $baseURL,         field: .url,     keyboard: .URL)
+            formField(icon: "envelope.fill", label: LocalizedStrings.email,              placeholder: LocalizedStrings.emailPlaceholder,              value: $email,           field: .email,   keyboard: .emailAddress)
+            secureField(                     label: LocalizedStrings.password,            placeholder: LocalizedStrings.atLeast8Characters,        value: $password,        field: .password)
+            secureField(                     label: LocalizedStrings.confirmPassword,    placeholder: LocalizedStrings.passwordPlaceholder,                     value: $confirmPassword, field: .confirm)
 
             // Password strength indicator
             if !password.isEmpty {
@@ -227,7 +227,7 @@ struct RegisterForm: View {
 
             // Register button
             Button { register() } label: {
-                buttonContent(label: "Create Account", icon: "person.badge.plus", loading: isLoading)
+                buttonContent(label: LocalizedStrings.createAccount, icon: "person.badge.plus", loading: isLoading)
             }
             .disabled(baseURL.isEmpty || email.isEmpty || password.isEmpty || confirmPassword.isEmpty || isLoading)
             .opacity(baseURL.isEmpty || email.isEmpty || password.isEmpty || confirmPassword.isEmpty ? 0.5 : 1)
@@ -235,9 +235,9 @@ struct RegisterForm: View {
             // Switch to sign in
             Button(action: onSwitch) {
                 HStack(spacing: 4) {
-                    Text("Already have an account?")
+                    Text(LocalizedStrings.alreadyHaveAccount)
                         .foregroundColor(theme.textSecondary)
-                    Text("Sign In")
+                    Text(LocalizedStrings.signIn)
                         .foregroundColor(theme.accentLight)
                         .fontWeight(.semibold)
                 }
@@ -253,12 +253,12 @@ struct RegisterForm: View {
 
     private func register() {
         error = ""
-        guard password == confirmPassword else { error = "Passwords don't match"; return }
-        guard password.count >= 8 else { error = "Password must be at least 8 characters"; return }
+        guard password == confirmPassword else { error = LocalizedStrings.passwordsDontMatch; return }
+        guard password.count >= 8 else { error = LocalizedStrings.passwordTooShort; return }
         var cleanURL = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
         if cleanURL.hasSuffix("/") { cleanURL = String(cleanURL.dropLast()) }
-        guard cleanURL.lowercased().hasPrefix("http") else { error = "URL must start with http:// or https://"; return }
-        guard URL(string: cleanURL + "/v1/auth/register") != nil else { error = "Invalid URL"; return }
+        guard cleanURL.lowercased().hasPrefix("http") else { error = LocalizedStrings.urlMustStartWithHTTP; return }
+        guard URL(string: cleanURL + "/v1/auth/register") != nil else { error = LocalizedStrings.invalidURL; return }
         isLoading = true
         let tempAuth = AuthManager()
         tempAuth.baseURL = cleanURL
@@ -357,10 +357,10 @@ struct PasswordStrengthBar: View {
 
     private var label: String {
         switch strength {
-        case 0, 1: return "Weak"
-        case 2, 3: return "Fair"
-        case 4:    return "Good"
-        default:   return "Strong"
+        case 0, 1: return LocalizedStrings.passwordWeak
+        case 2, 3: return LocalizedStrings.passwordFair
+        case 4:    return LocalizedStrings.passwordGood
+        default:   return LocalizedStrings.passwordStrong
         }
     }
 

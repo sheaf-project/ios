@@ -24,7 +24,7 @@ struct SettingsView: View {
 
                 ScrollView {
                     VStack(spacing: 24) {
-                        Text("Settings")
+                        Text(LocalizedStrings.settings)
                         .font(.system(size: 28, weight: .bold, design: .rounded))
                         .foregroundColor(theme.textPrimary)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -32,11 +32,11 @@ struct SettingsView: View {
                         .padding(.top, 16)
 
                     // Connection
-                    settingsSection(title: "Connection") {
+                    settingsSection(title: LocalizedStrings.connection) {
                         VStack(spacing: 0) {
-                            infoRow(icon: "link", label: "API URL", value: authManager.baseURL)
+                            infoRow(icon: "link", label: LocalizedStrings.apiURL, value: authManager.baseURL)
                             Divider().background(theme.backgroundCard)
-                            infoRow(icon: "key.fill", label: "Token", value: maskedToken)
+                            infoRow(icon: "key.fill", label: LocalizedStrings.token, value: maskedToken)
                             Divider().background(theme.backgroundCard)
                             Button {
                                 newBaseURL = authManager.baseURL
@@ -45,7 +45,7 @@ struct SettingsView: View {
                             } label: {
                                 HStack {
                                     Image(systemName: "pencil").foregroundColor(theme.accentLight)
-                                    Text("Edit Connection")
+                                    Text(LocalizedStrings.editConnection)
                                         .font(.system(size: 15, weight: .medium))
                                         .foregroundColor(theme.accentLight)
                                     Spacer()
@@ -56,7 +56,7 @@ struct SettingsView: View {
                     }
 
                     // Appearance
-                    settingsSection(title: "Appearance") {
+                    settingsSection(title: LocalizedStrings.appearance) {
                         VStack(spacing: 0) {
                             ForEach(ThemeMode.allCases, id: \.self) { mode in
                                 Button { themeManager.mode = mode } label: {
@@ -84,7 +84,7 @@ struct SettingsView: View {
                     }
 
                     // Security
-                    settingsSection(title: "Security") {
+                    settingsSection(title: LocalizedStrings.security) {
                         VStack(spacing: 0) {
                             // TOTP status row
                             HStack(spacing: 12) {
@@ -93,12 +93,12 @@ struct SettingsView: View {
                                         ? theme.success
                                         : Color.white.opacity(0.4))
                                     .frame(width: 20)
-                                Text("Two-Factor Auth")
+                                Text(LocalizedStrings.twoFactorAuth)
                                     .font(.system(size: 15))
                                     .foregroundColor(theme.textSecondary)
                                 Spacer()
                                 if let me {
-                                    Text(me.totpEnabled ? "Enabled" : "Disabled")
+                                    Text(me.totpEnabled ? LocalizedStrings.twoFactorEnabled : LocalizedStrings.twoFactorDisabled)
                                         .font(.system(size: 13, weight: .medium))
                                         .foregroundColor(me.totpEnabled
                                             ? theme.success
@@ -118,7 +118,7 @@ struct SettingsView: View {
                                           ? "gearshape.fill" : "plus.circle.fill")
                                         .foregroundColor(theme.accentLight)
                                     Text(me?.totpEnabled == true
-                                         ? "Manage Two-Factor Auth" : "Set Up Two-Factor Auth")
+                                         ? LocalizedStrings.manageTwoFactorAuth : LocalizedStrings.setUpTwoFactorAuth)
                                         .font(.system(size: 15, weight: .medium))
                                         .foregroundColor(theme.accentLight)
                                     Spacer()
@@ -132,13 +132,13 @@ struct SettingsView: View {
                     }
 
                     // Import
-                    settingsSection(title: "Import") {
+                    settingsSection(title: LocalizedStrings.importData) {
                         Button { showImport = true } label: {
                             HStack {
                                 Image(systemName: "square.and.arrow.down.fill")
                                     .foregroundColor(theme.accentLight)
                                     .frame(width: 20)
-                                Text("Import from Simply Plural")
+                                Text(LocalizedStrings.importFromSimplyPlural)
                                     .font(.system(size: 15, weight: .medium))
                                     .foregroundColor(theme.textPrimary)
                                 Spacer()
