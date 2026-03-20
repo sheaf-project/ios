@@ -8,14 +8,14 @@ on:
   workflow_dispatch:
 
 env:
-  XCODE_VERSION: '26.2'
+  XCODE_VERSION: '16.0'
   IOS_SCHEME: 'Sheaf'
   CONFIGURATION: 'Release'
 
 jobs:
   build:
     name: Build Unsigned IPA
-    runs-on: macos-26
+    runs-on: macos-14
     
     steps:
       - name: Checkout repository
@@ -27,31 +27,46 @@ jobs:
       - name: Show Xcode version
         run: xcodebuild -version
       
+      - name: List schemes and targets
+        run: |
+          echo "Available schemes:"
+          xcodebuild -list -project Sheaf.xcodeproj
+      
       - name: Clean build folder
         run: |
           xcodebuild clean \
             -scheme "${{ env.IOS_SCHEME }}" \
             -configuration "${{ env.CONFIGURATION }}"
       
-      - name: Build for iOS device (unsigned)
+      - name: Build iOS app only (unsigned)
         run: |
+          # Build only the Sheaf target, skip Watch app
           xcodebuild \
-            -scheme "${{ env.IOS_SCHEME }}" \
+            -project Sheaf.xcodeproj \
+            -target Sheaf \
             -configuration "${{ env.CONFIGURATION }}" \
             -sdk iphoneos \
-            -destination 'generic/platform=iOS' \
             -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            ONLY_ACTIVE_ARCH=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGN_ENTITLEMENTS="" \
-            ONLY_ACTIVE_ARCH=NO \
+            DEVELOPMENT_TEAM="" \
             build
       
       - name: Find built app
         id: find_app
         run: |
           APP_PATH=$(find "$RUNNER_TEMP/DerivedData" -name "Sheaf.app" -type d -path "*/Build/Products/${{ env.CONFIGURATION }}-iphoneos/*" | head -n 1)
+          
+          if [ -z "$APP_PATH" ]; then
+            echo "Error: Could not find Sheaf.app"
+            echo "Searching for any .app bundles:"
+            find "$RUNNER_TEMP/DerivedData" -name "*.app" -type d
+            exit 1
+          fi
+          
           echo "app_path=$APP_PATH" >> $GITHUB_OUTPUT
           echo "Found app at: $APP_PATH"
           ls -la "$APP_PATH"
@@ -60,6 +75,8 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/Payload"
           cp -r "${{ steps.find_app.outputs.app_path }}" "$RUNNER_TEMP/Payload/"
+          echo "Payload contents:"
+          ls -la "$RUNNER_TEMP/Payload/"
       
       - name: Create unsigned IPA
         id: create_ipa
@@ -82,6 +99,10 @@ jobs:
           # Show IPA info
           ls -lh "$IPA_NAME"
           echo "Created unsigned IPA: $IPA_NAME"
+          
+          # Verify IPA structure
+          echo "IPA contents:"
+          unzip -l "$IPA_NAME" | head -20
       
       - name: Generate build info
         id: build_info
@@ -222,8 +243,9 @@ jobs:
           ideviceinstaller -i Sheaf-signed.ipa
           ```
           
-          ### Method 6: Xcode
+          ### Method 6: Xcode (If you have the source)
           
+          If you have access to the source code, just build directly:
           1. Open the project in Xcode
           2. Select your development team
           3. Connect your device
@@ -254,7 +276,7 @@ jobs:
           **"Unable to install app" error**
           - Make sure your device is registered with your Apple ID
           - Check that your signing certificate is valid
-          - Try revoking certificates in developer.apple.com and sign again (only works for accounts enrolled in the Apple Developer Program)
+          - Try revoking certificates in developer.apple.com and sign again
           
           **"Untrusted Developer" warning**
           - Go to Settings → General → VPN & Device Management
@@ -347,6 +369,10 @@ jobs:
             2. Tap on your Apple ID under "Developer App"
             3. Tap **Trust**
             
+            ### 📖 Need Help?
+            
+            See `SIGNING_GUIDE.md` for detailed instructions on all signing methods.
+            
             ---
             
             *This release is automatically updated with each push to `${{ github.ref_name }}`*
@@ -376,4 +402,3 @@ jobs:
             ${{ runner.temp }}/SIGNING_GUIDE.md
             ${{ steps.find_app.outputs.app_path }}
           retention-days: 30
-
