@@ -15,7 +15,7 @@ env:
 jobs:
   build:
     name: Build Unsigned IPA
-    runs-on: macos-26
+    runs-on: macos-14
     
     steps:
       - name: Checkout repository
@@ -35,18 +35,21 @@ jobs:
       - name: Clean build folder
         run: |
           xcodebuild clean \
-            -scheme "${{ env.IOS_SCHEME }}" \
+            -project Sheaf.xcodeproj \
+            -target Sheaf \
             -configuration "${{ env.CONFIGURATION }}"
       
       - name: Build iOS app only (unsigned)
         run: |
           # Build only the Sheaf target, skip Watch app
+          # Use SYMROOT instead of derivedDataPath (which requires -scheme)
           xcodebuild \
             -project Sheaf.xcodeproj \
             -target Sheaf \
             -configuration "${{ env.CONFIGURATION }}" \
             -sdk iphoneos \
-            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            -arch arm64 \
+            SYMROOT="$RUNNER_TEMP/Build" \
             ONLY_ACTIVE_ARCH=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
@@ -58,12 +61,13 @@ jobs:
       - name: Find built app
         id: find_app
         run: |
-          APP_PATH=$(find "$RUNNER_TEMP/DerivedData" -name "Sheaf.app" -type d -path "*/Build/Products/${{ env.CONFIGURATION }}-iphoneos/*" | head -n 1)
+          # With SYMROOT, the app is at SYMROOT/Release-iphoneos/
+          APP_PATH="$RUNNER_TEMP/Build/${{ env.CONFIGURATION }}-iphoneos/Sheaf.app"
           
-          if [ -z "$APP_PATH" ]; then
-            echo "Error: Could not find Sheaf.app"
-            echo "Searching for any .app bundles:"
-            find "$RUNNER_TEMP/DerivedData" -name "*.app" -type d
+          if [ ! -d "$APP_PATH" ]; then
+            echo "Error: Could not find Sheaf.app at expected location: $APP_PATH"
+            echo "Searching for any .app bundles in Build directory:"
+            find "$RUNNER_TEMP/Build" -name "*.app" -type d
             exit 1
           fi
           
@@ -243,12 +247,14 @@ jobs:
           ideviceinstaller -i Sheaf-signed.ipa
           ```
           
-          ### Method 6: Xcode (If you have the source)
+          ### Method 6: Build from Source with Xcode
           
-          1. Open the project in Xcode
-          2. Select your development team
-          3. Connect your device
-          4. Click Run (⌘R)
+          If you prefer to build from source instead of using the pre-built IPA:
+          1. Clone this repository
+          2. Open `Sheaf.xcodeproj` in Xcode
+          3. Select your development team in Signing & Capabilities
+          4. Connect your device
+          5. Click Run (⌘R) or Archive for distribution
           
           ## ❓ FAQ
           
