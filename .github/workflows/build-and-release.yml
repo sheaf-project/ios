@@ -442,7 +442,7 @@ jobs:
             
             ### 📖 Need Help?
             
-            Join our [Discord server](https://discord.gg/yourinvitelink) for support, or [open an issue](https://github.com/${{ github.repository }}/issues/new) if you encounter bugs.
+            Join our [Discord server](https://discord.gg/PXDPErXjrh) for support, or [open an issue](https://github.com/${{ github.repository }}/issues/new) if you encounter bugs.
             
             ---
             
@@ -454,7 +454,6 @@ jobs:
             ```
           files: |
             ${{ steps.create_ipa.outputs.ipa_path }}
-            ${{ runner.temp }}/BUILD_INFO.txt
           draft: false
           prerelease: true
           token: ${{ secrets.GITHUB_TOKEN }}
