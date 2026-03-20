@@ -41,8 +41,8 @@ jobs:
       
       - name: Build iOS app only (unsigned)
         run: |
-          # Build only the Sheaf target, skip Watch app
-          # Use SYMROOT instead of derivedDataPath (which requires -scheme)
+          # Build ONLY the Sheaf target, do NOT build implicit dependencies (Watch app)
+          # The -skipDependencies flag (if available) or we build with careful settings
           xcodebuild \
             -project Sheaf.xcodeproj \
             -target Sheaf \
@@ -56,6 +56,7 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             CODE_SIGN_ENTITLEMENTS="" \
             DEVELOPMENT_TEAM="" \
+            DONT_BUILD_DEPENDENCIES=YES \
             build
       
       - name: Find built app
