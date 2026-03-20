@@ -7,8 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		2A063BB22F6CE58000321DA6 /* README.md in Resources */ = {isa = PBXBuildFile; fileRef = 2A063BB12F6CE58000321DA6 /* README.md */; };
 		2A2028322F6BB3090084B22F /* SheafWatch Watch App.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 2A2028282F6BB3070084B22F /* SheafWatch Watch App.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		2A2028962F6C8D350084B22F /* .gitignore in Resources */ = {isa = PBXBuildFile; fileRef = 2A2028952F6C8D310084B22F /* .gitignore */; };
+		2A20289A2F6CB1780084B22F /* LocalizationHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A2028992F6CB1780084B22F /* LocalizationHelpers.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -36,9 +38,11 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		2A063BB12F6CE58000321DA6 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 		2A2027972F6B92F10084B22F /* Sheaf.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Sheaf.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		2A2028282F6BB3070084B22F /* SheafWatch Watch App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "SheafWatch Watch App.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		2A2028952F6C8D310084B22F /* .gitignore */ = {isa = PBXFileReference; lastKnownFileType = text; path = .gitignore; sourceTree = "<group>"; };
+		2A2028992F6CB1780084B22F /* LocalizationHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalizationHelpers.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -101,6 +105,8 @@
 				2A2028292F6BB3070084B22F /* WatchKitApp */,
 				2A2027982F6B92F10084B22F /* Products */,
 				2A2028952F6C8D310084B22F /* .gitignore */,
+				2A2028992F6CB1780084B22F /* LocalizationHelpers.swift */,
+				2A063BB12F6CE58000321DA6 /* README.md */,
 			);
 			sourceTree = "<group>";
 		};
@@ -206,6 +212,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				2A063BB22F6CE58000321DA6 /* README.md in Resources */,
 				2A2028962F6C8D350084B22F /* .gitignore in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -224,6 +231,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				2A20289A2F6CB1780084B22F /* LocalizationHelpers.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -10,35 +10,35 @@ struct ContentView: View {
             HomeView()
                 .tag(0)
                 .tabItem {
-                    Label("Home", systemImage: "house.fill")
+                    Label(LocalizedStrings.home, systemImage: "house.fill")
                 }
             MembersView()
                 .tag(1)
                 .tabItem {
-                    Label("Members", systemImage: "person.2.fill")
+                    Label(LocalizedStrings.members, systemImage: "person.2.fill")
                 }
             GroupsView()
                 .tag(2)
                 .tabItem {
-                    Label("Groups", systemImage: "square.grid.2x2.fill")
+                    Label(LocalizedStrings.groups, systemImage: "square.grid.2x2.fill")
                 }
             HistoryView()
                 .tag(3)
                 .tabItem {
-                    Label("History", systemImage: "clock.fill")
+                    Label(LocalizedStrings.history, systemImage: "clock.fill")
                 }
             SettingsView()
                 .tag(4)
                 .tabItem {
-                    Label("Settings", systemImage: "gearshape.fill")
+                    Label(LocalizedStrings.settings, systemImage: "gearshape.fill")
                 }
         }
         .tint(Color(hex: "#A78BFA")!)
-        .alert("Error", isPresented: Binding(
+        .alert(LocalizedStrings.errorTitle, isPresented: Binding(
             get: { systemStore.errorMessage != nil },
             set: { if !$0 { systemStore.errorMessage = nil } }
         )) {
-            Button("OK") { systemStore.errorMessage = nil }
+            Button(LocalizedStrings.ok) { systemStore.errorMessage = nil }
         } message: {
             Text(systemStore.errorMessage ?? "")
         }

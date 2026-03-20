@@ -18,12 +18,12 @@ struct HomeView: View {
                     HStack {
                         VStack(alignment: .leading, spacing: 4) {
                             if let name = store.systemProfile?.name {
-                                Text("Welcome, \(name)!")
+                                Text(LocalizedStrings.welcomeName(name))
                                     .font(.system(size: 28, weight: .bold, design: .rounded))
                                     .foregroundColor(theme.textPrimary)
                             }
                             if let since = store.oldestCurrentFront?.startedAt {
-                                Text("Since \(since.formatted(date: .omitted, time: .shortened))")
+                                Text(LocalizedStrings.since(since.formatted(date: .omitted, time: .shortened)))
                                     .font(.system(size: 13))
                                     .foregroundColor(theme.textSecondary)
                             }
@@ -55,7 +55,7 @@ struct HomeView: View {
                                     Button(role: .destructive) {
                                         Task { await removeMemberFromFront(member) }
                                     } label: {
-                                        Label("Remove", systemImage: "person.fill.xmark")
+                                        Label(LocalizedStrings.remove, systemImage: "person.fill.xmark")
                                     }
                                 }
                         }
@@ -65,7 +65,7 @@ struct HomeView: View {
 
                     // Quick switch section
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("Quick Switch")
+                        Text(LocalizedStrings.quickSwitch)
                             .font(.system(size: 17, weight: .semibold))
                             .foregroundColor(theme.textPrimary.opacity(0.8))
                             .padding(.horizontal, 24)
@@ -90,7 +90,7 @@ struct HomeView: View {
                                                 .foregroundColor(theme.textSecondary)
                                                 .font(.system(size: 18))
                                         }
-                                        Text("More")
+                                        Text(LocalizedStrings.more)
                                             .font(.system(size: 11))
                                             .foregroundColor(theme.textTertiary)
                                     }

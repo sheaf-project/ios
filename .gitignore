@@ -26,6 +26,11 @@ DerivedData/
 Packages/
 Package.resolved
 
+# Localization
+# Note: .xcstrings files (String Catalogs) should be committed
+# Only ignore export/import temporary files
+*.xliff
+
 # CocoaPods
 Pods/
 *.xcworkspace
