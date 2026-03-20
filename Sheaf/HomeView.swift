@@ -213,7 +213,7 @@ struct FrontingMemberCard: View {
             Button {
                 Task { await store.switchFronting(to: [member.id]) }
             } label: {
-                Label("Switch to Only \(member.displayName ?? member.name)", systemImage: "arrow.left.arrow.right")
+                Label("Switch to \(member.displayName ?? member.name)", systemImage: "arrow.left.arrow.right")
             }
         }
     }
