@@ -41,7 +41,7 @@ jobs:
       
       - name: Build iOS app only (unsigned)
         run: |
-          # Build the Sheaf target - it will fail trying to copy Watch app, but we'll handle that
+          # Build the iOS app for iPhone
           set +e  # Don't exit on error
           
           xcodebuild \
@@ -57,25 +57,71 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             CODE_SIGN_ENTITLEMENTS="" \
             DEVELOPMENT_TEAM="" \
-            build 2>&1 | tee "$RUNNER_TEMP/build.log"
+            build 2>&1 | tee "$RUNNER_TEMP/build-ios.log"
           
           BUILD_EXIT_CODE=${PIPESTATUS[0]}
           
-          # Check if the main app binary exists (it's a file, not a directory)
+          # Check if the iOS app binary exists
           if [ -f "$RUNNER_TEMP/Build/${{ env.CONFIGURATION }}-iphoneos/Sheaf.app/Sheaf" ]; then
-            echo "✅ iOS app binary built successfully at:"
+            echo "✅ iOS app binary built successfully"
             ls -lh "$RUNNER_TEMP/Build/${{ env.CONFIGURATION }}-iphoneos/Sheaf.app/Sheaf"
-            echo "The build failed on Watch app copy phase, but the iOS app is complete"
-            exit 0
-          elif [ -d "$RUNNER_TEMP/Build/${{ env.CONFIGURATION }}-iphoneos/Sheaf.app" ]; then
-            echo "⚠️  Sheaf.app exists but binary might be missing"
-            ls -la "$RUNNER_TEMP/Build/${{ env.CONFIGURATION }}-iphoneos/Sheaf.app/"
-            echo "Attempting to continue anyway..."
             exit 0
           else
-            echo "❌ Build failed - iOS app not found at all"
-            cat "$RUNNER_TEMP/build.log"
+            echo "❌ iOS app build failed"
+            cat "$RUNNER_TEMP/build-ios.log"
             exit $BUILD_EXIT_CODE
+          fi
+      
+      - name: Build Watch app (unsigned)
+        run: |
+          # Build the Watch app for watchOS
+          echo "Building Watch app for watchOS..."
+          
+          xcodebuild \
+            -project Sheaf.xcodeproj \
+            -target "SheafWatch Watch App" \
+            -configuration "${{ env.CONFIGURATION }}" \
+            -sdk watchos \
+            -arch arm64_32 \
+            SYMROOT="$RUNNER_TEMP/Build" \
+            ONLY_ACTIVE_ARCH=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGN_ENTITLEMENTS="" \
+            DEVELOPMENT_TEAM="" \
+            build
+          
+          # Check if Watch app was built
+          if [ -d "$RUNNER_TEMP/Build/${{ env.CONFIGURATION }}-watchos/SheafWatch Watch App.app" ]; then
+            echo "✅ Watch app built successfully"
+            ls -la "$RUNNER_TEMP/Build/${{ env.CONFIGURATION }}-watchos/SheafWatch Watch App.app"
+          else
+            echo "⚠️ Watch app build failed, but continuing with iOS-only IPA"
+            echo "Checking what was built:"
+            find "$RUNNER_TEMP/Build" -name "*.app" -type d
+          fi
+      
+      - name: Embed Watch app into iOS app
+        run: |
+          # Create Watch folder in iOS app bundle
+          WATCH_APP_SOURCE="$RUNNER_TEMP/Build/${{ env.CONFIGURATION }}-watchos/SheafWatch Watch App.app"
+          WATCH_APP_DEST="$RUNNER_TEMP/Build/${{ env.CONFIGURATION }}-iphoneos/Sheaf.app/Watch"
+          
+          if [ -d "$WATCH_APP_SOURCE" ]; then
+            echo "📦 Embedding Watch app into iOS app..."
+            mkdir -p "$WATCH_APP_DEST"
+            cp -r "$WATCH_APP_SOURCE" "$WATCH_APP_DEST/"
+            
+            echo "✅ Watch app embedded successfully"
+            ls -la "$WATCH_APP_DEST"
+            
+            # Verify the structure
+            echo "Final iOS app structure:"
+            ls -la "$RUNNER_TEMP/Build/${{ env.CONFIGURATION }}-iphoneos/Sheaf.app/"
+          else
+            echo "⚠️ Watch app not found at $WATCH_APP_SOURCE"
+            echo "Creating iOS-only IPA without Watch app"
           fi
       
       - name: Find built app
@@ -396,7 +442,7 @@ jobs:
             
             ### 📖 Need Help?
             
-            See `SIGNING_GUIDE.md` for detailed instructions on all signing methods.
+            Join our [Discord server](https://discord.gg/yourinvitelink) for support, or [open an issue](https://github.com/${{ github.repository }}/issues/new) if you encounter bugs.
             
             ---
             
@@ -409,7 +455,6 @@ jobs:
           files: |
             ${{ steps.create_ipa.outputs.ipa_path }}
             ${{ runner.temp }}/BUILD_INFO.txt
-            ${{ runner.temp }}/SIGNING_GUIDE.md
           draft: false
           prerelease: true
           token: ${{ secrets.GITHUB_TOKEN }}
