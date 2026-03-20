@@ -13,6 +13,16 @@
 		2A20289A2F6CB1780084B22F /* LocalizationHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A2028992F6CB1780084B22F /* LocalizationHelpers.swift */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		2ACEC0FC2F6D148700B4AB57 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 2A20278F2F6B92F10084B22F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 2A2028272F6BB3070084B22F;
+			remoteInfo = "SheafWatch Watch App";
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXCopyFilesBuildPhase section */
 		2A2028332F6BB3090084B22F /* Embed Watch Content */ = {
 			isa = PBXCopyFilesBuildPhase;
@@ -124,6 +134,7 @@
 			buildRules = (
 			);
 			dependencies = (
+				2ACEC0FD2F6D148700B4AB57 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				2A2027992F6B92F10084B22F /* Sheaf */,
@@ -232,6 +243,14 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		2ACEC0FD2F6D148700B4AB57 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 2A2028272F6BB3070084B22F /* SheafWatch Watch App */;
+			targetProxy = 2ACEC0FC2F6D148700B4AB57 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		2A2027A02F6B92F20084B22F /* Debug */ = {
