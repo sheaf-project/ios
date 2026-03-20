@@ -4,6 +4,8 @@
   <img src="https://img.shields.io/badge/Platform-iOS%2017%2B%20%7C%20watchOS%2010%2B-blue" alt="Platform">
   <img src="https://img.shields.io/badge/Swift-6.0-orange" alt="Swift 6.0">
   <img src="https://img.shields.io/badge/SwiftUI-Native-brightgreen" alt="SwiftUI">
+  <img src="https://github.com/fullynocturnal/sheaf-ios/actions/workflows/build-and-release.yml/badge.svg" alt="Build Status">
+  <a href="https://github.com/fullynocturnal/sheaf-ios/releases/tag/dev"><img src="https://img.shields.io/badge/Download-Dev%20Build-blueviolet" alt="Download Dev Build"></a>
 </p>
 
 A native iOS and watchOS companion app for managing plural systems. Sheaf provides a beautiful, privacy-focused interface for tracking fronting history, managing members, organizing groups, and staying connected across devices.
@@ -123,11 +125,30 @@ You'll need:
 3. Xcode 16.0+ installed
 4. An iPhone running iOS 17+ (and optionally Apple Watch with watchOS 10+)
 
-### Building
+### Download Pre-Built App
+
+**🚀 Quick Start**: Download the latest **unsigned** development build from the [dev release](https://github.com/fullynocturnal/sheaf-ios/releases/tag/dev).
+
+**Installation (Easy with AltStore):**
+1. Install [AltStore](https://altstore.io/) on your iPhone (free, no paid developer account needed)
+2. Download the unsigned `.ipa` from the [dev release](https://github.com/fullynocturnal/sheaf-ios/releases/tag/dev)
+3. Open the `.ipa` in AltStore
+4. AltStore signs and installs automatically with your Apple ID
+5. Trust the app in Settings → General → VPN & Device Management
+6. Launch and enjoy!
+
+**Alternative signing tools:**
+- [Sideloadly](https://sideloadly.io/) - Popular desktop sideloading tool
+- [SideStore](https://sidestore.io/) - No computer needed after setup
+- See the `SIGNING_GUIDE.md` in the release for all methods
+
+> **Note**: The IPA is unsigned so users can sign with their own Apple ID. Works on any device - no UDID restrictions! Free Apple IDs work (7-day validity, auto-refreshed by AltStore). Paid accounts get 1-year validity.
+
+### Building from Source
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/yourusername/sheaf-ios.git
+   git clone https://github.com/fullynocturnal/sheaf-ios.git
    cd sheaf-ios
    ```
 
@@ -289,13 +310,10 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 - [ ] Migrate to Keychain for credential storage
 - [ ] Add widgets for Home Screen and Lock Screen
-- [ ] Implement Live Activities for front changes
 - [ ] Add complications for watchOS
 - [ ] iCloud sync support
-- [ ] iPad optimization with multi-column layouts
 - [ ] Offline mode with local caching
 - [ ] Custom notifications for system events
-- [ ] Share sheet integration
 - [ ] macOS companion app
 
 ## Known Issues
@@ -303,10 +321,6 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 - Multiple `Localizable.xcstrings` target membership can cause build errors (ensure one per target)
 - Watch app requires iPhone app to be configured first
 - Large member lists may impact performance (pagination planned)
-
-## License
-
-[Your License Here - e.g., MIT, GPL, Proprietary]
 
 ## Acknowledgments
 
@@ -318,9 +332,4 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 For questions, issues, or feature requests:
 - Open an issue on GitHub
-- Contact: [your contact information]
-- Documentation: [link to docs if available]
-
----
-
-**Note**: Sheaf is a third-party client and requires a compatible API server. This app is not affiliated with any specific plural system tracking service.
+- Join our Discord
