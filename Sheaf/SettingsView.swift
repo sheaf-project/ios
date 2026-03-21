@@ -16,6 +16,9 @@ struct SettingsView: View {
     @State private var newBaseURL = ""
     @State private var newToken = ""
     @State private var me: UserRead?
+    @State private var isExporting = false
+    @State private var exportError: String?
+    @State private var showExportSuccess = false
 
     var body: some View {
         NavigationStack {
@@ -131,22 +134,49 @@ struct SettingsView: View {
                         }
                     }
 
-                    // Import
-                    settingsSection(title: LocalizedStrings.importData) {
-                        Button { showImport = true } label: {
-                            HStack {
-                                Image(systemName: "square.and.arrow.down.fill")
-                                    .foregroundColor(theme.accentLight)
-                                    .frame(width: 20)
-                                Text(LocalizedStrings.importFromSimplyPlural)
-                                    .font(.system(size: 15, weight: .medium))
-                                    .foregroundColor(theme.textPrimary)
-                                Spacer()
-                                Image(systemName: "chevron.right")
-                                    .font(.system(size: 12))
-                                    .foregroundColor(theme.textTertiary)
+                    // Data Management
+                    settingsSection(title: "Data Management") {
+                        VStack(spacing: 0) {
+                            // Import
+                            Button { showImport = true } label: {
+                                HStack {
+                                    Image(systemName: "square.and.arrow.down.fill")
+                                        .foregroundColor(theme.accentLight)
+                                        .frame(width: 20)
+                                    Text(LocalizedStrings.importFromSimplyPlural)
+                                        .font(.system(size: 15, weight: .medium))
+                                        .foregroundColor(theme.textPrimary)
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 12))
+                                        .foregroundColor(theme.textTertiary)
+                                }
+                                .padding(.horizontal, 16).padding(.vertical, 14)
                             }
-                            .padding(.horizontal, 16).padding(.vertical, 14)
+                            
+                            Divider().background(theme.divider)
+                            
+                            // Export
+                            Button { 
+                                Task { await exportData() }
+                            } label: {
+                                HStack {
+                                    Image(systemName: "square.and.arrow.up.fill")
+                                        .foregroundColor(theme.accentLight)
+                                        .frame(width: 20)
+                                    Text("Export All Data")
+                                        .font(.system(size: 15, weight: .medium))
+                                        .foregroundColor(theme.textPrimary)
+                                    Spacer()
+                                    if isExporting {
+                                        ProgressView()
+                                            .tint(theme.accentLight)
+                                            .scaleEffect(0.8)
+                                    }
+                                }
+                                .padding(.horizontal, 16).padding(.vertical, 14)
+                            }
+                            .disabled(isExporting)
                         }
                     }
 
@@ -262,6 +292,11 @@ struct SettingsView: View {
                     .padding(.bottom, 80)
                 }
             }
+            .refreshable {
+                store.loadAll()
+                await loadMe()
+                try? await Task.sleep(nanoseconds: 500_000_000)
+            }
         }
         .sheet(isPresented: $showEditSystem) {
             EditSystemProfileSheet()
@@ -291,12 +326,82 @@ struct SettingsView: View {
             TOTPSetupSheet()
                 .environmentObject(authManager)
         }
+        .alert("Export Successful", isPresented: $showExportSuccess) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Your data has been saved to Files.")
+        }
+        .alert("Export Failed", isPresented: .constant(exportError != nil)) {
+            Button("OK", role: .cancel) {
+                exportError = nil
+            }
+        } message: {
+            Text(exportError ?? "An unknown error occurred.")
+        }
         } // NavigationStack
     }
 
     private func loadMe() async {
         guard let api = store.api else { return }
         me = try? await api.getMe()
+    }
+    
+    private func exportData() async {
+        guard let api = store.api else { return }
+        
+        await MainActor.run {
+            isExporting = true
+            exportError = nil
+        }
+        
+        do {
+            let data = try await api.exportData()
+            
+            // Create a temporary file
+            let timestamp = ISO8601DateFormatter().string(from: Date())
+                .replacingOccurrences(of: ":", with: "-")
+            let filename = "sheaf-export-\(timestamp).json"
+            let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(filename)
+            
+            try data.write(to: tempURL)
+            
+            // Present share sheet
+            await MainActor.run {
+                isExporting = false
+                presentShareSheet(url: tempURL)
+            }
+        } catch {
+            await MainActor.run {
+                isExporting = false
+                exportError = error.localizedDescription
+            }
+        }
+    }
+    
+    private func presentShareSheet(url: URL) {
+        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let window = windowScene.windows.first,
+              let rootViewController = window.rootViewController else {
+            return
+        }
+        
+        let activityVC = UIActivityViewController(
+            activityItems: [url],
+            applicationActivities: nil
+        )
+        
+        // For iPad - set popover source
+        if let popover = activityVC.popoverPresentationController {
+            popover.sourceView = rootViewController.view
+            popover.sourceRect = CGRect(x: rootViewController.view.bounds.midX,
+                                       y: rootViewController.view.bounds.midY,
+                                       width: 0, height: 0)
+            popover.permittedArrowDirections = []
+        }
+        
+        rootViewController.present(activityVC, animated: true) {
+            // File will be cleaned up automatically by the system after sharing
+        }
     }
 
     var maskedToken: String {

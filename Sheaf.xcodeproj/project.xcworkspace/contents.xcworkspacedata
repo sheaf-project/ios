@@ -5,12 +5,6 @@
       location = "self:">
    </FileRef>
    <FileRef
-      location = "group:WIDGET_TROUBLESHOOTING.md">
-   </FileRef>
-   <FileRef
-      location = "group:WIDGET_INTEGRITY_FIX.md">
-   </FileRef>
-   <FileRef
-      location = "group:TestMinimalWidget.swift">
+      location = "group:SheafWatchWidgetExtensionExtension.entitlements">
    </FileRef>
 </Workspace>

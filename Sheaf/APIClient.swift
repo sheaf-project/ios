@@ -26,6 +26,11 @@ final class AuthManager: ObservableObject {
         refreshToken = UserDefaults.standard.string(forKey: refreshKey) ?? ""
         baseURL      = UserDefaults.standard.string(forKey: urlKey)     ?? ""
         isAuthenticated = !accessToken.isEmpty && !baseURL.isEmpty
+        
+        // Configure connectivity manager immediately
+        #if os(iOS)
+        PhoneConnectivityManager.shared.configure(auth: self)
+        #endif
     }
 
     /// Call after a successful login when the account has TOTP enabled.
@@ -69,9 +74,19 @@ final class AuthManager: ObservableObject {
         UserDefaults.standard.set(cleanURL,            forKey: urlKey)
         UserDefaults.standard.set(tokens.accessToken,  forKey: accessKey)
         UserDefaults.standard.set(tokens.refreshToken, forKey: refreshKey)
+        
         // Push updated credentials to Apple Watch
         #if os(iOS)
         PhoneConnectivityManager.shared.syncCredentials()
+        
+        // Also write to App Group as fallback (works in simulator)
+        if let sharedDefaults = UserDefaults(suiteName: "group.systems.lupine.sheaf") {
+            sharedDefaults.set(cleanURL, forKey: "sheaf_base_url")
+            sharedDefaults.set(tokens.accessToken, forKey: "sheaf_access_token")
+            sharedDefaults.set(tokens.refreshToken, forKey: "sheaf_refresh_token")
+            sharedDefaults.synchronize()
+            NSLog("📱 AuthManager: Wrote credentials to App Group as fallback")
+        }
         #endif
     }
 

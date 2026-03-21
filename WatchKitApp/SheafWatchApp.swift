@@ -7,7 +7,7 @@ struct SheafWatchApp: App {
     @StateObject private var store       = WatchStore()
 
     init() {
-        WatchConnectivityManager.shared.configure(auth: WatchAuthManager())
+        // Don't configure here - do it in onAppear so we have the actual authManager instance
     }
 
     var body: some Scene {
@@ -20,7 +20,6 @@ struct SheafWatchApp: App {
                         .onAppear {
                             store.configure(auth: authManager)
                             store.loadAll()
-                            WatchConnectivityManager.shared.configure(auth: authManager)
                             SheafShortcuts.updateAppShortcutParameters()
                         }
                 } else {
@@ -37,12 +36,21 @@ struct SheafWatchApp: App {
                             .font(.system(size: 12))
                             .foregroundColor(.secondary)
                             .multilineTextAlignment(.center)
+                        
+                        Button("Refresh") {
+                            authManager.loadCredentials()
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(.purple)
                     }
                     .padding()
-                    .onAppear {
-                        WatchConnectivityManager.shared.configure(auth: authManager)
-                    }
                 }
+            }
+            .onAppear {
+                // Configure connectivity manager with the actual authManager instance
+                WatchConnectivityManager.shared.configure(auth: authManager)
+                // Also try loading from App Group on appear
+                authManager.loadCredentials()
             }
         }
     }

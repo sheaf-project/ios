@@ -79,7 +79,7 @@ struct MainView: View {
             .onAppear {
                 systemStore.configure(auth: authManager)
                 systemStore.loadAll()
-                PhoneConnectivityManager.shared.configure(auth: authManager)
+                // Sync credentials in case user was already logged in
                 PhoneConnectivityManager.shared.syncCredentials()
                 SheafShortcuts.updateAppShortcutParameters()
                 donateQuickActions()
