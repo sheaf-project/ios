@@ -65,6 +65,10 @@ struct GroupsView: View {
                         .padding(.horizontal, 24)
                         .padding(.bottom, 100)
                     }
+                    .refreshable {
+                        store.loadAll()
+                        try? await Task.sleep(nanoseconds: 500_000_000)
+                    }
                 }
             }
         }

@@ -6,6 +6,8 @@ struct MembersView: View {
     @State private var searchText = ""
     @State private var showAddMember = false
     @State private var selectedMember: Member?
+    @State private var memberToDelete: Member?
+    @State private var showDeleteConfirm = false
 
 
     private func removeMemberFromFront(_ member: Member) async {
@@ -66,7 +68,8 @@ struct MembersView: View {
                             }
                             .swipeActions(edge: .trailing) {
                                 Button(role: .destructive) {
-                                    Task { await store.deleteMember(id: member.id) }
+                                    memberToDelete = member
+                                    showDeleteConfirm = true
                                 } label: {
                                     Label("Delete", systemImage: "trash")
                                 }
@@ -79,6 +82,10 @@ struct MembersView: View {
                     .listStyle(.plain)
                     .background(theme.backgroundPrimary)
                     .scrollContentBackground(.hidden)
+                    .refreshable {
+                        store.loadAll()
+                        try? await Task.sleep(nanoseconds: 500_000_000)
+                    }
                 }
             }
             .background(theme.backgroundPrimary)
@@ -105,6 +112,14 @@ struct MembersView: View {
         .sheet(item: $selectedMember) { member in
             MemberDetailSheet(member: member)
                 .environmentObject(store)
+        }
+        .alert("Delete this member?", isPresented: $showDeleteConfirm, presenting: memberToDelete) { member in
+            Button("Delete", role: .destructive) {
+                Task { await store.deleteMember(id: member.id) }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: { member in
+            Text("This will permanently delete \(member.displayName ?? member.name) and cannot be undone.")
         }
     }
 }

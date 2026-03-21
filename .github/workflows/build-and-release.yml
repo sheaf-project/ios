@@ -1,8 +1,18 @@
 name: Build and Release Dev IPA
 
 # This workflow builds an unsigned IPA for distribution.
-# The Watch app is built separately and embedded if available.
-# Local Xcode builds can include Watch app as a dependency without affecting CI.
+# 
+# Build Strategy:
+# - iOS app, Watch app, and Widget extension are built separately to avoid platform conflicts
+# - Preferentially uses CI-specific schemes (Sheaf-CI, SheafWatch-CI, SheafWatchWidget-CI)
+# - These schemes exclude cross-platform dependencies that cause iOS/watchOS build conflicts
+# - Falls back to target-based builds if schemes don't exist
+# - Widget extension is built separately and manually embedded into Watch app
+# - Watch app (with widget) is then embedded into iOS app
+# - Final IPA contains: iOS app → Watch app → Widget extension
+# 
+# For users: The IPA includes Watch app and complications but they require proper signing to function.
+# Local Xcode builds use regular schemes with all dependencies and work normally.
 
 on:
   push:
@@ -43,29 +53,53 @@ jobs:
             -target Sheaf \
             -configuration "${{ env.CONFIGURATION }}"
       
-      - name: Build iOS app only (unsigned)
+      - name: Build iOS app using scheme
         run: |
-          # Build the iOS app for iPhone (without Watch app dependencies)
+          # Build the iOS app for iPhone
+          # Preferentially use CI scheme if available to avoid Watch dependencies
           set +e  # Don't exit on error
           
-          xcodebuild \
-            -project Sheaf.xcodeproj \
-            -target Sheaf \
-            -configuration "${{ env.CONFIGURATION }}" \
-            -sdk iphoneos \
-            -arch arm64 \
-            SYMROOT="$RUNNER_TEMP/Build" \
-            ONLY_ACTIVE_ARCH=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGN_IDENTITY="" \
-            CODE_SIGN_ENTITLEMENTS="" \
-            DEVELOPMENT_TEAM="" \
-            SKIP_INSTALL=NO \
-            VALIDATE_DEPENDENCIES=NO \
-            build 2>&1 | tee "$RUNNER_TEMP/build-ios.log"
-          
-          BUILD_EXIT_CODE=${PIPESTATUS[0]}
+          if xcodebuild -list -project Sheaf.xcodeproj | grep -q "Sheaf-CI"; then
+            echo "📱 Using Sheaf-CI scheme (without Watch dependencies)..."
+            
+            xcodebuild \
+              -project Sheaf.xcodeproj \
+              -scheme "Sheaf-CI" \
+              -configuration "${{ env.CONFIGURATION }}" \
+              -destination 'generic/platform=iOS' \
+              SYMROOT="$RUNNER_TEMP/Build" \
+              ONLY_ACTIVE_ARCH=NO \
+              CODE_SIGNING_REQUIRED=NO \
+              CODE_SIGNING_ALLOWED=NO \
+              CODE_SIGN_IDENTITY="" \
+              CODE_SIGN_ENTITLEMENTS="" \
+              DEVELOPMENT_TEAM="" \
+              SKIP_INSTALL=NO \
+              build 2>&1 | tee "$RUNNER_TEMP/build-ios.log"
+            
+            BUILD_EXIT_CODE=${PIPESTATUS[0]}
+          else
+            echo "📱 Using Sheaf target with explicit iOS SDK..."
+            
+            xcodebuild \
+              -project Sheaf.xcodeproj \
+              -target Sheaf \
+              -configuration "${{ env.CONFIGURATION }}" \
+              -sdk iphoneos \
+              -arch arm64 \
+              SYMROOT="$RUNNER_TEMP/Build" \
+              ONLY_ACTIVE_ARCH=NO \
+              CODE_SIGNING_REQUIRED=NO \
+              CODE_SIGNING_ALLOWED=NO \
+              CODE_SIGN_IDENTITY="" \
+              CODE_SIGN_ENTITLEMENTS="" \
+              DEVELOPMENT_TEAM="" \
+              SKIP_INSTALL=NO \
+              VALIDATE_DEPENDENCIES=NO \
+              build 2>&1 | tee "$RUNNER_TEMP/build-ios.log"
+            
+            BUILD_EXIT_CODE=${PIPESTATUS[0]}
+          fi
           
           # Check if the iOS app binary exists
           if [ -f "$RUNNER_TEMP/Build/${{ env.CONFIGURATION }}-iphoneos/Sheaf.app/Sheaf" ]; then
@@ -78,15 +112,34 @@ jobs:
             exit $BUILD_EXIT_CODE
           fi
       
-      - name: Build Watch app (unsigned)
+      - name: Build Watch app using scheme
         continue-on-error: true
         run: |
           # Build the Watch app for watchOS (optional - continues if it fails)
           echo "Building Watch app for watchOS..."
           
-          # First check if the Watch app target exists
-          if xcodebuild -list -project Sheaf.xcodeproj | grep -q "SheafWatch Watch App"; then
-            echo "📱 Watch app target found, building..."
+          # Check if CI scheme exists, otherwise fall back to target-based build
+          if xcodebuild -list -project Sheaf.xcodeproj | grep -q "SheafWatch-CI"; then
+            echo "📱 Using SheafWatch-CI scheme (without widget dependency)..."
+            
+            xcodebuild \
+              -project Sheaf.xcodeproj \
+              -scheme "SheafWatch-CI" \
+              -configuration "${{ env.CONFIGURATION }}" \
+              -destination 'generic/platform=watchOS' \
+              SYMROOT="$RUNNER_TEMP/Build" \
+              ONLY_ACTIVE_ARCH=NO \
+              CODE_SIGNING_REQUIRED=NO \
+              CODE_SIGNING_ALLOWED=NO \
+              CODE_SIGN_IDENTITY="" \
+              CODE_SIGN_ENTITLEMENTS="" \
+              DEVELOPMENT_TEAM="" \
+              build 2>&1 | tee "$RUNNER_TEMP/build-watch.log"
+            
+            BUILD_SUCCESS=$?
+            
+          elif xcodebuild -list -project Sheaf.xcodeproj | grep -q "SheafWatch Watch App"; then
+            echo "📱 Watch app target found, building with explicit watchOS SDK..."
             
             xcodebuild \
               -project Sheaf.xcodeproj \
@@ -102,21 +155,107 @@ jobs:
               CODE_SIGN_ENTITLEMENTS="" \
               DEVELOPMENT_TEAM="" \
               VALIDATE_DEPENDENCIES=NO \
-              build || echo "⚠️ Watch app build failed, continuing with iOS-only IPA"
+              build 2>&1 | tee "$RUNNER_TEMP/build-watch.log"
             
-            # Check if Watch app was built
-            if [ -d "$RUNNER_TEMP/Build/${{ env.CONFIGURATION }}-watchos/SheafWatch Watch App.app" ]; then
-              echo "✅ Watch app built successfully"
-              ls -la "$RUNNER_TEMP/Build/${{ env.CONFIGURATION }}-watchos/SheafWatch Watch App.app"
-            else
-              echo "⚠️ Watch app build failed, but continuing with iOS-only IPA"
-            fi
+            BUILD_SUCCESS=$?
           else
-            echo "ℹ️ Watch app target not found, building iOS-only IPA"
+            echo "ℹ️ Watch app scheme/target not found, building iOS-only IPA"
+            BUILD_SUCCESS=1
+          fi
+          
+          # Check build result
+          if [ $BUILD_SUCCESS -eq 0 ] && [ -d "$RUNNER_TEMP/Build/${{ env.CONFIGURATION }}-watchos/SheafWatch Watch App.app" ]; then
+            echo "✅ Watch app built successfully"
+            ls -la "$RUNNER_TEMP/Build/${{ env.CONFIGURATION }}-watchos/SheafWatch Watch App.app"
+          else
+            echo "⚠️ Watch app build failed, continuing with iOS-only IPA"
           fi
           
           echo "Checking what was built:"
           find "$RUNNER_TEMP/Build" -name "*.app" -type d || true
+      
+      - name: Build Widget Extension using scheme
+        continue-on-error: true
+        run: |
+          # Build widget extension using dedicated scheme to avoid platform conflicts
+          echo "Building Widget Extension for watchOS..."
+          
+          # Check if CI scheme exists, otherwise try target-based build
+          if xcodebuild -list -project Sheaf.xcodeproj | grep -q "SheafWatchWidget-CI"; then
+            echo "📱 Using SheafWatchWidget-CI scheme for widget extension..."
+            
+            xcodebuild \
+              -project Sheaf.xcodeproj \
+              -scheme "SheafWatchWidget-CI" \
+              -configuration "${{ env.CONFIGURATION }}" \
+              -destination 'generic/platform=watchOS' \
+              SYMROOT="$RUNNER_TEMP/Build" \
+              ONLY_ACTIVE_ARCH=NO \
+              CODE_SIGNING_REQUIRED=NO \
+              CODE_SIGNING_ALLOWED=NO \
+              CODE_SIGN_IDENTITY="" \
+              CODE_SIGN_ENTITLEMENTS="" \
+              DEVELOPMENT_TEAM="" \
+              build 2>&1 | tee "$RUNNER_TEMP/build-widget.log"
+            
+            BUILD_SUCCESS=$?
+            
+          elif xcodebuild -list -project Sheaf.xcodeproj | grep -q "SheafWatchWidgetExtension"; then
+            echo "📱 Widget extension target found, building with explicit watchOS SDK..."
+            
+            xcodebuild \
+              -project Sheaf.xcodeproj \
+              -target "SheafWatchWidgetExtension" \
+              -configuration "${{ env.CONFIGURATION }}" \
+              -sdk watchos \
+              -arch arm64_32 \
+              SYMROOT="$RUNNER_TEMP/Build" \
+              ONLY_ACTIVE_ARCH=NO \
+              CODE_SIGNING_REQUIRED=NO \
+              CODE_SIGNING_ALLOWED=NO \
+              CODE_SIGN_IDENTITY="" \
+              CODE_SIGN_ENTITLEMENTS="" \
+              DEVELOPMENT_TEAM="" \
+              SKIP_INSTALL=YES \
+              build 2>&1 | tee "$RUNNER_TEMP/build-widget.log"
+            
+            BUILD_SUCCESS=$?
+          else
+            echo "ℹ️ Widget extension scheme/target not found"
+            BUILD_SUCCESS=1
+          fi
+          
+          # Check build result
+          if [ $BUILD_SUCCESS -eq 0 ]; then
+            echo "✅ Widget extension build succeeded"
+          else
+            echo "⚠️ Widget extension build failed (continuing without widget)"
+          fi
+          
+          # Find the widget extension
+          echo "Searching for widget extension..."
+          find "$RUNNER_TEMP/Build" -name "*.appex" -type d || true
+      
+      - name: Embed Widget Extension into Watch app
+        continue-on-error: true
+        run: |
+          # Embed widget extension into Watch app if both exist
+          WATCH_APP_PATH="$RUNNER_TEMP/Build/${{ env.CONFIGURATION }}-watchos/SheafWatch Watch App.app"
+          WIDGET_SOURCE="$RUNNER_TEMP/Build/${{ env.CONFIGURATION }}-watchos/SheafWatchWidgetExtension.appex"
+          WIDGET_DEST="$WATCH_APP_PATH/PlugIns"
+          
+          if [ -d "$WATCH_APP_PATH" ] && [ -d "$WIDGET_SOURCE" ]; then
+            echo "📦 Embedding widget extension into Watch app..."
+            mkdir -p "$WIDGET_DEST"
+            cp -r "$WIDGET_SOURCE" "$WIDGET_DEST/"
+            
+            echo "✅ Widget extension embedded successfully"
+            ls -la "$WIDGET_DEST"
+          elif [ ! -d "$WATCH_APP_PATH" ]; then
+            echo "ℹ️ Watch app not found, skipping widget embed"
+          elif [ ! -d "$WIDGET_SOURCE" ]; then
+            echo "ℹ️ Widget extension not found, skipping embed"
+          fi
       
       - name: Embed Watch app into iOS app
         continue-on-error: true
@@ -133,9 +272,13 @@ jobs:
             echo "✅ Watch app embedded successfully"
             ls -la "$WATCH_APP_DEST"
             
-            # Verify the structure
+            # Show full structure including widget if present
             echo "Final iOS app structure:"
             ls -la "$RUNNER_TEMP/Build/${{ env.CONFIGURATION }}-iphoneos/Sheaf.app/"
+            if [ -d "$WATCH_APP_DEST/SheafWatch Watch App.app/PlugIns" ]; then
+              echo "Widget extension in Watch app:"
+              ls -la "$WATCH_APP_DEST/SheafWatch Watch App.app/PlugIns/"
+            fi
           else
             echo "ℹ️ Watch app not found at $WATCH_APP_SOURCE"
             echo "Creating iOS-only IPA without Watch app"

@@ -15,10 +15,33 @@ final class WatchAuthManager: ObservableObject {
     private let urlKey     = "sheaf_base_url"
 
     init() {
+        loadCredentials()
+    }
+    
+    /// Load credentials from UserDefaults, falling back to App Group if needed
+    func loadCredentials() {
+        // First try standard UserDefaults (for WatchConnectivity path)
         accessToken  = UserDefaults.standard.string(forKey: accessKey)  ?? ""
         refreshToken = UserDefaults.standard.string(forKey: refreshKey) ?? ""
         baseURL      = UserDefaults.standard.string(forKey: urlKey)     ?? ""
+        
+        // If empty, try App Group (fallback for simulator or direct sharing)
+        if accessToken.isEmpty, let sharedDefaults = UserDefaults(suiteName: "group.systems.lupine.sheaf") {
+            accessToken  = sharedDefaults.string(forKey: accessKey)  ?? ""
+            refreshToken = sharedDefaults.string(forKey: refreshKey) ?? ""
+            baseURL      = sharedDefaults.string(forKey: urlKey)     ?? ""
+            
+            if !accessToken.isEmpty {
+                NSLog("⌚️ WatchAuthManager: Loaded credentials from App Group")
+                // Copy to standard UserDefaults for consistency
+                UserDefaults.standard.set(baseURL, forKey: urlKey)
+                UserDefaults.standard.set(accessToken, forKey: accessKey)
+                UserDefaults.standard.set(refreshToken, forKey: refreshKey)
+            }
+        }
+        
         isAuthenticated = !accessToken.isEmpty && !baseURL.isEmpty
+        NSLog("⌚️ WatchAuthManager: Loaded credentials - isAuthenticated: \(isAuthenticated)")
     }
 
     func save(baseURL: String, accessToken: String, refreshToken: String) {
