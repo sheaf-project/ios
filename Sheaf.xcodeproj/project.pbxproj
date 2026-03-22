@@ -10,12 +10,21 @@
 		2A063BB22F6CE58000321DA6 /* README.md in Resources */ = {isa = PBXBuildFile; fileRef = 2A063BB12F6CE58000321DA6 /* README.md */; };
 		2A2028962F6C8D350084B22F /* .gitignore in Resources */ = {isa = PBXBuildFile; fileRef = 2A2028952F6C8D310084B22F /* .gitignore */; };
 		2A20289A2F6CB1780084B22F /* LocalizationHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A2028992F6CB1780084B22F /* LocalizationHelpers.swift */; };
+		2A4546A12F6F02B0006A8EE3 /* WatchKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2A4546A02F6F02B0006A8EE3 /* WatchKit.framework */; };
+		2A4546A92F6F5718006A8EE3 /* SheafWatch Watch App.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 2A2028282F6BB3070084B22F /* SheafWatch Watch App.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		2ACEC1902F6D27BD00B4AB57 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2ACEC10E2F6D1AD700B4AB57 /* WidgetKit.framework */; };
 		2ACEC1912F6D27BD00B4AB57 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2ACEC1102F6D1AD700B4AB57 /* SwiftUI.framework */; };
-		2ACEC19E2F6D27BF00B4AB57 /* SheafWatchWidgetExtensionExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 2ACEC18F2F6D27BD00B4AB57 /* SheafWatchWidgetExtensionExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		2ACEC19E2F6D27BF00B4AB57 /* SheafWatchWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 2ACEC18F2F6D27BD00B4AB57 /* SheafWatchWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		2A4546A72F6F569C006A8EE3 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 2A20278F2F6B92F10084B22F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 2A2028272F6BB3070084B22F;
+			remoteInfo = "SheafWatch Watch App";
+		};
 		2ACEC19C2F6D27BF00B4AB57 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 2A20278F2F6B92F10084B22F /* Project object */;
@@ -32,6 +41,7 @@
 			dstPath = "$(CONTENTS_FOLDER_PATH)/Watch";
 			dstSubfolderSpec = 16;
 			files = (
+				2A4546A92F6F5718006A8EE3 /* SheafWatch Watch App.app in Embed Watch Content */,
 			);
 			name = "Embed Watch Content";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -42,7 +52,7 @@
 			dstPath = "";
 			dstSubfolderSpec = 13;
 			files = (
-				2ACEC19E2F6D27BF00B4AB57 /* SheafWatchWidgetExtensionExtension.appex in Embed Foundation Extensions */,
+				2ACEC19E2F6D27BF00B4AB57 /* SheafWatchWidgetExtension.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -55,12 +65,14 @@
 		2A2028282F6BB3070084B22F /* SheafWatch Watch App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "SheafWatch Watch App.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		2A2028952F6C8D310084B22F /* .gitignore */ = {isa = PBXFileReference; lastKnownFileType = text; path = .gitignore; sourceTree = "<group>"; };
 		2A2028992F6CB1780084B22F /* LocalizationHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalizationHelpers.swift; sourceTree = "<group>"; };
-		2A8D15EE2F6E210C001F5282 /* SheafWatchWidgetExtensionExtensionDebug.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = SheafWatchWidgetExtensionExtensionDebug.entitlements; sourceTree = "<group>"; };
+		2A4546A02F6F02B0006A8EE3 /* WatchKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WatchKit.framework; path = Platforms/WatchOS.platform/Developer/SDKs/WatchOS26.2.sdk/System/Library/Frameworks/WatchKit.framework; sourceTree = DEVELOPER_DIR; };
+		2A4546A42F6F0425006A8EE3 /* SheafWatch Watch AppRelease.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "SheafWatch Watch AppRelease.entitlements"; sourceTree = "<group>"; };
+		2A8D15EE2F6E210C001F5282 /* SheafWatchWidgetExtensionDebug.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = SheafWatchWidgetExtensionDebug.entitlements; sourceTree = "<group>"; };
 		2ACEC10E2F6D1AD700B4AB57 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
 		2ACEC1102F6D1AD700B4AB57 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 		2ACEC1402F6D1BD600B4AB57 /* FrontingComplicationExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = FrontingComplicationExtension.entitlements; sourceTree = "<group>"; };
 		2ACEC1412F6D1C3E00B4AB57 /* SheafWatch Watch App.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "SheafWatch Watch App.entitlements"; sourceTree = "<group>"; };
-		2ACEC18F2F6D27BD00B4AB57 /* SheafWatchWidgetExtensionExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = SheafWatchWidgetExtensionExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		2ACEC18F2F6D27BD00B4AB57 /* SheafWatchWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = SheafWatchWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		2ACEC1B02F6D28AB00B4AB57 /* SheafWatchWidgetExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = SheafWatchWidgetExtension.entitlements; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -76,20 +88,27 @@
 			);
 			target = 2A2028272F6BB3070084B22F /* SheafWatch Watch App */;
 		};
-		2ACEC1A22F6D27BF00B4AB57 /* Exceptions for "SheafWatchWidgetExtension" folder in "SheafWatchWidgetExtensionExtension" target */ = {
+		2A4546A62F6F0463006A8EE3 /* Exceptions for "WatchKitApp" folder in "Sheaf" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				KeychainHelper.swift,
+			);
+			target = 2A2027962F6B92F10084B22F /* Sheaf */;
+		};
+		2ACEC1A22F6D27BF00B4AB57 /* Exceptions for "SheafWatchWidgetExtension" folder in "SheafWatchWidgetExtension" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
 			);
-			target = 2ACEC18E2F6D27BD00B4AB57 /* SheafWatchWidgetExtensionExtension */;
+			target = 2ACEC18E2F6D27BD00B4AB57 /* SheafWatchWidgetExtension */;
 		};
-		2ACEC1AC2F6D286700B4AB57 /* Exceptions for "Sheaf" folder in "SheafWatchWidgetExtensionExtension" target */ = {
+		2ACEC1AC2F6D286700B4AB57 /* Exceptions for "Sheaf" folder in "SheafWatchWidgetExtension" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Models.swift,
 				SharedFrontingData.swift,
 			);
-			target = 2ACEC18E2F6D27BD00B4AB57 /* SheafWatchWidgetExtensionExtension */;
+			target = 2ACEC18E2F6D27BD00B4AB57 /* SheafWatchWidgetExtension */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
@@ -98,13 +117,16 @@
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
 				2A20285A2F6BB4420084B22F /* Exceptions for "Sheaf" folder in "SheafWatch Watch App" target */,
-				2ACEC1AC2F6D286700B4AB57 /* Exceptions for "Sheaf" folder in "SheafWatchWidgetExtensionExtension" target */,
+				2ACEC1AC2F6D286700B4AB57 /* Exceptions for "Sheaf" folder in "SheafWatchWidgetExtension" target */,
 			);
 			path = Sheaf;
 			sourceTree = "<group>";
 		};
 		2A2028292F6BB3070084B22F /* WatchKitApp */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				2A4546A62F6F0463006A8EE3 /* Exceptions for "WatchKitApp" folder in "Sheaf" target */,
+			);
 			path = WatchKitApp;
 			sourceTree = "<group>";
 		};
@@ -116,7 +138,7 @@
 		2ACEC1922F6D27BD00B4AB57 /* SheafWatchWidgetExtension */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				2ACEC1A22F6D27BF00B4AB57 /* Exceptions for "SheafWatchWidgetExtension" folder in "SheafWatchWidgetExtensionExtension" target */,
+				2ACEC1A22F6D27BF00B4AB57 /* Exceptions for "SheafWatchWidgetExtension" folder in "SheafWatchWidgetExtension" target */,
 			);
 			path = SheafWatchWidgetExtension;
 			sourceTree = "<group>";
@@ -135,6 +157,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				2A4546A12F6F02B0006A8EE3 /* WatchKit.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -153,7 +176,8 @@
 		2A20278E2F6B92F10084B22F = {
 			isa = PBXGroup;
 			children = (
-				2A8D15EE2F6E210C001F5282 /* SheafWatchWidgetExtensionExtensionDebug.entitlements */,
+				2A4546A42F6F0425006A8EE3 /* SheafWatch Watch AppRelease.entitlements */,
+				2A8D15EE2F6E210C001F5282 /* SheafWatchWidgetExtensionDebug.entitlements */,
 				2ACEC1B02F6D28AB00B4AB57 /* SheafWatchWidgetExtension.entitlements */,
 				2ACEC1412F6D1C3E00B4AB57 /* SheafWatch Watch App.entitlements */,
 				2ACEC1402F6D1BD600B4AB57 /* FrontingComplicationExtension.entitlements */,
@@ -174,7 +198,7 @@
 			children = (
 				2A2027972F6B92F10084B22F /* Sheaf.app */,
 				2A2028282F6BB3070084B22F /* SheafWatch Watch App.app */,
-				2ACEC18F2F6D27BD00B4AB57 /* SheafWatchWidgetExtensionExtension.appex */,
+				2ACEC18F2F6D27BD00B4AB57 /* SheafWatchWidgetExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -182,6 +206,7 @@
 		2ACEC10D2F6D1AD700B4AB57 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				2A4546A02F6F02B0006A8EE3 /* WatchKit.framework */,
 				2ACEC10E2F6D1AD700B4AB57 /* WidgetKit.framework */,
 				2ACEC1102F6D1AD700B4AB57 /* SwiftUI.framework */,
 			);
@@ -203,6 +228,7 @@
 			buildRules = (
 			);
 			dependencies = (
+				2A4546A82F6F569C006A8EE3 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				2A2027992F6B92F10084B22F /* Sheaf */,
@@ -239,9 +265,9 @@
 			productReference = 2A2028282F6BB3070084B22F /* SheafWatch Watch App.app */;
 			productType = "com.apple.product-type.application";
 		};
-		2ACEC18E2F6D27BD00B4AB57 /* SheafWatchWidgetExtensionExtension */ = {
+		2ACEC18E2F6D27BD00B4AB57 /* SheafWatchWidgetExtension */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 2ACEC19F2F6D27BF00B4AB57 /* Build configuration list for PBXNativeTarget "SheafWatchWidgetExtensionExtension" */;
+			buildConfigurationList = 2ACEC19F2F6D27BF00B4AB57 /* Build configuration list for PBXNativeTarget "SheafWatchWidgetExtension" */;
 			buildPhases = (
 				2ACEC18B2F6D27BD00B4AB57 /* Sources */,
 				2ACEC18C2F6D27BD00B4AB57 /* Frameworks */,
@@ -254,11 +280,11 @@
 			fileSystemSynchronizedGroups = (
 				2ACEC1922F6D27BD00B4AB57 /* SheafWatchWidgetExtension */,
 			);
-			name = SheafWatchWidgetExtensionExtension;
+			name = SheafWatchWidgetExtension;
 			packageProductDependencies = (
 			);
 			productName = SheafWatchWidgetExtensionExtension;
-			productReference = 2ACEC18F2F6D27BD00B4AB57 /* SheafWatchWidgetExtensionExtension.appex */;
+			productReference = 2ACEC18F2F6D27BD00B4AB57 /* SheafWatchWidgetExtension.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
@@ -298,7 +324,7 @@
 			targets = (
 				2A2027962F6B92F10084B22F /* Sheaf */,
 				2A2028272F6BB3070084B22F /* SheafWatch Watch App */,
-				2ACEC18E2F6D27BD00B4AB57 /* SheafWatchWidgetExtensionExtension */,
+				2ACEC18E2F6D27BD00B4AB57 /* SheafWatchWidgetExtension */,
 			);
 		};
 /* End PBXProject section */
@@ -355,9 +381,14 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		2A4546A82F6F569C006A8EE3 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 2A2028272F6BB3070084B22F /* SheafWatch Watch App */;
+			targetProxy = 2A4546A72F6F569C006A8EE3 /* PBXContainerItemProxy */;
+		};
 		2ACEC19D2F6D27BF00B4AB57 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = 2ACEC18E2F6D27BD00B4AB57 /* SheafWatchWidgetExtensionExtension */;
+			target = 2ACEC18E2F6D27BD00B4AB57 /* SheafWatchWidgetExtension */;
 			targetProxy = 2ACEC19C2F6D27BF00B4AB57 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
@@ -580,7 +611,7 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SDKROOT = watchos;
-				SKIP_INSTALL = YES;
+				SKIP_INSTALL = NO;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
@@ -597,7 +628,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = "SheafWatch Watch App.entitlements";
+				CODE_SIGN_ENTITLEMENTS = "SheafWatch Watch AppRelease.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -616,7 +647,7 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SDKROOT = watchos;
-				SKIP_INSTALL = YES;
+				SKIP_INSTALL = NO;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
@@ -633,7 +664,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
-				CODE_SIGN_ENTITLEMENTS = SheafWatchWidgetExtensionExtensionDebug.entitlements;
+				CODE_SIGN_ENTITLEMENTS = SheafWatchWidgetExtensionDebug.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -660,7 +691,7 @@
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 4;
-				WATCHOS_DEPLOYMENT_TARGET = 26.2;
+				WATCHOS_DEPLOYMENT_TARGET = 10.6;
 			};
 			name = Debug;
 		};
@@ -669,7 +700,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
-				CODE_SIGN_ENTITLEMENTS = SheafWatchWidgetExtensionExtension.entitlements;
+				CODE_SIGN_ENTITLEMENTS = SheafWatchWidgetExtension.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -685,7 +716,7 @@
 					"@executable_path/../../../../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = systems.lupine.sheaf.watchkitapp.widgetextension;
+				PRODUCT_BUNDLE_IDENTIFIER = systems.lupine.sheaf.watchkitapp.widgetkitextension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SDKROOT = watchos;
@@ -696,7 +727,7 @@
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 4;
-				WATCHOS_DEPLOYMENT_TARGET = 26.2;
+				WATCHOS_DEPLOYMENT_TARGET = 10.6;
 			};
 			name = Release;
 		};
@@ -730,7 +761,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		2ACEC19F2F6D27BF00B4AB57 /* Build configuration list for PBXNativeTarget "SheafWatchWidgetExtensionExtension" */ = {
+		2ACEC19F2F6D27BF00B4AB57 /* Build configuration list for PBXNativeTarget "SheafWatchWidgetExtension" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				2ACEC1A02F6D27BF00B4AB57 /* Debug */,

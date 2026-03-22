@@ -7,17 +7,21 @@ import WatchConnectivity
 final class PhoneConnectivityManager: NSObject, WCSessionDelegate, ObservableObject {
     static let shared = PhoneConnectivityManager()
 
-    weak var authManager: AuthManager?
+    // Strong reference — the AuthManager is also held by SheafApp's @StateObject,
+    // but we need to guarantee it's available when background WCSession callbacks fire.
+    var authManager: AuthManager?
 
     private override init() {
         super.init()
         if WCSession.isSupported() {
+            NSLog("📱 PhoneConnectivityManager: Setting up WCSession")
             WCSession.default.delegate = self
             WCSession.default.activate()
         }
     }
 
     func configure(auth: AuthManager) {
+        NSLog("📱 PhoneConnectivityManager: configure(auth:) called, isAuthenticated: \(auth.isAuthenticated)")
         self.authManager = auth
     }
 
@@ -25,20 +29,9 @@ final class PhoneConnectivityManager: NSObject, WCSessionDelegate, ObservableObj
 
     /// Call this after login, token refresh, or any credential change.
     func syncCredentials() {
-        NSLog("📱 PhoneConnectivityManager: syncCredentials() called")
-        NSLog("   Session state: \(WCSession.default.activationState.rawValue)")
-        NSLog("   Watch app installed: \(WCSession.default.isWatchAppInstalled)")
-        NSLog("   Auth manager configured: \(authManager != nil)")
-        NSLog("   Has access token: \((authManager?.accessToken.isEmpty == false))")
-        
-        guard
-            WCSession.default.activationState == .activated,
-            WCSession.default.isWatchAppInstalled,
-            let auth = authManager,
-            !auth.accessToken.isEmpty
-        else { 
-            NSLog("❌ PhoneConnectivityManager: Guard failed, not syncing")
-            return 
+        guard let auth = authManager, !auth.accessToken.isEmpty else {
+            NSLog("📱 PhoneConnectivityManager: No credentials to sync (authManager: \(authManager != nil))")
+            return
         }
 
         let context: [String: Any] = [
@@ -47,46 +40,84 @@ final class PhoneConnectivityManager: NSObject, WCSessionDelegate, ObservableObj
             "refreshToken": auth.refreshToken,
         ]
 
-        NSLog("✅ PhoneConnectivityManager: Sending credentials to watch")
-        NSLog("   Base URL: \(auth.baseURL)")
-        NSLog("   Watch reachable: \(WCSession.default.isReachable)")
-
-        // Try real-time message first (instant if watch is reachable)
-        if WCSession.default.isReachable {
-            WCSession.default.sendMessage(context, replyHandler: { reply in
-                NSLog("✅ PhoneConnectivityManager: Message sent successfully, reply: \(reply)")
-            }, errorHandler: { [weak self] error in
-                NSLog("⚠️ PhoneConnectivityManager: Message failed (\(error)), falling back to context")
-                // Fall back to application context if message fails
-                self?.updateApplicationContext(context)
-            })
-        } else {
-            NSLog("📦 PhoneConnectivityManager: Watch not reachable, using application context")
-            // Application context persists and is delivered when watch wakes
-            updateApplicationContext(context)
+        guard WCSession.default.activationState == .activated else {
+            NSLog("📱 PhoneConnectivityManager: Session not activated, can't sync")
+            return
         }
-    }
 
-    private func updateApplicationContext(_ context: [String: Any]) {
+        // 1. updateApplicationContext — persists until Watch reads it (survives reboots).
         do {
             try WCSession.default.updateApplicationContext(context)
-            NSLog("✅ PhoneConnectivityManager: Application context updated successfully")
+            NSLog("📱 PhoneConnectivityManager: Sent via updateApplicationContext")
         } catch {
-            NSLog("❌ PhoneConnectivityManager: Failed to update application context: \(error)")
+            NSLog("📱 PhoneConnectivityManager: updateApplicationContext failed: \(error.localizedDescription)")
+        }
+
+        // 2. transferUserInfo — queued delivery, guaranteed even when Watch app isn't running.
+        WCSession.default.transferUserInfo(context)
+        NSLog("📱 PhoneConnectivityManager: Queued via transferUserInfo")
+
+        // 3. sendMessage — immediate delivery if Watch is reachable right now.
+        if WCSession.default.isReachable {
+            WCSession.default.sendMessage(context, replyHandler: { reply in
+                NSLog("📱 PhoneConnectivityManager: Watch confirmed receipt: \(reply)")
+            }, errorHandler: { error in
+                NSLog("📱 PhoneConnectivityManager: sendMessage failed: \(error.localizedDescription)")
+            })
         }
     }
 
-    // MARK: - WCSessionDelegate boilerplate
+    // MARK: - Receive from Watch
+
+    /// Handle messages from Watch WITH a reply handler (e.g. credential requests).
+    func session(_ session: WCSession,
+                 didReceiveMessage message: [String: Any],
+                 replyHandler: @escaping ([String: Any]) -> Void) {
+        NSLog("📱 PhoneConnectivityManager: Received message from Watch: \(Array(message.keys))")
+
+        if message["request"] as? String == "credentials" {
+            guard let auth = authManager, !auth.accessToken.isEmpty else {
+                NSLog("📱 PhoneConnectivityManager: Watch requested credentials but none available (authManager: \(authManager != nil))")
+                replyHandler(["error": "not_authenticated"])
+                return
+            }
+            let credentials: [String: Any] = [
+                "baseURL":      auth.baseURL,
+                "accessToken":  auth.accessToken,
+                "refreshToken": auth.refreshToken,
+            ]
+            NSLog("📱 PhoneConnectivityManager: Sending credentials to Watch via reply")
+            replyHandler(credentials)
+            return
+        }
+
+        replyHandler(["status": "unknown_request"])
+    }
+    
+    /// Handle messages from Watch WITHOUT a reply handler.
+    func session(_ session: WCSession,
+                 didReceiveMessage message: [String: Any]) {
+        NSLog("📱 PhoneConnectivityManager: Received message (no reply) from Watch: \(Array(message.keys))")
+    }
+
+    // MARK: - WCSessionDelegate
 
     func session(_ session: WCSession,
                  activationDidCompleteWith activationState: WCSessionActivationState,
                  error: Error?) {
-        NSLog("📱 PhoneConnectivityManager: Session activation completed with state: \(activationState.rawValue)")
+        NSLog("📱 PhoneConnectivityManager: Session activated with state: \(activationState.rawValue), watchAppInstalled: \(session.isWatchAppInstalled)")
         if let error = error {
-            NSLog("❌ PhoneConnectivityManager: Activation error: \(error)")
+            NSLog("📱 PhoneConnectivityManager: Activation error: \(error)")
         }
         if activationState == .activated {
-            // Push current credentials as soon as the session is ready
+            syncCredentials()
+        }
+    }
+    
+    /// Called when the Watch app is installed, uninstalled, or the watch is paired/unpaired.
+    func sessionWatchStateDidChange(_ session: WCSession) {
+        NSLog("📱 PhoneConnectivityManager: Watch state changed - installed: \(session.isWatchAppInstalled), paired: \(session.isPaired)")
+        if session.isWatchAppInstalled {
             syncCredentials()
         }
     }

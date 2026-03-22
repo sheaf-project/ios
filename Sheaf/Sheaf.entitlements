@@ -6,5 +6,9 @@
 	<array>
 		<string>group.systems.lupine.sheaf</string>
 	</array>
+	<key>keychain-access-groups</key>
+	<array>
+		<string>$(AppIdentifierPrefix)systems.lupine.sheaf</string>
+	</array>
 </dict>
 </plist>

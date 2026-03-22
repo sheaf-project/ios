@@ -36,9 +36,10 @@ struct SheafWatchApp: App {
                             .font(.system(size: 12))
                             .foregroundColor(.secondary)
                             .multilineTextAlignment(.center)
-                        
+
                         Button("Refresh") {
                             authManager.loadCredentials()
+                            WatchConnectivityManager.shared.requestCredentials()
                         }
                         .buttonStyle(.bordered)
                         .tint(.purple)

@@ -11,6 +11,12 @@ struct SheafApp: App {
     @ObservedObject private var quickActions = QuickActionHandler.shared
     @State private var selectedTab = 0
 
+    init() {
+        // Configure PhoneConnectivityManager as early as possible
+        // Note: Can't use authManager directly here since @StateObject isn't initialized yet
+        // We'll configure it in RootView.onAppear instead
+    }
+
     var body: some Scene {
         WindowGroup {
             RootView(selectedTab: $selectedTab)
@@ -44,6 +50,16 @@ struct RootView: View {
             }
         }
         .environment(\.theme, resolvedTheme)
+        .onAppear {
+            // Configure PhoneConnectivityManager as soon as we have access to authManager
+            PhoneConnectivityManager.shared.configure(auth: authManager)
+            
+            // Sync credentials to watch if already authenticated
+            if authManager.isAuthenticated {
+                NSLog("📱 RootView: User already authenticated, syncing to watch")
+                PhoneConnectivityManager.shared.syncCredentials()
+            }
+        }
     }
 
     private var resolvedTheme: Theme {
@@ -79,7 +95,8 @@ struct MainView: View {
             .onAppear {
                 systemStore.configure(auth: authManager)
                 systemStore.loadAll()
-                // Sync credentials in case user was already logged in
+                // Configure and sync credentials with watch
+                PhoneConnectivityManager.shared.configure(auth: authManager)
                 PhoneConnectivityManager.shared.syncCredentials()
                 SheafShortcuts.updateAppShortcutParameters()
                 donateQuickActions()

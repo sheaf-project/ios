@@ -22,10 +22,13 @@ final class AuthManager: ObservableObject {
     private let urlKey     = "sheaf_base_url"
 
     init() {
-        accessToken  = UserDefaults.standard.string(forKey: accessKey)  ?? ""
-        refreshToken = UserDefaults.standard.string(forKey: refreshKey) ?? ""
-        baseURL      = UserDefaults.standard.string(forKey: urlKey)     ?? ""
+        // Load from iCloud Keychain (syncs to watch automatically)
+        accessToken  = KeychainHelper.get(key: accessKey) ?? ""
+        refreshToken = KeychainHelper.get(key: refreshKey) ?? ""
+        baseURL      = KeychainHelper.get(key: urlKey) ?? ""
         isAuthenticated = !accessToken.isEmpty && !baseURL.isEmpty
+        
+        NSLog("📱 AuthManager: Loaded from Keychain - isAuthenticated: \(isAuthenticated)")
         
         // Configure connectivity manager immediately
         #if os(iOS)
@@ -71,22 +74,30 @@ final class AuthManager: ObservableObject {
         self.refreshToken = tokens.refreshToken
         self.isAuthenticated = true
         needsTOTP = false
+        
+        // Save to iCloud Keychain (will sync to watch automatically)
+        do {
+            try KeychainHelper.save(key: urlKey, value: cleanURL)
+            try KeychainHelper.save(key: accessKey, value: tokens.accessToken)
+            try KeychainHelper.save(key: refreshKey, value: tokens.refreshToken)
+            NSLog("📱 AuthManager: Credentials saved to iCloud Keychain")
+        } catch {
+            NSLog("❌ AuthManager: Keychain save failed: \(error)")
+        }
+        
+        // Also keep in UserDefaults for backwards compatibility
         UserDefaults.standard.set(cleanURL,            forKey: urlKey)
         UserDefaults.standard.set(tokens.accessToken,  forKey: accessKey)
         UserDefaults.standard.set(tokens.refreshToken, forKey: refreshKey)
         
-        // Push updated credentials to Apple Watch
-        #if os(iOS)
-        PhoneConnectivityManager.shared.syncCredentials()
+        NSLog("📱 AuthManager: Credentials saved locally")
+        NSLog("📱 AuthManager: baseURL: \(cleanURL)")
+        NSLog("📱 AuthManager: accessToken length: \(tokens.accessToken.count)")
         
-        // Also write to App Group as fallback (works in simulator)
-        if let sharedDefaults = UserDefaults(suiteName: "group.systems.lupine.sheaf") {
-            sharedDefaults.set(cleanURL, forKey: "sheaf_base_url")
-            sharedDefaults.set(tokens.accessToken, forKey: "sheaf_access_token")
-            sharedDefaults.set(tokens.refreshToken, forKey: "sheaf_refresh_token")
-            sharedDefaults.synchronize()
-            NSLog("📱 AuthManager: Wrote credentials to App Group as fallback")
-        }
+        // Still try WatchConnectivity as a backup for instant sync
+        #if os(iOS)
+        NSLog("📱 AuthManager: Attempting to sync to watch via WatchConnectivity...")
+        PhoneConnectivityManager.shared.syncCredentials()
         #endif
     }
 
@@ -97,9 +108,15 @@ final class AuthManager: ObservableObject {
         isAuthenticated = false
         needsTOTP      = false
         pendingTokens  = nil
+        
+        // Delete from Keychain
+        KeychainHelper.deleteAll()
+        
+        // Delete from UserDefaults
         UserDefaults.standard.removeObject(forKey: accessKey)
         UserDefaults.standard.removeObject(forKey: refreshKey)
         UserDefaults.standard.removeObject(forKey: urlKey)
+        
         #if os(iOS)
         try? WCSession.default.updateApplicationContext(
             ["baseURL": "", "accessToken": "", "refreshToken": ""]
@@ -191,15 +208,27 @@ class APIClient {
 
     // MARK: - Auth
 
-    func login(email: String, password: String) async throws -> TokenResponse {
-        let body = try JSONEncoder.iso.encode(UserLogin(email: email, password: password))
-        let data = try await request("/v1/auth/login", method: "POST", body: body)
+    func login(email: String, password: String, totpCode: String? = nil) async throws -> TokenResponse {
+        let body = try JSONEncoder.iso.encode(UserLogin(email: email, password: password, totpCode: totpCode))
+        // Don't use request() because login endpoints shouldn't trigger token refresh
+        let (data, status) = try await perform("/v1/auth/login", method: "POST", body: body)
+        guard status == 200 else {
+            let message = String(data: data, encoding: .utf8) ?? "Login failed"
+            throw NSError(domain: "APIError", code: status,
+                         userInfo: [NSLocalizedDescriptionKey: message])
+        }
         return try JSONDecoder.iso.decode(TokenResponse.self, from: data)
     }
 
     func register(email: String, password: String) async throws -> TokenResponse {
         let body = try JSONEncoder.iso.encode(UserRegister(email: email, password: password))
-        let data = try await request("/v1/auth/register", method: "POST", body: body)
+        // Don't use request() because register endpoints shouldn't trigger token refresh
+        let (data, status) = try await perform("/v1/auth/register", method: "POST", body: body)
+        guard status == 200 else {
+            let message = String(data: data, encoding: .utf8) ?? "Registration failed"
+            throw NSError(domain: "APIError", code: status,
+                         userInfo: [NSLocalizedDescriptionKey: message])
+        }
         return try JSONDecoder.iso.decode(TokenResponse.self, from: data)
     }
 
@@ -225,6 +254,17 @@ class APIClient {
 
     func getMe() async throws -> UserRead {
         let data = try await request("/v1/auth/me")
+        return try JSONDecoder.iso.decode(UserRead.self, from: data)
+    }
+    
+    /// Version of getMe that doesn't auto-retry on 401 (for login flow TOTP detection)
+    func getMeWithoutRetry() async throws -> UserRead {
+        let (data, status) = try await perform("/v1/auth/me", method: "GET", body: nil)
+        guard status == 200 else {
+            let message = String(data: data, encoding: .utf8) ?? "Request failed"
+            throw NSError(domain: "APIError", code: status,
+                         userInfo: [NSLocalizedDescriptionKey: message])
+        }
         return try JSONDecoder.iso.decode(UserRead.self, from: data)
     }
 

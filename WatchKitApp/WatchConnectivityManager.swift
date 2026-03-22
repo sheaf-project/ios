@@ -8,6 +8,9 @@ final class WatchConnectivityManager: NSObject, WCSessionDelegate, ObservableObj
     static let shared = WatchConnectivityManager()
 
     weak var authManager: WatchAuthManager?
+    
+    /// Credentials received before authManager was configured — applied once configure() is called.
+    private var pendingContext: [String: Any]?
 
     private override init() {
         super.init()
@@ -20,85 +23,145 @@ final class WatchConnectivityManager: NSObject, WCSessionDelegate, ObservableObj
     func configure(auth: WatchAuthManager) {
         NSLog("⌚️ WatchConnectivityManager: Configuring with auth manager")
         self.authManager = auth
+        
+        // Apply any credentials that arrived before configure() was called
+        if let pending = pendingContext {
+            NSLog("⌚️ WatchConnectivityManager: Applying pending context")
+            pendingContext = nil
+            applyContext(pending)
+        }
+        
         // Apply any context already waiting from the last iPhone push
         let existingContext = WCSession.default.receivedApplicationContext
-        NSLog("   Existing context keys: \(existingContext.keys)")
-        applyContext(existingContext)
+        if !existingContext.isEmpty {
+            NSLog("⌚️ WatchConnectivityManager: Found existing application context, applying")
+            applyContext(existingContext)
+        }
+        
+        // If still not authenticated, try requesting from iPhone
+        if !auth.isAuthenticated {
+            requestCredentials()
+        }
+    }
+
+    /// Actively request credentials from the iPhone (pull-based).
+    /// Only works when the iPhone app is reachable (foreground/recently active).
+    func requestCredentials() {
+        guard WCSession.default.activationState == .activated else {
+            NSLog("⌚️ WatchConnectivityManager: Cannot request credentials - session not activated")
+            return
+        }
+        
+        // First, always check the application context — this survives reboots
+        // and doesn't require the iPhone app to be in the foreground.
+        let existing = WCSession.default.receivedApplicationContext
+        if !existing.isEmpty, existing["accessToken"] as? String != nil {
+            NSLog("⌚️ WatchConnectivityManager: Found credentials in receivedApplicationContext")
+            applyContext(existing)
+            return
+        }
+        
+        // Fall back to sendMessage if iPhone is reachable (requires iPhone app foreground)
+        guard WCSession.default.isReachable else {
+            NSLog("⌚️ WatchConnectivityManager: iPhone not reachable, will retry when reachable")
+            return
+        }
+
+        NSLog("⌚️ WatchConnectivityManager: Requesting credentials from iPhone via sendMessage...")
+        WCSession.default.sendMessage(["request": "credentials"], replyHandler: { [weak self] reply in
+            NSLog("⌚️ WatchConnectivityManager: Received credential reply from iPhone")
+            self?.applyContext(reply)
+        }, errorHandler: { error in
+            NSLog("⌚️ WatchConnectivityManager: Credential request failed: \(error.localizedDescription)")
+        })
     }
 
     // MARK: - Receive from iPhone
 
-    /// Called when the iPhone pushes updated application context.
     func session(_ session: WCSession,
                  didReceiveApplicationContext applicationContext: [String: Any]) {
         NSLog("⌚️ WatchConnectivityManager: Received application context")
-        NSLog("   Keys: \(applicationContext.keys)")
         applyContext(applicationContext)
     }
 
-    /// Also handle real-time messages (sent while both devices are reachable).
     func session(_ session: WCSession,
                  didReceiveMessage message: [String: Any]) {
-        NSLog("⌚️ WatchConnectivityManager: Received message")
-        NSLog("   Keys: \(message.keys)")
+        NSLog("⌚️ WatchConnectivityManager: Received message (no reply)")
         applyContext(message)
     }
 
+    func session(_ session: WCSession,
+                 didReceiveMessage message: [String: Any],
+                 replyHandler: @escaping ([String: Any]) -> Void) {
+        NSLog("⌚️ WatchConnectivityManager: Received message (with reply)")
+        applyContext(message)
+        replyHandler(["status": "received"])
+    }
+    
+    /// Called by watchOS when `didReceiveUserInfo` fires (queued transfer from iPhone).
+    func session(_ session: WCSession,
+                 didReceiveUserInfo userInfo: [String: Any] = [:]) {
+        NSLog("⌚️ WatchConnectivityManager: Received userInfo transfer")
+        applyContext(userInfo)
+    }
+
     private func applyContext(_ context: [String: Any]) {
-        // Skip empty contexts (happens on first launch before any credentials are sent)
-        guard !context.isEmpty else {
-            NSLog("⌚️ WatchConnectivityManager: Context is empty, skipping (no credentials sent yet)")
-            return
-        }
-        
-        NSLog("⌚️ WatchConnectivityManager: Applying context...")
-        NSLog("   Context dictionary: \(context)")
-        
+        guard !context.isEmpty else { return }
+
         let baseURL = context["baseURL"] as? String
         let accessToken = context["accessToken"] as? String
         let refreshToken = context["refreshToken"] as? String
-        
-        NSLog("   baseURL: '\(baseURL ?? "nil")' (isEmpty: \(baseURL?.isEmpty ?? true))")
-        NSLog("   accessToken: '\(accessToken?.prefix(10) ?? "nil")...' (isEmpty: \(accessToken?.isEmpty ?? true))")
-        NSLog("   refreshToken: '\(refreshToken?.prefix(10) ?? "nil")...' (isEmpty: \(refreshToken?.isEmpty ?? true))")
-        
+
         guard
             let baseURL = baseURL,
             let accessToken = accessToken,
             let refreshToken = refreshToken,
             !baseURL.isEmpty, !accessToken.isEmpty
-        else { 
-            NSLog("❌ WatchConnectivityManager: Context validation failed")
-            NSLog("   baseURL valid: \(baseURL != nil && !(baseURL?.isEmpty ?? true))")
-            NSLog("   accessToken valid: \(accessToken != nil && !(accessToken?.isEmpty ?? true))")
-            NSLog("   refreshToken valid: \(refreshToken != nil)")
-            return 
+        else {
+            return
         }
 
-        NSLog("✅ WatchConnectivityManager: Context valid, saving to auth manager")
-        DispatchQueue.main.async { [weak self] in
-            guard let authManager = self?.authManager else {
-                NSLog("❌ WatchConnectivityManager: Auth manager is nil!")
-                return
-            }
+        // If authManager isn't configured yet, stash for later
+        guard let authManager = authManager else {
+            NSLog("⌚️ WatchConnectivityManager: Auth manager not configured yet, stashing credentials")
+            pendingContext = context
+            return
+        }
+
+        NSLog("✅ WatchConnectivityManager: Saving credentials...")
+        DispatchQueue.main.async {
             authManager.save(
                 baseURL: baseURL,
                 accessToken: accessToken,
                 refreshToken: refreshToken
             )
-            NSLog("✅ WatchConnectivityManager: Credentials saved!")
-            NSLog("   Auth manager isAuthenticated: \(authManager.isAuthenticated)")
+            NSLog("✅ WatchConnectivityManager: Credentials saved, isAuthenticated: \(authManager.isAuthenticated)")
         }
     }
 
-    // MARK: - WCSessionDelegate boilerplate
+    // MARK: - WCSessionDelegate
 
     func session(_ session: WCSession,
                  activationDidCompleteWith activationState: WCSessionActivationState,
                  error: Error?) {
         NSLog("⌚️ WatchConnectivityManager: Session activated with state: \(activationState.rawValue)")
         if let error = error {
-            NSLog("❌ WatchConnectivityManager: Activation error: \(error)")
+            NSLog("⌚️ WatchConnectivityManager: Activation error: \(error)")
+        }
+        if activationState == .activated {
+            // Check existing context on activation
+            let existing = WCSession.default.receivedApplicationContext
+            if !existing.isEmpty {
+                applyContext(existing)
+            }
+        }
+    }
+    
+    /// Called when iPhone reachability changes. This is the reliable moment to request credentials.
+    func sessionReachabilityDidChange(_ session: WCSession) {
+        NSLog("⌚️ WatchConnectivityManager: Reachability changed - isReachable: \(session.isReachable)")
+        if session.isReachable, authManager?.isAuthenticated != true {
+            requestCredentials()
         }
     }
 }

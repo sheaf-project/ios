@@ -312,6 +312,12 @@ struct CustomFieldValueSet: Codable {
 struct UserLogin: Codable {
     var email: String
     var password: String
+    var totpCode: String?
+    
+    enum CodingKeys: String, CodingKey {
+        case email, password
+        case totpCode = "totp_code"
+    }
 }
 
 struct TOTPVerify: Codable {
