@@ -63,16 +63,24 @@ struct SignInForm: View {
     @State private var baseURL  = ""
     @State private var email    = ""
     @State private var password = ""
+    @State private var totpCode = ""
     @State private var error    = ""
     @State private var isLoading = false
+    @State private var needsTOTP = false
     @FocusState private var focused: Field?
-    enum Field { case url, email, password }
+    enum Field { case url, email, password, totp }
 
     var body: some View {
         VStack(spacing: 20) {
             formField(icon: "link",         label: LocalizedStrings.apiBaseURL,  placeholder: LocalizedStrings.apiURLPlaceholder, value: $baseURL,   field: .url,      keyboard: .URL)
             formField(icon: "envelope.fill", label: LocalizedStrings.email,         placeholder: LocalizedStrings.emailPlaceholder,              value: $email,    field: .email,    keyboard: .emailAddress)
-            secureField(                     label: LocalizedStrings.password,       placeholder: LocalizedStrings.passwordPlaceholder,                     value: $password)
+            secureField(                     label: LocalizedStrings.password,       placeholder: LocalizedStrings.passwordPlaceholder,                     value: $password, field: .password)
+            
+            // Show TOTP field if needed
+            if needsTOTP {
+                formField(icon: "lock.shield", label: "2FA Code", placeholder: "000000", value: $totpCode, field: .totp, keyboard: .numberPad)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
 
             if !error.isEmpty { errorLabel(error) }
 
@@ -80,8 +88,8 @@ struct SignInForm: View {
             Button { signIn() } label: {
                 buttonContent(label: LocalizedStrings.signIn, icon: "arrow.right", loading: isLoading)
             }
-            .disabled(baseURL.isEmpty || email.isEmpty || password.isEmpty || isLoading)
-            .opacity(baseURL.isEmpty || email.isEmpty || password.isEmpty ? 0.5 : 1)
+            .disabled(baseURL.isEmpty || email.isEmpty || password.isEmpty || isLoading || (needsTOTP && totpCode.count != 6))
+            .opacity(baseURL.isEmpty || email.isEmpty || password.isEmpty || (needsTOTP && totpCode.count != 6) ? 0.5 : 1)
 
             // Switch to register
             Button(action: onSwitch) {
@@ -114,19 +122,41 @@ struct SignInForm: View {
         let api = APIClient(auth: tempAuth)
         Task {
             do {
-                let tokens = try await api.login(email: email, password: password)
-                tempAuth.accessToken = tokens.accessToken
-                let me = try await api.getMe()
+                NSLog("📱 Login: Starting login request... (TOTP: \(totpCode.isEmpty ? "no" : "yes"))")
+                // Pass TOTP code if available
+                let tokens = try await api.login(email: email, password: password, totpCode: totpCode.isEmpty ? nil : totpCode)
+                NSLog("📱 Login: Login successful, got tokens")
+                
+                // Login succeeded, save credentials
                 await MainActor.run {
-                    if me.totpEnabled {
-                        authManager.awaitTOTP(baseURL: cleanURL, tokens: tokens)
-                    } else {
-                        authManager.save(baseURL: cleanURL, tokens: tokens)
-                    }
+                    authManager.save(baseURL: cleanURL, tokens: tokens)
                     isLoading = false
                 }
-            } catch {
-                await MainActor.run { self.error = error.localizedDescription; isLoading = false }
+            } catch let loginError as NSError {
+                // Check if login failed due to TOTP requirement
+                let errorMessage = loginError.localizedDescription.lowercased()
+                NSLog("📱 Login: Login failed")
+                NSLog("📱 Login: Error message: \(loginError.localizedDescription)")
+                
+                if errorMessage.contains("totp") || errorMessage.contains("code required") {
+                    // The server requires TOTP - show the TOTP field
+                    NSLog("📱 Login: TOTP required, showing 2FA field")
+                    await MainActor.run {
+                        withAnimation {
+                            needsTOTP = true
+                        }
+                        error = "Please enter your 6-digit authenticator code"
+                        focused = .totp
+                        isLoading = false
+                    }
+                } else {
+                    // Some other error - show it
+                    NSLog("📱 Login: Other login error, showing to user")
+                    await MainActor.run {
+                        error = loginError.localizedDescription
+                        isLoading = false
+                    }
+                }
             }
         }
     }
@@ -152,20 +182,20 @@ struct SignInForm: View {
         }
     }
 
-    func secureField(label: String, placeholder: String, value: Binding<String>) -> some View {
+    func secureField(label: String, placeholder: String, value: Binding<String>, field: Field) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Label(label, systemImage: "lock.fill")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(theme.textSecondary)
             SecureField(placeholder, text: value)
-                .focused($focused, equals: .password)
+                .focused($focused, equals: field)
                 .autocapitalization(.none)
                 .autocorrectionDisabled()
                 .padding(14)
                 .background(theme.inputBackground)
                 .cornerRadius(12)
                 .overlay(RoundedRectangle(cornerRadius: 12)
-                    .stroke(focused == .password ? theme.accentLight : theme.inputBorder, lineWidth: 1.5))
+                    .stroke(focused == field ? theme.accentLight : theme.inputBorder, lineWidth: 1.5))
                 .foregroundColor(theme.textPrimary)
         }
     }
