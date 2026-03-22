@@ -27,34 +27,13 @@ jobs:
       - name: Show Xcode version
         run: xcodebuild -version
 
-      - name: Build iOS app
-        run: |
-          xcodebuild \
-            -project "${{ env.PROJECT }}" \
-            -target Sheaf \
-            -configuration "${{ env.CONFIGURATION }}" \
-            -sdk iphoneos \
-            -arch arm64 \
-            SYMROOT="$RUNNER_TEMP/Build" \
-            ONLY_ACTIVE_ARCH=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGN_IDENTITY=- \
-            CODE_SIGN_ENTITLEMENTS= \
-            DEVELOPMENT_TEAM= \
-            PROVISIONING_PROFILE_SPECIFIER= \
-            ASSETCATALOG_COMPILER_APPICON_NAME= \
-            SKIP_INSTALL=NO \
-            VALIDATE_DEPENDENCIES=NO \
-            build
-
       - name: Build Watch app
         run: |
           xcodebuild \
             -project "${{ env.PROJECT }}" \
             -target "SheafWatch Watch App" \
             -configuration "${{ env.CONFIGURATION }}" \
-            -sdk watchos \
+            -destination 'generic/platform=watchOS' \
             SYMROOT="$RUNNER_TEMP/Build" \
             ONLY_ACTIVE_ARCH=NO \
             CODE_SIGNING_REQUIRED=NO \
@@ -73,7 +52,7 @@ jobs:
             -project "${{ env.PROJECT }}" \
             -target SheafWatchWidgetExtension \
             -configuration "${{ env.CONFIGURATION }}" \
-            -sdk watchos \
+            -destination 'generic/platform=watchOS' \
             SYMROOT="$RUNNER_TEMP/Build" \
             ONLY_ACTIVE_ARCH=NO \
             CODE_SIGNING_REQUIRED=NO \
@@ -84,6 +63,26 @@ jobs:
             PROVISIONING_PROFILE_SPECIFIER= \
             ASSETCATALOG_COMPILER_APPICON_NAME= \
             SKIP_INSTALL=YES \
+            VALIDATE_DEPENDENCIES=NO \
+            build
+
+      - name: Build iOS app
+        run: |
+          xcodebuild \
+            -project "${{ env.PROJECT }}" \
+            -target Sheaf \
+            -configuration "${{ env.CONFIGURATION }}" \
+            -destination 'generic/platform=iOS' \
+            SYMROOT="$RUNNER_TEMP/Build" \
+            ONLY_ACTIVE_ARCH=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGN_IDENTITY=- \
+            CODE_SIGN_ENTITLEMENTS= \
+            DEVELOPMENT_TEAM= \
+            PROVISIONING_PROFILE_SPECIFIER= \
+            ASSETCATALOG_COMPILER_APPICON_NAME= \
+            SKIP_INSTALL=NO \
             VALIDATE_DEPENDENCIES=NO \
             build
 
