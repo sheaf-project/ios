@@ -68,7 +68,9 @@ struct WatchSwitchView: View {
                             ProgressView()
                                 .frame(maxWidth: .infinity, alignment: .center)
                         } else {
-                            Text(selectedIDs.isEmpty ? "Clear Front" : "Switch (\(selectedIDs.count))")
+                            Text(selectedIDs.isEmpty
+                                 ? String(localized: "Clear Front")
+                                 : String(localized: "Switch (\(selectedIDs.count))"))
                                 .font(.system(size: 13, weight: .semibold))
                                 .frame(maxWidth: .infinity, alignment: .center)
                         }

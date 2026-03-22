@@ -12,9 +12,9 @@ struct WatchSettingsView: View {
                     .font(.system(size: 16, weight: .bold, design: .rounded))
 
                 // Info rows
-                infoRow(icon: "link", label: "URL", value: shortURL)
-                infoRow(icon: "person.2.fill", label: "Members", value: "\(store.members.count)")
-                infoRow(icon: "arrow.left.arrow.right", label: "Fronting", value: "\(store.frontingMembers.count)")
+                infoRow(icon: "link", label: String(localized: "URL"), value: shortURL)
+                infoRow(icon: "person.2.fill", label: String(localized: "Members"), value: "\(store.members.count)")
+                infoRow(icon: "arrow.left.arrow.right", label: String(localized: "Fronting"), value: "\(store.frontingMembers.count)")
 
                 Divider()
 
