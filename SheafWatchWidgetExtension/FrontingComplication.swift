@@ -279,7 +279,7 @@ struct CornerComplicationView: View {
                     Color.clear
                 }
                 .widgetLabel {
-                    Text("No front")
+                    Text("No fronters")
                 }
         } else if entry.members.count == 1 {
             Text(entry.members[0].initials)
