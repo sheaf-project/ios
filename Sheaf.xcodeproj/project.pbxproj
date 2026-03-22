@@ -9,7 +9,6 @@
 /* Begin PBXBuildFile section */
 		2A063BB22F6CE58000321DA6 /* README.md in Resources */ = {isa = PBXBuildFile; fileRef = 2A063BB12F6CE58000321DA6 /* README.md */; };
 		2A2028962F6C8D350084B22F /* .gitignore in Resources */ = {isa = PBXBuildFile; fileRef = 2A2028952F6C8D310084B22F /* .gitignore */; };
-		2A20289A2F6CB1780084B22F /* LocalizationHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A2028992F6CB1780084B22F /* LocalizationHelpers.swift */; };
 		2A4546A12F6F02B0006A8EE3 /* WatchKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2A4546A02F6F02B0006A8EE3 /* WatchKit.framework */; };
 		2A4546A92F6F5718006A8EE3 /* SheafWatch Watch App.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 2A2028282F6BB3070084B22F /* SheafWatch Watch App.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		2ACEC1902F6D27BD00B4AB57 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2ACEC10E2F6D1AD700B4AB57 /* WidgetKit.framework */; };
@@ -64,7 +63,6 @@
 		2A2027972F6B92F10084B22F /* Sheaf.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Sheaf.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		2A2028282F6BB3070084B22F /* SheafWatch Watch App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "SheafWatch Watch App.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		2A2028952F6C8D310084B22F /* .gitignore */ = {isa = PBXFileReference; lastKnownFileType = text; path = .gitignore; sourceTree = "<group>"; };
-		2A2028992F6CB1780084B22F /* LocalizationHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalizationHelpers.swift; sourceTree = "<group>"; };
 		2A4546A02F6F02B0006A8EE3 /* WatchKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WatchKit.framework; path = Platforms/WatchOS.platform/Developer/SDKs/WatchOS26.2.sdk/System/Library/Frameworks/WatchKit.framework; sourceTree = DEVELOPER_DIR; };
 		2A4546A42F6F0425006A8EE3 /* SheafWatch Watch AppRelease.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "SheafWatch Watch AppRelease.entitlements"; sourceTree = "<group>"; };
 		2A8D15EE2F6E210C001F5282 /* SheafWatchWidgetExtensionDebug.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = SheafWatchWidgetExtensionDebug.entitlements; sourceTree = "<group>"; };
@@ -82,6 +80,7 @@
 			membershipExceptions = (
 				APIClient.swift,
 				AvatarView.swift,
+				Localizable.xcstrings,
 				Models.swift,
 				SharedFrontingData.swift,
 				SheafShortcuts.swift,
@@ -105,6 +104,7 @@
 		2ACEC1AC2F6D286700B4AB57 /* Exceptions for "Sheaf" folder in "SheafWatchWidgetExtension" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
+				Localizable.xcstrings,
 				Models.swift,
 				SharedFrontingData.swift,
 			);
@@ -188,7 +188,6 @@
 				2ACEC10D2F6D1AD700B4AB57 /* Frameworks */,
 				2A2027982F6B92F10084B22F /* Products */,
 				2A2028952F6C8D310084B22F /* .gitignore */,
-				2A2028992F6CB1780084B22F /* LocalizationHelpers.swift */,
 				2A063BB12F6CE58000321DA6 /* README.md */,
 			);
 			sourceTree = "<group>";
@@ -360,7 +359,6 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				2A20289A2F6CB1780084B22F /* LocalizationHelpers.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
