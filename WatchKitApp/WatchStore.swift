@@ -72,20 +72,21 @@ class WatchStore: ObservableObject {
             return
         }
         
-        let primarySharedMember = frontingMembers.first.map { member in
+        let allSharedMembers = frontingMembers.map { member in
             SharedMember(
                 id: member.id,
                 name: member.name,
                 displayName: member.displayName,
                 color: member.color,
-                avatarURL: member.avatarURL  // Include avatar URL
+                avatarURL: member.avatarURL
             )
         }
         
         let frontingData = SharedFrontingData(
-            primaryMember: primarySharedMember,
+            primaryMember: allSharedMembers.first,
             totalCount: frontingMembers.count,
-            updatedAt: Date()
+            updatedAt: Date(),
+            allMembers: allSharedMembers
         )
         
         if let encoded = try? JSONEncoder().encode(frontingData) {

@@ -6,22 +6,11 @@ struct FrontingComplicationProvider: TimelineProvider {
     typealias Entry = FrontingEntry
     
     func placeholder(in context: Context) -> FrontingEntry {
-        // Return example data for placeholder instead of empty state
-        FrontingEntry(
-            date: Date(),
-            frontingMember: SharedMember.example,
-            frontCount: 1
-        )
+        FrontingEntry(date: Date(), members: [SharedMember.example])
     }
     
     func getSnapshot(in context: Context, completion: @escaping (FrontingEntry) -> Void) {
-        // For previews in the widget gallery
-        let entry = FrontingEntry(
-            date: Date(),
-            frontingMember: SharedMember.example,
-            frontCount: 1
-        )
-        completion(entry)
+        completion(FrontingEntry(date: Date(), members: [SharedMember.example]))
     }
     
     func getTimeline(in context: Context, completion: @escaping (Timeline<FrontingEntry>) -> Void) {
@@ -40,17 +29,17 @@ struct FrontingComplicationProvider: TimelineProvider {
         // Try to get current fronting info from shared data
         guard let sharedData = UserDefaults(suiteName: "group.systems.lupine.sheaf") else {
             print("⚠️ Widget: Unable to access App Group - check entitlements")
-            return FrontingEntry(date: Date(), frontingMember: nil, frontCount: 0)
+            return FrontingEntry(date: Date(), members: [])
         }
         
         if let frontingData = sharedData.data(forKey: "currentFronting") {
             if let decoded = try? JSONDecoder().decode(SharedFrontingData.self, from: frontingData) {
                 print("✅ Widget: Loaded fronting data - \(decoded.totalCount) fronting")
-                return FrontingEntry(
-                    date: Date(),
-                    frontingMember: decoded.primaryMember,
-                    frontCount: decoded.totalCount
-                )
+                // Use allMembers if available, fall back to primaryMember for backwards compat
+                let members = decoded.allMembers.isEmpty
+                    ? (decoded.primaryMember.map { [$0] } ?? [])
+                    : decoded.allMembers
+                return FrontingEntry(date: Date(), members: members)
             } else {
                 print("⚠️ Widget: Failed to decode fronting data")
             }
@@ -59,15 +48,14 @@ struct FrontingComplicationProvider: TimelineProvider {
         }
         
         // Fallback: no one fronting
-        return FrontingEntry(date: Date(), frontingMember: nil, frontCount: 0)
+        return FrontingEntry(date: Date(), members: [])
     }
 }
 
 // MARK: - Timeline Entry
 struct FrontingEntry: TimelineEntry {
     let date: Date
-    let frontingMember: SharedMember?
-    let frontCount: Int
+    let members: [SharedMember]
 }
 
 // MARK: - Shared Member Extensions
@@ -96,43 +84,15 @@ extension SharedMember {
 }
 
 // MARK: - Widget-Specific Avatar View
+// Widgets cannot reliably fetch remote images, so always use initials
 struct WidgetAvatarView: View {
     let member: SharedMember
     let size: CGFloat
 
     var body: some View {
-        Group {
-            if let avatarURLString = member.avatarURL,
-               !avatarURLString.isEmpty,
-               let url = URL(string: avatarURLString) {
-                // Show image avatar if available
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                    case .failure:
-                        // Fallback to color avatar with initials on error
-                        ColorAvatarView(member: member, size: size)
-                    case .empty:
-                        // Show loading state with color background
-                        ZStack {
-                            ColorAvatarView(member: member, size: size)
-                            ProgressView()
-                                .tint(.white)
-                        }
-                    @unknown default:
-                        ColorAvatarView(member: member, size: size)
-                    }
-                }
-            } else {
-                // No avatar URL, use color avatar with initials
-                ColorAvatarView(member: member, size: size)
-            }
-        }
-        .frame(width: size, height: size)
-        .clipShape(Circle())
+        ColorAvatarView(member: member, size: size)
+            .frame(width: size, height: size)
+            .clipShape(Circle())
     }
 }
 
@@ -144,16 +104,15 @@ private struct ColorAvatarView: View {
     var body: some View {
         ZStack {
             Circle()
-                .fill(LinearGradient(
-                    colors: [member.displayColor, member.displayColor.opacity(0.7)],
-                    startPoint: .topLeading, endPoint: .bottomTrailing
-                ))
+                .fill(member.displayColor)
             
             Text(member.initials)
                 .font(.system(size: size * 0.35, weight: .bold, design: .rounded))
-                .foregroundColor(.white)
+                .foregroundStyle(.white)
+                .fontWeight(.heavy)
                 .minimumScaleFactor(0.5)
                 .lineLimit(1)
+                .widgetAccentable()
         }
     }
 }
@@ -187,39 +146,45 @@ struct CircularComplicationView: View {
     
     var body: some View {
         ZStack {
-            if let member = entry.frontingMember {
-                // Show avatar with count badge if co-fronting
-                WidgetAvatarView(member: member, size: 42)
-                
-                if entry.frontCount > 1 {
+            if entry.members.isEmpty {
+                Image(systemName: "moon.stars.fill")
+                    .font(.system(size: 20))
+                    .foregroundColor(.secondary)
+            } else if entry.members.count == 1 {
+                WidgetAvatarView(member: entry.members[0], size: 42)
+            } else {
+                // Overlapping avatars for multiple fronters
+                let visible = Array(entry.members.prefix(3))
+                ZStack {
+                    ForEach(Array(visible.enumerated().reversed()), id: \.element.id) { index, member in
+                        WidgetAvatarView(member: member, size: 28)
+                            .offset(x: CGFloat(index - (visible.count - 1)) * 10)
+                    }
+                }
+                if entry.members.count > 3 {
                     VStack {
                         Spacer()
                         HStack {
                             Spacer()
-                            Text("\(entry.frontCount)")
-                                .font(.system(size: 10, weight: .bold))
+                            Text("+\(entry.members.count - 3)")
+                                .font(.system(size: 9, weight: .bold))
                                 .foregroundColor(.white)
-                                .padding(4)
+                                .padding(3)
                                 .background(Color.purple)
                                 .clipShape(Circle())
                         }
                     }
                     .padding(2)
                 }
-            } else {
-                // No one fronting
-                Image(systemName: "moon.stars.fill")
-                    .font(.system(size: 20))
-                    .foregroundColor(.secondary)
             }
         }
         .containerBackground(for: .widget) {
             Color.clear
         }
         .widgetLabel {
-            if entry.frontCount > 1 {
-                Text("\(entry.frontCount) fronting")
-            } else if entry.frontingMember != nil {
+            if entry.members.count > 1 {
+                Text("\(entry.members.count) fronting")
+            } else if !entry.members.isEmpty {
                 Text("Fronting")
             } else {
                 Text("No front")
@@ -234,25 +199,7 @@ struct RectangularComplicationView: View {
     
     var body: some View {
         HStack(spacing: 8) {
-            if let member = entry.frontingMember {
-                WidgetAvatarView(member: member, size: 32)
-                
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(member.shortName)
-                        .font(.system(size: 14, weight: .semibold))
-                        .lineLimit(1)
-                    
-                    if entry.frontCount > 1 {
-                        Text("+\(entry.frontCount - 1) more")
-                            .font(.system(size: 11))
-                            .foregroundColor(.secondary)
-                    } else {
-                        Text("Fronting")
-                            .font(.system(size: 11))
-                            .foregroundColor(.secondary)
-                    }
-                }
-            } else {
+            if entry.members.isEmpty {
                 Image(systemName: "moon.stars.fill")
                     .font(.system(size: 24))
                     .foregroundColor(.secondary)
@@ -263,6 +210,36 @@ struct RectangularComplicationView: View {
                     Text("No one fronting")
                         .font(.system(size: 11))
                         .foregroundColor(.secondary)
+                }
+            } else {
+                // Overlapping avatars
+                ZStack {
+                    ForEach(Array(entry.members.prefix(3).enumerated().reversed()), id: \.element.id) { index, member in
+                        WidgetAvatarView(member: member, size: 26)
+                            .offset(x: CGFloat(index) * 10)
+                    }
+                }
+                .frame(width: CGFloat(min(entry.members.count, 3) - 1) * 10 + 26, alignment: .leading)
+                
+                VStack(alignment: .leading, spacing: 2) {
+                    let names = entry.members.prefix(2).map { $0.shortName }
+                    Text(names.joined(separator: ", "))
+                        .font(.system(size: 13, weight: .semibold))
+                        .lineLimit(1)
+                    
+                    if entry.members.count > 2 {
+                        Text("+\(entry.members.count - 2) more")
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary)
+                    } else if entry.members.count == 1 {
+                        Text("Fronting")
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary)
+                    } else {
+                        Text("Co-fronting")
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary)
+                    }
                 }
             }
             
@@ -280,14 +257,13 @@ struct InlineComplicationView: View {
     let entry: FrontingEntry
     
     var body: some View {
-        if let member = entry.frontingMember {
-            if entry.frontCount > 1 {
-                Text("\(member.shortName) +\(entry.frontCount - 1)")
-            } else {
-                Text(member.shortName)
-            }
-        } else {
+        if entry.members.isEmpty {
             Text("No front")
+        } else if entry.members.count <= 2 {
+            Text(entry.members.map { $0.shortName }.joined(separator: " & "))
+        } else {
+            let first = entry.members[0].shortName
+            Text("\(first) +\(entry.members.count - 1)")
         }
     }
 }
@@ -297,26 +273,31 @@ struct CornerComplicationView: View {
     let entry: FrontingEntry
     
     var body: some View {
-        if let member = entry.frontingMember {
-            Text(member.initials)
-                .font(.system(size: 16, weight: .bold))
-                .containerBackground(for: .widget) {
-                    Color.clear
-                }
-                .widgetLabel {
-                    if entry.frontCount > 1 {
-                        Text("\(entry.frontCount) fronting")
-                    } else {
-                        Text("Fronting")
-                    }
-                }
-        } else {
+        if entry.members.isEmpty {
             Image(systemName: "moon.stars")
                 .containerBackground(for: .widget) {
                     Color.clear
                 }
                 .widgetLabel {
                     Text("No front")
+                }
+        } else if entry.members.count == 1 {
+            Text(entry.members[0].initials)
+                .font(.system(size: 16, weight: .bold))
+                .containerBackground(for: .widget) {
+                    Color.clear
+                }
+                .widgetLabel {
+                    Text("Fronting")
+                }
+        } else {
+            Text("\(entry.members.count)")
+                .font(.system(size: 16, weight: .bold))
+                .containerBackground(for: .widget) {
+                    Color.clear
+                }
+                .widgetLabel {
+                    Text(entry.members.prefix(2).map { $0.shortName }.joined(separator: ", "))
                 }
         }
     }
@@ -354,11 +335,10 @@ struct FrontingComplication: Widget {
 struct FrontingComplication_Previews: PreviewProvider {
     static var previews: some View {
         Group {
-            // Circular - with member
+            // Circular - single
             FrontingComplicationView(entry: FrontingEntry(
                 date: Date(),
-                frontingMember: SharedMember.example,
-                frontCount: 1
+                members: [SharedMember.example]
             ))
             .previewContext(WidgetPreviewContext(family: .accessoryCircular))
             .previewDisplayName("Circular - Single")
@@ -366,35 +346,31 @@ struct FrontingComplication_Previews: PreviewProvider {
             // Circular - co-fronting
             FrontingComplicationView(entry: FrontingEntry(
                 date: Date(),
-                frontingMember: SharedMember.example,
-                frontCount: 3
+                members: SharedMember.examples
             ))
             .previewContext(WidgetPreviewContext(family: .accessoryCircular))
             .previewDisplayName("Circular - Co-front")
             
-            // Rectangular
+            // Rectangular - co-fronting
             FrontingComplicationView(entry: FrontingEntry(
                 date: Date(),
-                frontingMember: SharedMember.example,
-                frontCount: 2
+                members: SharedMember.examples
             ))
             .previewContext(WidgetPreviewContext(family: .accessoryRectangular))
-            .previewDisplayName("Rectangular")
+            .previewDisplayName("Rectangular - Co-front")
             
-            // Inline
+            // Inline - co-fronting
             FrontingComplicationView(entry: FrontingEntry(
                 date: Date(),
-                frontingMember: SharedMember.example,
-                frontCount: 1
+                members: Array(SharedMember.examples.prefix(2))
             ))
             .previewContext(WidgetPreviewContext(family: .accessoryInline))
-            .previewDisplayName("Inline")
+            .previewDisplayName("Inline - Co-front")
             
             // No one fronting
             FrontingComplicationView(entry: FrontingEntry(
                 date: Date(),
-                frontingMember: nil,
-                frontCount: 0
+                members: []
             ))
             .previewContext(WidgetPreviewContext(family: .accessoryCircular))
             .previewDisplayName("No Front")
@@ -406,12 +382,14 @@ struct FrontingComplication_Previews: PreviewProvider {
 // MARK: - Example Data
 extension SharedMember {
     static var example: SharedMember {
-        SharedMember(
-            id: "example",
-            name: "Alice",
-            displayName: "Alice",
-            color: "#9B59B6",
-            avatarURL: nil  // Example uses color avatar
-        )
+        SharedMember(id: "1", name: "Alice", displayName: "Alice", color: "#9B59B6", avatarURL: nil)
+    }
+    
+    static var examples: [SharedMember] {
+        [
+            SharedMember(id: "1", name: "Alice", displayName: "Alice", color: "#9B59B6", avatarURL: nil),
+            SharedMember(id: "2", name: "Bob", displayName: "Bob", color: "#3498DB", avatarURL: nil),
+            SharedMember(id: "3", name: "Carol", displayName: "Carol", color: "#E74C3C", avatarURL: nil),
+        ]
     }
 }

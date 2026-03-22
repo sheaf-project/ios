@@ -21,4 +21,12 @@ struct SharedFrontingData: Codable {
     let primaryMember: SharedMember?
     let totalCount: Int
     let updatedAt: Date
+    let allMembers: [SharedMember]
+
+    init(primaryMember: SharedMember?, totalCount: Int, updatedAt: Date, allMembers: [SharedMember] = []) {
+        self.primaryMember = primaryMember
+        self.totalCount = totalCount
+        self.updatedAt = updatedAt
+        self.allMembers = allMembers
+    }
 }
