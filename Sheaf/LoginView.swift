@@ -28,11 +28,11 @@ struct LoginView: View {
                         }
                         .shadow(color: theme.accentLight.opacity(0.6), radius: 20)
 
-                        Text(LocalizedStrings.appName)
+                        Text("Sheaf")
                             .font(.system(size: 34, weight: .bold, design: .rounded))
                             .foregroundColor(theme.textPrimary)
 
-                        Text(isRegistering ? LocalizedStrings.createYourAccount : LocalizedStrings.signInToYourSystem)
+                        Text(isRegistering ? String(localized: "Create your account") : String(localized: "Sign in to your system"))
                             .font(.system(size: 15, weight: .medium))
                             .foregroundColor(theme.textSecondary)
                             .animation(.default, value: isRegistering)
@@ -72,9 +72,9 @@ struct SignInForm: View {
 
     var body: some View {
         VStack(spacing: 20) {
-            formField(icon: "link",         label: LocalizedStrings.apiBaseURL,  placeholder: LocalizedStrings.apiURLPlaceholder, value: $baseURL,   field: .url,      keyboard: .URL)
-            formField(icon: "envelope.fill", label: LocalizedStrings.email,         placeholder: LocalizedStrings.emailPlaceholder,              value: $email,    field: .email,    keyboard: .emailAddress)
-            secureField(                     label: LocalizedStrings.password,       placeholder: LocalizedStrings.passwordPlaceholder,                     value: $password, field: .password)
+            formField(icon: "link",         label: String(localized: "API Base URL"),  placeholder: String(localized: "https://your-server.com"), value: $baseURL,   field: .url,      keyboard: .URL)
+            formField(icon: "envelope.fill", label: String(localized: "Email"),         placeholder: String(localized: "you@example.com"),              value: $email,    field: .email,    keyboard: .emailAddress)
+            secureField(                     label: String(localized: "Password"),       placeholder: String(localized: "••••••••"),                     value: $password, field: .password)
             
             // Show TOTP field if needed
             if needsTOTP {
@@ -86,7 +86,7 @@ struct SignInForm: View {
 
             // Sign In button
             Button { signIn() } label: {
-                buttonContent(label: LocalizedStrings.signIn, icon: "arrow.right", loading: isLoading)
+                buttonContent(label: String(localized: "Sign In"), icon: "arrow.right", loading: isLoading)
             }
             .disabled(baseURL.isEmpty || email.isEmpty || password.isEmpty || isLoading || (needsTOTP && totpCode.count != 6))
             .opacity(baseURL.isEmpty || email.isEmpty || password.isEmpty || (needsTOTP && totpCode.count != 6) ? 0.5 : 1)
@@ -94,9 +94,9 @@ struct SignInForm: View {
             // Switch to register
             Button(action: onSwitch) {
                 HStack(spacing: 4) {
-                    Text(LocalizedStrings.dontHaveAccount)
+                    Text("Don't have an account?")
                         .foregroundColor(theme.textSecondary)
-                    Text(LocalizedStrings.register)
+                    Text("Register")
                         .foregroundColor(theme.accentLight)
                         .fontWeight(.semibold)
                 }
@@ -114,8 +114,8 @@ struct SignInForm: View {
         error = ""
         var cleanURL = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
         if cleanURL.hasSuffix("/") { cleanURL = String(cleanURL.dropLast()) }
-        guard cleanURL.lowercased().hasPrefix("http") else { error = LocalizedStrings.urlMustStartWithHTTP; return }
-        guard URL(string: cleanURL + "/v1/auth/login") != nil else { error = LocalizedStrings.invalidURL; return }
+        guard cleanURL.lowercased().hasPrefix("http") else { error = String(localized: "URL must start with http:// or https://"); return }
+        guard URL(string: cleanURL + "/v1/auth/login") != nil else { error = String(localized: "Invalid URL"); return }
         isLoading = true
         let tempAuth = AuthManager()
         tempAuth.baseURL = cleanURL
@@ -243,10 +243,10 @@ struct RegisterForm: View {
 
     var body: some View {
         VStack(spacing: 20) {
-            formField(icon: "link",          label: LocalizedStrings.apiBaseURL,      placeholder: LocalizedStrings.apiURLPlaceholder, value: $baseURL,         field: .url,     keyboard: .URL)
-            formField(icon: "envelope.fill", label: LocalizedStrings.email,              placeholder: LocalizedStrings.emailPlaceholder,              value: $email,           field: .email,   keyboard: .emailAddress)
-            secureField(                     label: LocalizedStrings.password,            placeholder: LocalizedStrings.atLeast8Characters,        value: $password,        field: .password)
-            secureField(                     label: LocalizedStrings.confirmPassword,    placeholder: LocalizedStrings.passwordPlaceholder,                     value: $confirmPassword, field: .confirm)
+            formField(icon: "link",          label: String(localized: "API Base URL"),      placeholder: String(localized: "https://your-server.com"), value: $baseURL,         field: .url,     keyboard: .URL)
+            formField(icon: "envelope.fill", label: String(localized: "Email"),              placeholder: String(localized: "you@example.com"),              value: $email,           field: .email,   keyboard: .emailAddress)
+            secureField(                     label: String(localized: "Password"),            placeholder: String(localized: "At least 8 characters"),        value: $password,        field: .password)
+            secureField(                     label: String(localized: "Confirm Password"),    placeholder: String(localized: "••••••••"),                     value: $confirmPassword, field: .confirm)
 
             // Password strength indicator
             if !password.isEmpty {
@@ -257,7 +257,7 @@ struct RegisterForm: View {
 
             // Register button
             Button { register() } label: {
-                buttonContent(label: LocalizedStrings.createAccount, icon: "person.badge.plus", loading: isLoading)
+                buttonContent(label: String(localized: "Create Account"), icon: "person.badge.plus", loading: isLoading)
             }
             .disabled(baseURL.isEmpty || email.isEmpty || password.isEmpty || confirmPassword.isEmpty || isLoading)
             .opacity(baseURL.isEmpty || email.isEmpty || password.isEmpty || confirmPassword.isEmpty ? 0.5 : 1)
@@ -265,9 +265,9 @@ struct RegisterForm: View {
             // Switch to sign in
             Button(action: onSwitch) {
                 HStack(spacing: 4) {
-                    Text(LocalizedStrings.alreadyHaveAccount)
+                    Text("Already have an account?")
                         .foregroundColor(theme.textSecondary)
-                    Text(LocalizedStrings.signIn)
+                    Text("Sign In")
                         .foregroundColor(theme.accentLight)
                         .fontWeight(.semibold)
                 }
@@ -283,12 +283,12 @@ struct RegisterForm: View {
 
     private func register() {
         error = ""
-        guard password == confirmPassword else { error = LocalizedStrings.passwordsDontMatch; return }
-        guard password.count >= 8 else { error = LocalizedStrings.passwordTooShort; return }
+        guard password == confirmPassword else { error = String(localized: "Passwords don't match"); return }
+        guard password.count >= 8 else { error = String(localized: "Password must be at least 8 characters"); return }
         var cleanURL = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
         if cleanURL.hasSuffix("/") { cleanURL = String(cleanURL.dropLast()) }
-        guard cleanURL.lowercased().hasPrefix("http") else { error = LocalizedStrings.urlMustStartWithHTTP; return }
-        guard URL(string: cleanURL + "/v1/auth/register") != nil else { error = LocalizedStrings.invalidURL; return }
+        guard cleanURL.lowercased().hasPrefix("http") else { error = String(localized: "URL must start with http:// or https://"); return }
+        guard URL(string: cleanURL + "/v1/auth/register") != nil else { error = String(localized: "Invalid URL"); return }
         isLoading = true
         let tempAuth = AuthManager()
         tempAuth.baseURL = cleanURL
@@ -387,10 +387,10 @@ struct PasswordStrengthBar: View {
 
     private var label: String {
         switch strength {
-        case 0, 1: return LocalizedStrings.passwordWeak
-        case 2, 3: return LocalizedStrings.passwordFair
-        case 4:    return LocalizedStrings.passwordGood
-        default:   return LocalizedStrings.passwordStrong
+        case 0, 1: return String(localized: "Weak")
+        case 2, 3: return String(localized: "Fair")
+        case 4:    return String(localized: "Good")
+        default:   return String(localized: "Strong")
         }
     }
 

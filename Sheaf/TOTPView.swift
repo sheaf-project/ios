@@ -35,13 +35,13 @@ struct TOTPView: View {
 
                 Spacer().frame(height: 24)
 
-                Text(LocalizedStrings.twoFactorAuth)
+                Text("Two-Factor Auth")
                     .font(.system(size: 26, weight: .bold, design: .rounded))
                     .foregroundColor(theme.textPrimary)
 
                 Spacer().frame(height: 8)
 
-                Text(LocalizedStrings.twoFactorAuthPrompt)
+                Text("Enter the 6-digit code from your authenticator app")
                     .font(.system(size: 14))
                     .foregroundColor(theme.textSecondary)
                     .multilineTextAlignment(.center)
@@ -83,7 +83,7 @@ struct TOTPView: View {
                     HStack {
                         if isVerifying { ProgressView().tint(.white) }
                         else {
-                            Text(LocalizedStrings.verify)
+                            Text("Verify")
                                 .font(.system(size: 17, weight: .semibold))
                             Image(systemName: "checkmark")
                         }
@@ -113,7 +113,7 @@ struct TOTPView: View {
                 Button {
                     authManager.cancelTOTP()
                 } label: {
-                    Text(LocalizedStrings.backToLogin)
+                    Text("Back to login")
                         .font(.system(size: 14))
                         .foregroundColor(theme.textTertiary)
                 }
@@ -172,7 +172,7 @@ struct TOTPView: View {
                 }
             } catch {
                 await MainActor.run {
-                    self.error = LocalizedStrings.incorrectCode
+                    self.error = String(localized: "Incorrect code — please try again")
                     isVerifying = false
                     digits = Array(repeating: "", count: 6)
                     focusedIndex = 0
