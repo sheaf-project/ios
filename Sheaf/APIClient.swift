@@ -224,7 +224,7 @@ class APIClient {
         let body = try JSONEncoder.iso.encode(UserRegister(email: email, password: password))
         // Don't use request() because register endpoints shouldn't trigger token refresh
         let (data, status) = try await perform("/v1/auth/register", method: "POST", body: body)
-        guard status == 200 else {
+        guard (200...201).contains(status) else {
             let message = String(data: data, encoding: .utf8) ?? "Registration failed"
             throw NSError(domain: "APIError", code: status,
                          userInfo: [NSLocalizedDescriptionKey: message])
