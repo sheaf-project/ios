@@ -1,19 +1,5 @@
 name: Build and Release Dev IPA
 
-# This workflow builds an unsigned IPA for distribution.
-# 
-# Build Strategy:
-# - iOS app, Watch app, and Widget extension are built separately to avoid platform conflicts
-# - Preferentially uses CI-specific schemes (Sheaf-CI, SheafWatch-CI, SheafWatchWidget-CI)
-# - These schemes exclude cross-platform dependencies that cause iOS/watchOS build conflicts
-# - Falls back to target-based builds if schemes don't exist
-# - Widget extension is built separately and manually embedded into Watch app
-# - Watch app (with widget) is then embedded into iOS app
-# - Final IPA contains: iOS app → Watch app → Widget extension
-# 
-# For users: The IPA includes Watch app and complications but they require proper signing to function.
-# Local Xcode builds use regular schemes with all dependencies and work normally.
-
 on:
   push:
     branches:
@@ -23,592 +9,164 @@ on:
 
 env:
   XCODE_VERSION: '26.2'
-  IOS_SCHEME: 'Sheaf'
   CONFIGURATION: 'Release'
+  PROJECT: 'Sheaf.xcodeproj'
 
 jobs:
   build:
     name: Build Unsigned IPA
     runs-on: macos-26
-    
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-      
+
       - name: Select Xcode version
         run: sudo xcode-select -s /Applications/Xcode_${{ env.XCODE_VERSION }}.app/Contents/Developer
-      
+
       - name: Show Xcode version
         run: xcodebuild -version
-      
-      - name: List schemes and targets
+
+      - name: Build iOS app
         run: |
-          echo "Available schemes:"
-          xcodebuild -list -project Sheaf.xcodeproj
-      
-      - name: Clean build folder
-        run: |
-          xcodebuild clean \
-            -project Sheaf.xcodeproj \
+          xcodebuild \
+            -project "${{ env.PROJECT }}" \
             -target Sheaf \
-            -configuration "${{ env.CONFIGURATION }}"
-      
-      - name: Build iOS app using scheme
+            -configuration "${{ env.CONFIGURATION }}" \
+            -sdk iphoneos \
+            -arch arm64 \
+            SYMROOT="$RUNNER_TEMP/Build" \
+            ONLY_ACTIVE_ARCH=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGN_IDENTITY=- \
+            CODE_SIGN_ENTITLEMENTS= \
+            DEVELOPMENT_TEAM= \
+            PROVISIONING_PROFILE_SPECIFIER= \
+            SKIP_INSTALL=NO \
+            VALIDATE_DEPENDENCIES=NO \
+            build
+
+      - name: Build Watch app
         run: |
-          # Build the iOS app for iPhone
-          # Preferentially use CI scheme if available to avoid Watch dependencies
-          set +e  # Don't exit on error
-          
-          if xcodebuild -list -project Sheaf.xcodeproj | grep -q "Sheaf-CI"; then
-            echo "📱 Using Sheaf-CI scheme (without Watch dependencies)..."
-            
-            xcodebuild \
-              -project Sheaf.xcodeproj \
-              -scheme "Sheaf-CI" \
-              -configuration "${{ env.CONFIGURATION }}" \
-              -destination 'generic/platform=iOS' \
-              SYMROOT="$RUNNER_TEMP/Build" \
-              ONLY_ACTIVE_ARCH=NO \
-              CODE_SIGNING_REQUIRED=NO \
-              CODE_SIGNING_ALLOWED=NO \
-              CODE_SIGN_IDENTITY="" \
-              CODE_SIGN_ENTITLEMENTS="" \
-              DEVELOPMENT_TEAM="" \
-              SKIP_INSTALL=NO \
-              build 2>&1 | tee "$RUNNER_TEMP/build-ios.log"
-            
-            BUILD_EXIT_CODE=${PIPESTATUS[0]}
-          else
-            echo "📱 Using Sheaf target with explicit iOS SDK..."
-            
-            xcodebuild \
-              -project Sheaf.xcodeproj \
-              -target Sheaf \
-              -configuration "${{ env.CONFIGURATION }}" \
-              -sdk iphoneos \
-              -arch arm64 \
-              SYMROOT="$RUNNER_TEMP/Build" \
-              ONLY_ACTIVE_ARCH=NO \
-              CODE_SIGNING_REQUIRED=NO \
-              CODE_SIGNING_ALLOWED=NO \
-              CODE_SIGN_IDENTITY="" \
-              CODE_SIGN_ENTITLEMENTS="" \
-              DEVELOPMENT_TEAM="" \
-              SKIP_INSTALL=NO \
-              VALIDATE_DEPENDENCIES=NO \
-              build 2>&1 | tee "$RUNNER_TEMP/build-ios.log"
-            
-            BUILD_EXIT_CODE=${PIPESTATUS[0]}
-          fi
-          
-          # Check if the iOS app binary exists
-          if [ -f "$RUNNER_TEMP/Build/${{ env.CONFIGURATION }}-iphoneos/Sheaf.app/Sheaf" ]; then
-            echo "✅ iOS app binary built successfully"
-            ls -lh "$RUNNER_TEMP/Build/${{ env.CONFIGURATION }}-iphoneos/Sheaf.app/Sheaf"
-            exit 0
-          else
-            echo "❌ iOS app build failed"
-            cat "$RUNNER_TEMP/build-ios.log"
-            exit $BUILD_EXIT_CODE
-          fi
-      
-      - name: Build Watch app using scheme
-        continue-on-error: true
+          xcodebuild \
+            -project "${{ env.PROJECT }}" \
+            -target "SheafWatch Watch App" \
+            -configuration "${{ env.CONFIGURATION }}" \
+            -sdk watchos \
+            SYMROOT="$RUNNER_TEMP/Build" \
+            ONLY_ACTIVE_ARCH=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGN_IDENTITY=- \
+            CODE_SIGN_ENTITLEMENTS= \
+            DEVELOPMENT_TEAM= \
+            PROVISIONING_PROFILE_SPECIFIER= \
+            VALIDATE_DEPENDENCIES=NO \
+            build
+
+      - name: Build Widget Extension
         run: |
-          # Build the Watch app for watchOS (optional - continues if it fails)
-          echo "Building Watch app for watchOS..."
-          
-          # Check if CI scheme exists, otherwise fall back to target-based build
-          if xcodebuild -list -project Sheaf.xcodeproj | grep -q "SheafWatch-CI"; then
-            echo "📱 Using SheafWatch-CI scheme (without widget dependency)..."
-            
-            xcodebuild \
-              -project Sheaf.xcodeproj \
-              -scheme "SheafWatch-CI" \
-              -configuration "${{ env.CONFIGURATION }}" \
-              -destination 'generic/platform=watchOS' \
-              SYMROOT="$RUNNER_TEMP/Build" \
-              ONLY_ACTIVE_ARCH=NO \
-              CODE_SIGNING_REQUIRED=NO \
-              CODE_SIGNING_ALLOWED=NO \
-              CODE_SIGN_IDENTITY="" \
-              CODE_SIGN_ENTITLEMENTS="" \
-              DEVELOPMENT_TEAM="" \
-              build 2>&1 | tee "$RUNNER_TEMP/build-watch.log"
-            
-            BUILD_SUCCESS=$?
-            
-          elif xcodebuild -list -project Sheaf.xcodeproj | grep -q "SheafWatch Watch App"; then
-            echo "📱 Watch app target found, building with explicit watchOS SDK..."
-            
-            xcodebuild \
-              -project Sheaf.xcodeproj \
-              -target "SheafWatch Watch App" \
-              -configuration "${{ env.CONFIGURATION }}" \
-              -sdk watchos \
-              -arch arm64_32 \
-              SYMROOT="$RUNNER_TEMP/Build" \
-              ONLY_ACTIVE_ARCH=NO \
-              CODE_SIGNING_REQUIRED=NO \
-              CODE_SIGNING_ALLOWED=NO \
-              CODE_SIGN_IDENTITY="" \
-              CODE_SIGN_ENTITLEMENTS="" \
-              DEVELOPMENT_TEAM="" \
-              VALIDATE_DEPENDENCIES=NO \
-              build 2>&1 | tee "$RUNNER_TEMP/build-watch.log"
-            
-            BUILD_SUCCESS=$?
-          else
-            echo "ℹ️ Watch app scheme/target not found, building iOS-only IPA"
-            BUILD_SUCCESS=1
-          fi
-          
-          # Check build result
-          if [ $BUILD_SUCCESS -eq 0 ] && [ -d "$RUNNER_TEMP/Build/${{ env.CONFIGURATION }}-watchos/SheafWatch Watch App.app" ]; then
-            echo "✅ Watch app built successfully"
-            ls -la "$RUNNER_TEMP/Build/${{ env.CONFIGURATION }}-watchos/SheafWatch Watch App.app"
-          else
-            echo "⚠️ Watch app build failed, continuing with iOS-only IPA"
-          fi
-          
-          echo "Checking what was built:"
-          find "$RUNNER_TEMP/Build" -name "*.app" -type d || true
-      
-      - name: Build Widget Extension using scheme
-        continue-on-error: true
+          xcodebuild \
+            -project "${{ env.PROJECT }}" \
+            -target SheafWatchWidgetExtension \
+            -configuration "${{ env.CONFIGURATION }}" \
+            -sdk watchos \
+            SYMROOT="$RUNNER_TEMP/Build" \
+            ONLY_ACTIVE_ARCH=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGN_IDENTITY=- \
+            CODE_SIGN_ENTITLEMENTS= \
+            DEVELOPMENT_TEAM= \
+            PROVISIONING_PROFILE_SPECIFIER= \
+            SKIP_INSTALL=YES \
+            VALIDATE_DEPENDENCIES=NO \
+            build
+
+      - name: Assemble app bundle
         run: |
-          # Build widget extension using dedicated scheme to avoid platform conflicts
-          echo "Building Widget Extension for watchOS..."
-          
-          # Check if CI scheme exists, otherwise try target-based build
-          if xcodebuild -list -project Sheaf.xcodeproj | grep -q "SheafWatchWidget-CI"; then
-            echo "📱 Using SheafWatchWidget-CI scheme for widget extension..."
-            
-            xcodebuild \
-              -project Sheaf.xcodeproj \
-              -scheme "SheafWatchWidget-CI" \
-              -configuration "${{ env.CONFIGURATION }}" \
-              -destination 'generic/platform=watchOS' \
-              SYMROOT="$RUNNER_TEMP/Build" \
-              ONLY_ACTIVE_ARCH=NO \
-              CODE_SIGNING_REQUIRED=NO \
-              CODE_SIGNING_ALLOWED=NO \
-              CODE_SIGN_IDENTITY="" \
-              CODE_SIGN_ENTITLEMENTS="" \
-              DEVELOPMENT_TEAM="" \
-              build 2>&1 | tee "$RUNNER_TEMP/build-widget.log"
-            
-            BUILD_SUCCESS=$?
-            
-          elif xcodebuild -list -project Sheaf.xcodeproj | grep -q "SheafWatchWidgetExtension"; then
-            echo "📱 Widget extension target found, building with explicit watchOS SDK..."
-            
-            xcodebuild \
-              -project Sheaf.xcodeproj \
-              -target "SheafWatchWidgetExtension" \
-              -configuration "${{ env.CONFIGURATION }}" \
-              -sdk watchos \
-              -arch arm64_32 \
-              SYMROOT="$RUNNER_TEMP/Build" \
-              ONLY_ACTIVE_ARCH=NO \
-              CODE_SIGNING_REQUIRED=NO \
-              CODE_SIGNING_ALLOWED=NO \
-              CODE_SIGN_IDENTITY="" \
-              CODE_SIGN_ENTITLEMENTS="" \
-              DEVELOPMENT_TEAM="" \
-              SKIP_INSTALL=YES \
-              build 2>&1 | tee "$RUNNER_TEMP/build-widget.log"
-            
-            BUILD_SUCCESS=$?
-          else
-            echo "ℹ️ Widget extension scheme/target not found"
-            BUILD_SUCCESS=1
-          fi
-          
-          # Check build result
-          if [ $BUILD_SUCCESS -eq 0 ]; then
-            echo "✅ Widget extension build succeeded"
-          else
-            echo "⚠️ Widget extension build failed (continuing without widget)"
-          fi
-          
-          # Find the widget extension
-          echo "Searching for widget extension..."
-          find "$RUNNER_TEMP/Build" -name "*.appex" -type d || true
-      
-      - name: Embed Widget Extension into Watch app
-        continue-on-error: true
-        run: |
-          # Embed widget extension into Watch app if both exist
-          WATCH_APP_PATH="$RUNNER_TEMP/Build/${{ env.CONFIGURATION }}-watchos/SheafWatch Watch App.app"
-          WIDGET_SOURCE="$RUNNER_TEMP/Build/${{ env.CONFIGURATION }}-watchos/SheafWatchWidgetExtension.appex"
-          WIDGET_DEST="$WATCH_APP_PATH/PlugIns"
-          
-          if [ -d "$WATCH_APP_PATH" ] && [ -d "$WIDGET_SOURCE" ]; then
-            echo "📦 Embedding widget extension into Watch app..."
-            mkdir -p "$WIDGET_DEST"
-            cp -r "$WIDGET_SOURCE" "$WIDGET_DEST/"
-            
-            echo "✅ Widget extension embedded successfully"
-            ls -la "$WIDGET_DEST"
-          elif [ ! -d "$WATCH_APP_PATH" ]; then
-            echo "ℹ️ Watch app not found, skipping widget embed"
-          elif [ ! -d "$WIDGET_SOURCE" ]; then
-            echo "ℹ️ Widget extension not found, skipping embed"
-          fi
-      
-      - name: Embed Watch app into iOS app
-        continue-on-error: true
-        run: |
-          # Create Watch folder in iOS app bundle if Watch app exists
-          WATCH_APP_SOURCE="$RUNNER_TEMP/Build/${{ env.CONFIGURATION }}-watchos/SheafWatch Watch App.app"
-          WATCH_APP_DEST="$RUNNER_TEMP/Build/${{ env.CONFIGURATION }}-iphoneos/Sheaf.app/Watch"
-          
-          if [ -d "$WATCH_APP_SOURCE" ]; then
-            echo "📦 Embedding Watch app into iOS app..."
-            mkdir -p "$WATCH_APP_DEST"
-            cp -r "$WATCH_APP_SOURCE" "$WATCH_APP_DEST/"
-            
-            echo "✅ Watch app embedded successfully"
-            ls -la "$WATCH_APP_DEST"
-            
-            # Show full structure including widget if present
-            echo "Final iOS app structure:"
-            ls -la "$RUNNER_TEMP/Build/${{ env.CONFIGURATION }}-iphoneos/Sheaf.app/"
-            if [ -d "$WATCH_APP_DEST/SheafWatch Watch App.app/PlugIns" ]; then
-              echo "Widget extension in Watch app:"
-              ls -la "$WATCH_APP_DEST/SheafWatch Watch App.app/PlugIns/"
-            fi
-          else
-            echo "ℹ️ Watch app not found at $WATCH_APP_SOURCE"
-            echo "Creating iOS-only IPA without Watch app"
-          fi
-      
-      - name: Find built app
-        id: find_app
-        run: |
-          # With SYMROOT, the app is at SYMROOT/Release-iphoneos/
-          APP_PATH="$RUNNER_TEMP/Build/${{ env.CONFIGURATION }}-iphoneos/Sheaf.app"
-          
-          if [ ! -d "$APP_PATH" ]; then
-            echo "Error: Could not find Sheaf.app at expected location: $APP_PATH"
-            echo "Searching for any .app bundles in Build directory:"
-            find "$RUNNER_TEMP/Build" -name "*.app" -type d
-            exit 1
-          fi
-          
-          echo "app_path=$APP_PATH" >> $GITHUB_OUTPUT
-          echo "Found app at: $APP_PATH"
-          ls -la "$APP_PATH"
-      
-      - name: Create Payload directory
-        run: |
-          mkdir -p "$RUNNER_TEMP/Payload"
-          cp -r "${{ steps.find_app.outputs.app_path }}" "$RUNNER_TEMP/Payload/"
-          echo "Payload contents:"
-          ls -la "$RUNNER_TEMP/Payload/"
-      
+          IOS_APP="$RUNNER_TEMP/Build/${{ env.CONFIGURATION }}-iphoneos/Sheaf.app"
+          WATCH_APP="$RUNNER_TEMP/Build/${{ env.CONFIGURATION }}-watchos/SheafWatch Watch App.app"
+          WIDGET_EXT="$RUNNER_TEMP/Build/${{ env.CONFIGURATION }}-watchos/SheafWatchWidgetExtension.appex"
+
+          # Embed widget extension into watch app
+          mkdir -p "$WATCH_APP/PlugIns"
+          cp -R "$WIDGET_EXT" "$WATCH_APP/PlugIns/"
+
+          # Embed watch app into iOS app
+          mkdir -p "$IOS_APP/Watch"
+          cp -R "$WATCH_APP" "$IOS_APP/Watch/"
+
+          echo "Final bundle structure:"
+          find "$IOS_APP" -maxdepth 4 -type d
+
       - name: Create unsigned IPA
         id: create_ipa
         run: |
+          mkdir -p "$RUNNER_TEMP/Payload"
+          cp -R "$RUNNER_TEMP/Build/${{ env.CONFIGURATION }}-iphoneos/Sheaf.app" "$RUNNER_TEMP/Payload/"
+
           cd "$RUNNER_TEMP"
-          
-          # Create IPA (which is just a zip file with .ipa extension)
-          zip -r Sheaf-unsigned.ipa Payload
-          
-          # Add timestamp and commit to filename
-          TIMESTAMP=$(date +"%Y%m%d-%H%M%S")
-          COMMIT_SHORT=$(echo ${{ github.sha }} | cut -c1-7)
-          IPA_NAME="Sheaf-unsigned-${TIMESTAMP}-${COMMIT_SHORT}.ipa"
-          
-          mv Sheaf-unsigned.ipa "$IPA_NAME"
-          
-          echo "ipa_name=$IPA_NAME" >> $GITHUB_OUTPUT
-          echo "ipa_path=$RUNNER_TEMP/$IPA_NAME" >> $GITHUB_OUTPUT
-          
-          # Show IPA info
+          COMMIT_SHORT=$(echo "${{ github.sha }}" | cut -c1-7)
+          IPA_NAME="Sheaf-unsigned-$(date +%Y%m%d-%H%M%S)-${COMMIT_SHORT}.ipa"
+
+          zip -r "$IPA_NAME" Payload
+
+          echo "ipa_name=$IPA_NAME" >> "$GITHUB_OUTPUT"
+          echo "ipa_path=$RUNNER_TEMP/$IPA_NAME" >> "$GITHUB_OUTPUT"
           ls -lh "$IPA_NAME"
-          echo "Created unsigned IPA: $IPA_NAME"
-          
-          # Verify IPA structure
-          echo "IPA contents:"
-          unzip -l "$IPA_NAME" | head -20
-      
-      - name: Generate build info
-        id: build_info
-        run: |
-          cat > "$RUNNER_TEMP/BUILD_INFO.txt" <<EOF
-          Sheaf iOS Development Build (Unsigned)
-          
-          Build Date: $(date +"%Y-%m-%d %H:%M:%S UTC")
-          Commit: ${{ github.sha }}
-          Branch: ${{ github.ref_name }}
-          Workflow: ${{ github.workflow }}
-          Run Number: ${{ github.run_number }}
-          
-          Configuration: ${{ env.CONFIGURATION }}
-          Xcode Version: ${{ env.XCODE_VERSION }}
-          Signing: UNSIGNED - Users must sign with their own certificates
-          
-          Installation Instructions:
-          
-          This IPA is UNSIGNED and must be signed before installation.
-          
-          Option 1: AltStore / SideStore
-          1. Install AltStore or SideStore on your device
-          2. Open the app and sign in with your Apple ID
-          3. Tap "+" and select the downloaded IPA
-          4. AltStore will sign and install automatically
-          
-          Option 2: Sideloadly
-          1. Download Sideloadly (https://sideloadly.io/)
-          2. Connect your device via USB
-          3. Drag the IPA into Sideloadly
-          4. Enter your Apple ID credentials
-          5. Click "Start" to sign and install
-          
-          Option 3: iOS App Signer + Xcode
-          1. Download iOS App Signer
-          2. Select the IPA file
-          3. Choose your signing certificate
-          4. Choose your provisioning profile
-          5. Click "Start" to create a signed IPA
-          6. Install via Xcode Devices window
-          
-          Option 4: Command Line (Advanced)
-          1. Unzip the IPA: unzip Sheaf-unsigned.ipa
-          2. Sign the app bundle: codesign -f -s "Your Identity" Payload/Sheaf.app
-          3. Re-zip: zip -r Sheaf-signed.ipa Payload
-          4. Install via Xcode or other tools
-          
-          Note: Free Apple Developer accounts are limited to 3 apps and 7-day validity.
-          Paid accounts have no app limit and apps are valid for 1 year.
-          EOF
-          
-          cat "$RUNNER_TEMP/BUILD_INFO.txt"
-      
-      - name: Generate signing instructions
-        run: |
-          cat > "$RUNNER_TEMP/SIGNING_GUIDE.md" <<'EOF'
-          # How to Sign and Install This IPA
-          
-          This is an **unsigned IPA** that you need to sign with your own Apple Developer certificate before installing.
-          
-          ## 🚀 Quick Methods (Recommended)
-          
-          ### Method 1: AltStore (Easiest - Free)
-          
-          **What you need:**
-          - Any Apple ID (even free accounts work)
-          - AltStore installed on your iPhone
-          - AltServer running on your computer
-          
-          **Steps:**
-          1. Download AltStore from https://altstore.io/
-          2. Install AltServer on your Mac/PC
-          3. Install AltStore on your iPhone via AltServer
-          4. Open AltStore on your iPhone
-          5. Tap "My Apps" → "+" button
-          6. Select the downloaded IPA file
-          7. AltStore will sign and install automatically!
-          
-          **Note:** Free accounts require refreshing every 7 days (AltStore does this automatically when on WiFi).
-          
-          ### Method 2: SideStore (Alternative - Free)
-          
-          Similar to AltStore but doesn't require a computer after initial setup.
-          
-          1. Download from https://sidestore.io/
-          2. Follow installation instructions
-          3. Import and install the IPA
-          
-          ### Method 3: Sideloadly (Popular - Free)
-          
-          **What you need:**
-          - Any Apple ID
-          - Computer with Sideloadly installed
-          - iPhone connected via USB
-          
-          **Steps:**
-          1. Download Sideloadly from https://sideloadly.io/
-          2. Connect your iPhone via USB
-          3. Drag the IPA file into Sideloadly
-          4. Enter your Apple ID and password
-          5. Click "Start"
-          6. Sideloadly will sign and install the app
-          
-          ## 🔧 Advanced Methods
-          
-          ### Method 4: iOS App Signer + Your Own Certificate
-          
-          **What you need:**
-          - Paid Apple Developer account ($99/year)
-          - Valid signing certificate and provisioning profile
-          - iOS App Signer tool
-          
-          **Steps:**
-          1. Download iOS App Signer
-          2. Select Input File: Choose the unsigned IPA
-          3. Select Signing Certificate: Choose your certificate from the dropdown
-          4. Select Provisioning Profile: Choose your profile
-          5. Click "Start" to create a signed IPA
-          6. Install the signed IPA via Xcode Devices window
-          
-          ### Method 5: Command Line (Expert)
-          
-          ```bash
-          # Unzip the IPA
-          unzip Sheaf-unsigned.ipa
-          
-          # Sign the app with your certificate
-          codesign -f -s "Apple Development: Your Name (ABC123XYZ)" Payload/Sheaf.app
-          
-          # Verify signing
-          codesign -v Payload/Sheaf.app
-          
-          # Re-package as IPA
-          zip -r Sheaf-signed.ipa Payload
-          
-          # Install via Xcode or ideviceinstaller
-          ideviceinstaller -i Sheaf-signed.ipa
-          ```
-          
-          ### Method 6: Build from Source with Xcode
-          
-          If you prefer to build from source instead of using the pre-built IPA:
-          1. Clone this repository
-          2. Open `Sheaf.xcodeproj` in Xcode
-          3. Select your development team in Signing & Capabilities
-          4. Connect your device
-          5. Click Run (⌘R) or Archive for distribution
-          
-          ## ❓ FAQ
-          
-          **Q: Do I need a paid Apple Developer account?**
-          A: No! Free accounts work with AltStore, SideStore, and Sideloadly. Paid accounts are only needed if you want apps to last 1 year instead of 7 days.
-          
-          **Q: Why does the app expire after 7 days?**
-          A: Free Apple Developer accounts sign apps with certificates that expire after 7 days. Paid accounts get 1-year certificates. Tools like AltStore auto-refresh for you.
-          
-          **Q: Is this safe?**
-          A: Yes! This is the standard way to sideload iOS apps. You're signing with your own Apple ID, so you're trusting yourself. Always download IPAs from trusted sources only.
-          
-          **Q: Can I use someone else's signed IPA?**
-          A: No. Signed IPAs only work on devices registered in the provisioning profile. Each user must sign with their own Apple ID.
-          
-          **Q: What's the difference between signed and unsigned?**
-          A: Unsigned IPAs are universal - anyone can sign them. Signed IPAs only work on specific devices and expire after 7 days (free) or 1 year (paid).
-          
-          **Q: Will I get banned for sideloading?**
-          A: No. Apple officially allows this for personal use. Millions of people use AltStore and similar tools.
-          
-          ## 🆘 Troubleshooting
-          
-          **"Unable to install app" error**
-          - Make sure your device is registered with your Apple ID
-          - Check that your signing certificate is valid
-          - Try revoking certificates in developer.apple.com and sign again
-          
-          **"Untrusted Developer" warning**
-          - Go to Settings → General → VPN & Device Management
-          - Tap your Apple ID under "Developer App"
-          - Tap "Trust [Your Apple ID]"
-          
-          **App crashes on launch**
-          - The build might be incompatible with your iOS version
-          - Check the minimum iOS version requirement (iOS 17+)
-          - Try reinstalling the app
-          
-          ## 📱 Supported Devices
-          
-          - iPhone running iOS 17.0 or later
-          - Apple Watch running watchOS 10.0 or later (requires iPhone)
-          
-          ## 🔗 Helpful Resources
-          
-          - AltStore: https://altstore.io/
-          - SideStore: https://sidestore.io/
-          - Sideloadly: https://sideloadly.io/
-          - iOS App Signer: https://dantheman827.github.io/ios-app-signer/
-          - r/sideloaded: https://reddit.com/r/sideloaded
-          
-          ---
-          
-          **Need help?** Open an issue on GitHub or check the documentation.
-          EOF
-      
+
       - name: Delete existing dev release
         continue-on-error: true
-        run: |
-          gh release delete dev --yes --cleanup-tag
+        run: gh release delete dev --yes --cleanup-tag
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      
-      - name: Create fresh "dev" release
+
+      - name: Create dev release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: dev
           name: Development Build (Unsigned)
           body: |
-            ## 🚀 Latest Development Build (Unsigned)
-            
+            ## Latest Development Build (Unsigned)
+
             **This IPA is unsigned and must be signed before installation.**
-            
-            ### 📋 Build Information
-            
+
+            ### Build Information
+
             - **Commit**: `${{ github.sha }}`
             - **Branch**: `${{ github.ref_name }}`
-            - **Build Date**: $(date +"%Y-%m-%d %H:%M:%S UTC")
             - **Workflow Run**: [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
-            - **Signing**: ⚠️ **UNSIGNED** - Must be signed by user
-            
-            ### 📦 Quick Installation (Recommended)
-            
-            **Option 1: AltStore (Easiest)**
+            - **Signing**: UNSIGNED - Must be signed by user
+
+            ### Quick Installation
+
+            **AltStore (Easiest)**
             1. Install [AltStore](https://altstore.io/) on your iPhone
             2. Download the `.ipa` file below
-            3. Open in AltStore → It will sign and install automatically
-            4. Done! (No paid developer account needed)
-            
-            **Option 2: Sideloadly**
+            3. Open in AltStore - it will sign and install automatically
+
+            **Sideloadly**
             1. Download [Sideloadly](https://sideloadly.io/)
-            2. Connect your iPhone
-            3. Drag the `.ipa` into Sideloadly
-            4. Enter your Apple ID → Install
-            
-            **Option 3: SideStore**
+            2. Connect your iPhone via USB
+            3. Drag the `.ipa` into Sideloadly and enter your Apple ID
+
+            **SideStore**
             1. Install [SideStore](https://sidestore.io/)
-            2. Import the IPA
-            3. Sign and install
-            
-            ### 📥 Downloads
-            
-            Download the latest build below ⬇️
-            
-            ### ⚠️ Important Notes
-            
-            - This is an **unsigned development build**
-            - You must sign it with your own Apple ID before installation
-            - Free Apple IDs work fine (7-day validity, auto-refresh with AltStore)
+            2. Import and install the IPA
+
+            ### Notes
+
+            - Free Apple IDs work (7-day validity, auto-refresh with AltStore)
             - Paid developer accounts get 1-year validity
-            - Works on any iPhone running iOS 17+ (no UDID restrictions!)
-            
-            ### 🔒 Trust After Installation
-            
-            After installing, you'll need to trust the app:
-            1. Go to **Settings** → **General** → **VPN & Device Management**
-            2. Tap on your Apple ID under "Developer App"
-            3. Tap **Trust**
-            
-            ### 📖 Need Help?
-            
-            Join our [Discord server](https://discord.gg/PXDPErXjrh) for support, or [open an issue](https://github.com/${{ github.repository }}/issues/new) if you encounter bugs.
-            
+            - After installing, trust the app in Settings > General > VPN & Device Management
+            - Watch app and complications are included but require proper signing to function
+
             ---
-            
-            *This release is automatically updated with each push to `${{ github.ref_name }}`*
-            
-            **Latest commit message:**
+
+            *Updated on each push to `${{ github.ref_name }}`*
+
             ```
             ${{ github.event.head_commit.message }}
             ```
@@ -619,15 +177,11 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           generate_release_notes: false
           make_latest: false
-      
+
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: unsigned-build-${{ github.run_number }}
-          path: |
-            ${{ steps.create_ipa.outputs.ipa_path }}
-            ${{ runner.temp }}/BUILD_INFO.txt
-            ${{ runner.temp }}/SIGNING_GUIDE.md
-            ${{ steps.find_app.outputs.app_path }}
+          path: ${{ steps.create_ipa.outputs.ipa_path }}
           retention-days: 30
