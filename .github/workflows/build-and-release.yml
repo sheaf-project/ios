@@ -43,6 +43,7 @@ jobs:
             CODE_SIGN_ENTITLEMENTS= \
             DEVELOPMENT_TEAM= \
             PROVISIONING_PROFILE_SPECIFIER= \
+            ASSETCATALOG_COMPILER_APPICON_NAME= \
             SKIP_INSTALL=NO \
             VALIDATE_DEPENDENCIES=NO \
             build
@@ -62,6 +63,7 @@ jobs:
             CODE_SIGN_ENTITLEMENTS= \
             DEVELOPMENT_TEAM= \
             PROVISIONING_PROFILE_SPECIFIER= \
+            ASSETCATALOG_COMPILER_APPICON_NAME= \
             VALIDATE_DEPENDENCIES=NO \
             build
 
@@ -80,6 +82,7 @@ jobs:
             CODE_SIGN_ENTITLEMENTS= \
             DEVELOPMENT_TEAM= \
             PROVISIONING_PROFILE_SPECIFIER= \
+            ASSETCATALOG_COMPILER_APPICON_NAME= \
             SKIP_INSTALL=YES \
             VALIDATE_DEPENDENCIES=NO \
             build
