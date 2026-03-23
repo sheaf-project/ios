@@ -295,6 +295,34 @@ struct SettingsView: View {
                         }
                     }
 
+                    // Administration (admin only)
+                    if me?.isAdmin == true {
+                        settingsSection(title: "Administration") {
+                            VStack(spacing: 0) {
+                                NavigationLink {
+                                    AdminPanelView()
+                                        .environmentObject(authManager)
+                                        .environmentObject(store)
+                                } label: {
+                                    HStack {
+                                        Image(systemName: "shield.lefthalf.filled")
+                                            .foregroundColor(theme.accentLight)
+                                            .frame(width: 20)
+                                        Text("Admin Panel")
+                                            .font(.system(size: 15, weight: .medium))
+                                            .foregroundColor(theme.textPrimary)
+                                        Spacer()
+                                        Image(systemName: "chevron.right")
+                                            .font(.system(size: 12))
+                                            .foregroundColor(theme.textTertiary)
+                                    }
+                                    .padding(.horizontal, 16).padding(.vertical, 14)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+
                     // Account
                     settingsSection(title: "Account") {
                         VStack(spacing: 0) {
@@ -1309,5 +1337,753 @@ struct EditConnectionSheet: View {
                 Spacer()
             }
         }
+    }
+}
+
+// MARK: - Admin Panel View
+struct AdminPanelView: View {
+    @Environment(\.theme) var theme
+    @EnvironmentObject var authManager: AuthManager
+    @EnvironmentObject var store: SystemStore
+
+    // Step-up auth state
+    @State private var isAdminAuthed = false
+    @State private var isCheckingAuth = true
+    @State private var password = ""
+    @State private var totpCode = ""
+    @State private var authError: String?
+    @State private var isAuthenticating = false
+
+    // Stats
+    @State private var stats: [String: Int]?
+    @State private var isLoadingStats = false
+
+    // Users
+    @State private var users: [AdminUserRead] = []
+    @State private var searchText = ""
+    @State private var currentPage = 1
+    @State private var hasMoreUsers = true
+    @State private var isLoadingUsers = false
+    @State private var selectedUser: AdminUserRead?
+
+    // Maintenance
+    @State private var showRetentionConfirm = false
+    @State private var showCleanupConfirm = false
+    @State private var showAuditConfirm = false
+    @State private var maintenanceResult: String?
+    @State private var showMaintenanceResult = false
+    @State private var isRunningMaintenance = false
+
+    var body: some View {
+        ZStack {
+            theme.backgroundPrimary.ignoresSafeArea()
+
+            if isCheckingAuth {
+                ProgressView().tint(theme.accentLight)
+            } else if !isAdminAuthed {
+                stepUpAuthView
+            } else {
+                adminContent
+            }
+        }
+        .navigationTitle("Admin Panel")
+        .navigationBarTitleDisplayMode(.inline)
+        .task { await checkAdminAuth() }
+        .sheet(item: $selectedUser) { user in
+            AdminUserEditSheet(user: user) { updatedUser in
+                if let idx = users.firstIndex(where: { $0.id == updatedUser.id }) {
+                    users[idx] = updatedUser
+                }
+            }
+            .environmentObject(authManager)
+            .environmentObject(store)
+        }
+        .alert("Maintenance", isPresented: $showMaintenanceResult) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(maintenanceResult ?? "")
+        }
+        .confirmationDialog("Run Retention?", isPresented: $showRetentionConfirm, titleVisibility: .visible) {
+            Button("Run Retention", role: .destructive) { Task { await runMaintenance(.retention) } }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This will run the retention policy and may delete expired data.")
+        }
+        .confirmationDialog("Run Cleanup?", isPresented: $showCleanupConfirm, titleVisibility: .visible) {
+            Button("Run Cleanup", role: .destructive) { Task { await runMaintenance(.cleanup) } }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This will run cleanup tasks on the server.")
+        }
+        .confirmationDialog("Run Storage Audit?", isPresented: $showAuditConfirm, titleVisibility: .visible) {
+            Button("Run Storage Audit", role: .destructive) { Task { await runMaintenance(.storageAudit) } }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This will audit storage usage across all users.")
+        }
+    }
+
+    // MARK: - Step-Up Auth
+
+    private var stepUpAuthView: some View {
+        ScrollView {
+            VStack(spacing: 24) {
+                VStack(spacing: 12) {
+                    Image(systemName: "shield.lefthalf.filled")
+                        .font(.system(size: 48))
+                        .foregroundColor(theme.accentLight)
+
+                    Text("Admin Authentication")
+                        .font(.system(size: 22, weight: .bold, design: .rounded))
+                        .foregroundColor(theme.textPrimary)
+
+                    Text("Enter your password to access the admin panel.")
+                        .font(.system(size: 14))
+                        .foregroundColor(theme.textSecondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 32)
+                }
+                .padding(.top, 40)
+
+                VStack(spacing: 16) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Password")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(theme.textSecondary)
+                        SecureField("Enter your password", text: $password)
+                            .autocapitalization(.none)
+                            .autocorrectionDisabled()
+                            .padding(14)
+                            .background(theme.backgroundCard)
+                            .cornerRadius(12)
+                            .foregroundColor(theme.textPrimary)
+                    }
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("TOTP Code (if enabled)")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(theme.textSecondary)
+                        TextField("6-digit code", text: $totpCode)
+                            .keyboardType(.numberPad)
+                            .padding(14)
+                            .background(theme.backgroundCard)
+                            .cornerRadius(12)
+                            .foregroundColor(theme.textPrimary)
+                    }
+                }
+                .padding(.horizontal, 24)
+
+                if let authError {
+                    Text(authError)
+                        .font(.system(size: 13))
+                        .foregroundColor(theme.danger)
+                        .padding(.horizontal, 24)
+                }
+
+                Button {
+                    Task { await authenticate() }
+                } label: {
+                    HStack {
+                        if isAuthenticating {
+                            ProgressView().tint(.white).scaleEffect(0.8)
+                        }
+                        Text("Authenticate")
+                            .font(.system(size: 16, weight: .semibold))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(password.isEmpty ? theme.accentLight.opacity(0.4) : theme.accentLight)
+                    .foregroundColor(.white)
+                    .cornerRadius(12)
+                }
+                .disabled(password.isEmpty || isAuthenticating)
+                .padding(.horizontal, 24)
+            }
+        }
+    }
+
+    // MARK: - Admin Content
+
+    private var adminContent: some View {
+        ScrollView {
+            VStack(spacing: 24) {
+                // Stats
+                statsSection
+
+                // User Management
+                userManagementSection
+
+                // Maintenance
+                maintenanceSection
+            }
+            .padding(.top, 16)
+            .padding(.bottom, 40)
+        }
+        .refreshable {
+            await loadStats()
+            await loadUsers(reset: true)
+        }
+    }
+
+    // MARK: - Stats Section
+
+    private var statsSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("STATISTICS")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(theme.textSecondary)
+                .textCase(.uppercase)
+                .kerning(0.8)
+                .padding(.horizontal, 24)
+
+            if let stats {
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                    adminStatCard(title: "Users", value: "\(stats["total_users"] ?? 0)", icon: "person.2.fill")
+                    adminStatCard(title: "Members", value: "\(stats["total_members"] ?? 0)", icon: "person.fill")
+                    adminStatCard(title: "Fronts", value: "\(stats["total_fronts"] ?? 0)", icon: "arrow.triangle.swap")
+                    adminStatCard(title: "Groups", value: "\(stats["total_groups"] ?? 0)", icon: "folder.fill")
+                    adminStatCard(title: "Fields", value: "\(stats["total_fields"] ?? 0)", icon: "list.bullet.rectangle")
+                    adminStatCard(title: "Storage", value: formatBytes(stats["total_storage_bytes"] ?? 0), icon: "externaldrive.fill")
+                }
+                .padding(.horizontal, 24)
+            } else if isLoadingStats {
+                HStack { Spacer(); ProgressView().tint(theme.accentLight); Spacer() }
+                    .padding(.vertical, 20)
+            }
+        }
+    }
+
+    private func adminStatCard(title: String, value: String, icon: String) -> some View {
+        VStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(size: 22))
+                .foregroundColor(theme.accentLight)
+            Text(value)
+                .font(.system(size: 20, weight: .bold, design: .rounded))
+                .foregroundColor(theme.textPrimary)
+            Text(title)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(theme.textSecondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 16)
+        .background(theme.backgroundCard)
+        .cornerRadius(14)
+    }
+
+    // MARK: - User Management Section
+
+    private var userManagementSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("USERS")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(theme.textSecondary)
+                .textCase(.uppercase)
+                .kerning(0.8)
+                .padding(.horizontal, 24)
+
+            VStack(spacing: 0) {
+                // Search bar
+                HStack(spacing: 10) {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundColor(theme.textTertiary)
+                    TextField("Search users...", text: $searchText)
+                        .autocapitalization(.none)
+                        .autocorrectionDisabled()
+                        .foregroundColor(theme.textPrimary)
+                }
+                .padding(12)
+                .background(theme.backgroundCard)
+                .cornerRadius(12)
+                .padding(.horizontal, 24)
+                .onChange(of: searchText) {
+                    Task {
+                        // Debounce: wait briefly then search
+                        try? await Task.sleep(nanoseconds: 300_000_000)
+                        await loadUsers(reset: true)
+                    }
+                }
+
+                if isLoadingUsers && users.isEmpty {
+                    HStack { Spacer(); ProgressView().tint(theme.accentLight); Spacer() }
+                        .padding(.vertical, 20)
+                } else if users.isEmpty {
+                    VStack(spacing: 12) {
+                        Image(systemName: "person.slash.fill")
+                            .font(.system(size: 32))
+                            .foregroundColor(theme.textTertiary)
+                        Text("No users found")
+                            .font(.system(size: 15))
+                            .foregroundColor(theme.textSecondary)
+                    }
+                    .padding(.vertical, 24)
+                } else {
+                    VStack(spacing: 0) {
+                        ForEach(users) { user in
+                            Button {
+                                selectedUser = user
+                            } label: {
+                                adminUserRow(user)
+                            }
+                            .buttonStyle(.plain)
+
+                            if user.id != users.last?.id {
+                                Divider().background(theme.divider).padding(.leading, 24)
+                            }
+                        }
+
+                        if hasMoreUsers {
+                            Button {
+                                Task { await loadUsers(reset: false) }
+                            } label: {
+                                HStack {
+                                    if isLoadingUsers {
+                                        ProgressView().tint(theme.accentLight).scaleEffect(0.8)
+                                    }
+                                    Text("Load More")
+                                        .font(.system(size: 14, weight: .medium))
+                                        .foregroundColor(theme.accentLight)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 14)
+                            }
+                        }
+                    }
+                    .background(theme.backgroundCard)
+                    .cornerRadius(14)
+                    .padding(.horizontal, 24)
+                    .padding(.top, 8)
+                }
+            }
+        }
+    }
+
+    private func adminUserRow(_ user: AdminUserRead) -> some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Text(user.email)
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundColor(theme.textPrimary)
+                        .lineLimit(1)
+                    if user.isAdmin {
+                        Text("Admin")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(theme.accentLight)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(theme.accentLight.opacity(0.15))
+                            .cornerRadius(4)
+                    }
+                }
+                HStack(spacing: 8) {
+                    Text(formatAdminTier(user.tier))
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(theme.textTertiary)
+                    Text("\(user.memberCount) members")
+                        .font(.system(size: 12))
+                        .foregroundColor(theme.textTertiary)
+                    Text(formatBytes(user.storageUsedBytes))
+                        .font(.system(size: 12))
+                        .foregroundColor(theme.textTertiary)
+                }
+            }
+            Spacer()
+            Image(systemName: "chevron.right")
+                .font(.system(size: 12))
+                .foregroundColor(theme.textTertiary)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+    }
+
+    // MARK: - Maintenance Section
+
+    private var maintenanceSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("MAINTENANCE")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(theme.textSecondary)
+                .textCase(.uppercase)
+                .kerning(0.8)
+                .padding(.horizontal, 24)
+
+            VStack(spacing: 0) {
+                maintenanceButton(
+                    icon: "clock.arrow.circlepath",
+                    title: "Run Retention",
+                    subtitle: "Remove expired data per retention policy"
+                ) {
+                    showRetentionConfirm = true
+                }
+
+                Divider().background(theme.divider).padding(.leading, 52)
+
+                maintenanceButton(
+                    icon: "trash.circle",
+                    title: "Run Cleanup",
+                    subtitle: "Clean up orphaned data and temp files"
+                ) {
+                    showCleanupConfirm = true
+                }
+
+                Divider().background(theme.divider).padding(.leading, 52)
+
+                maintenanceButton(
+                    icon: "externaldrive.badge.checkmark",
+                    title: "Run Storage Audit",
+                    subtitle: "Recalculate storage usage for all users"
+                ) {
+                    showAuditConfirm = true
+                }
+            }
+            .background(theme.backgroundCard)
+            .cornerRadius(14)
+            .padding(.horizontal, 24)
+        }
+    }
+
+    private func maintenanceButton(icon: String, title: String, subtitle: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                Image(systemName: icon)
+                    .font(.system(size: 18))
+                    .foregroundColor(theme.warning)
+                    .frame(width: 28)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundColor(theme.textPrimary)
+                    Text(subtitle)
+                        .font(.system(size: 12))
+                        .foregroundColor(theme.textTertiary)
+                }
+                Spacer()
+                if isRunningMaintenance {
+                    ProgressView().tint(theme.accentLight).scaleEffect(0.7)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+        }
+        .disabled(isRunningMaintenance)
+    }
+
+    // MARK: - Actions
+
+    private func checkAdminAuth() async {
+        guard let api = store.api else { return }
+        isCheckingAuth = true
+        do {
+            isAdminAuthed = try await api.getAdminAuthStatus()
+        } catch {
+            // If the check itself fails (e.g. 403), assume step-up is needed
+            isAdminAuthed = false
+        }
+        isCheckingAuth = false
+
+        if isAdminAuthed {
+            await loadStats()
+            await loadUsers(reset: true)
+        }
+    }
+
+    private func authenticate() async {
+        guard let api = store.api else { return }
+        isAuthenticating = true
+        authError = nil
+        do {
+            let verify = AdminStepUpVerify(
+                password: password.isEmpty ? nil : password,
+                totpCode: totpCode.isEmpty ? nil : totpCode
+            )
+            try await api.adminStepUp(verify)
+            isAdminAuthed = true
+            password = ""
+            totpCode = ""
+            await loadStats()
+            await loadUsers(reset: true)
+        } catch {
+            authError = error.localizedDescription
+        }
+        isAuthenticating = false
+    }
+
+    private func loadStats() async {
+        guard let api = store.api else { return }
+        isLoadingStats = true
+        stats = try? await api.getAdminStats()
+        isLoadingStats = false
+    }
+
+    private func loadUsers(reset: Bool) async {
+        guard let api = store.api else { return }
+        if reset { currentPage = 1 }
+        isLoadingUsers = true
+        let limit = 50
+        do {
+            let fetched = try await api.getAdminUsers(
+                search: searchText.isEmpty ? nil : searchText,
+                page: currentPage,
+                limit: limit
+            )
+            if reset {
+                users = fetched
+            } else {
+                users.append(contentsOf: fetched)
+            }
+            hasMoreUsers = fetched.count == limit
+            if !reset { currentPage += 1 }
+        } catch {
+            if reset { users = [] }
+        }
+        isLoadingUsers = false
+    }
+
+    private enum MaintenanceAction {
+        case retention, cleanup, storageAudit
+    }
+
+    private func runMaintenance(_ action: MaintenanceAction) async {
+        guard let api = store.api else { return }
+        isRunningMaintenance = true
+        do {
+            switch action {
+            case .retention:
+                try await api.runRetention()
+                maintenanceResult = "Retention completed successfully."
+            case .cleanup:
+                try await api.runCleanup()
+                maintenanceResult = "Cleanup completed successfully."
+            case .storageAudit:
+                try await api.runStorageAudit()
+                maintenanceResult = "Storage audit completed successfully."
+            }
+        } catch {
+            maintenanceResult = "Error: \(error.localizedDescription)"
+        }
+        isRunningMaintenance = false
+        showMaintenanceResult = true
+    }
+
+    // MARK: - Helpers
+
+    private func formatBytes(_ bytes: Int) -> String {
+        let formatter = ByteCountFormatter()
+        formatter.countStyle = .file
+        return formatter.string(fromByteCount: Int64(bytes))
+    }
+
+    private func formatAdminTier(_ tier: UserTier) -> String {
+        switch tier {
+        case .free: return "Free"
+        case .plus: return "Plus"
+        case .selfHosted: return "Self-Hosted"
+        }
+    }
+}
+
+// MARK: - Admin User Edit Sheet
+struct AdminUserEditSheet: View {
+    @Environment(\.theme) var theme
+    @EnvironmentObject var authManager: AuthManager
+    @EnvironmentObject var store: SystemStore
+    @Environment(\.dismiss) var dismiss
+
+    let user: AdminUserRead
+    let onSave: (AdminUserRead) -> Void
+
+    @State private var selectedTier: UserTier
+    @State private var isAdmin: Bool
+    @State private var memberLimitText: String
+    @State private var isSaving = false
+    @State private var error: String?
+
+    init(user: AdminUserRead, onSave: @escaping (AdminUserRead) -> Void) {
+        self.user = user
+        self.onSave = onSave
+        _selectedTier = State(initialValue: user.tier)
+        _isAdmin = State(initialValue: user.isAdmin)
+        _memberLimitText = State(initialValue: user.memberLimit.map { "\($0)" } ?? "")
+    }
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                theme.backgroundPrimary.ignoresSafeArea()
+
+                ScrollView {
+                    VStack(spacing: 24) {
+                        // User Info (read-only)
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("USER INFO")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundColor(theme.textSecondary)
+                                .textCase(.uppercase)
+                                .kerning(0.8)
+
+                            VStack(spacing: 0) {
+                                infoRow(label: "Email", value: user.email)
+                                Divider().background(theme.divider)
+                                infoRow(label: "Members", value: "\(user.memberCount)")
+                                Divider().background(theme.divider)
+                                infoRow(label: "Storage", value: formatBytes(user.storageUsedBytes))
+                                Divider().background(theme.divider)
+                                infoRow(label: "Created", value: user.createdAt.formatted(date: .abbreviated, time: .shortened))
+                                if let lastLogin = user.lastLoginAt {
+                                    Divider().background(theme.divider)
+                                    infoRow(label: "Last Login", value: lastLogin.formatted(date: .abbreviated, time: .shortened))
+                                }
+                            }
+                            .background(theme.backgroundCard)
+                            .cornerRadius(14)
+                        }
+
+                        // Editable Fields
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("SETTINGS")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundColor(theme.textSecondary)
+                                .textCase(.uppercase)
+                                .kerning(0.8)
+
+                            VStack(spacing: 0) {
+                                // Tier picker
+                                HStack {
+                                    Text("Tier")
+                                        .font(.system(size: 15))
+                                        .foregroundColor(theme.textPrimary)
+                                    Spacer()
+                                    Picker("Tier", selection: $selectedTier) {
+                                        Text("Free").tag(UserTier.free)
+                                        Text("Plus").tag(UserTier.plus)
+                                        Text("Self-Hosted").tag(UserTier.selfHosted)
+                                    }
+                                    .tint(theme.accentLight)
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 10)
+
+                                Divider().background(theme.divider)
+
+                                // Admin toggle
+                                Toggle(isOn: $isAdmin) {
+                                    Text("Administrator")
+                                        .font(.system(size: 15))
+                                        .foregroundColor(theme.textPrimary)
+                                }
+                                .tint(theme.accentLight)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 10)
+
+                                Divider().background(theme.divider)
+
+                                // Member limit
+                                HStack {
+                                    Text("Member Limit")
+                                        .font(.system(size: 15))
+                                        .foregroundColor(theme.textPrimary)
+                                    Spacer()
+                                    TextField("Default", text: $memberLimitText)
+                                        .keyboardType(.numberPad)
+                                        .multilineTextAlignment(.trailing)
+                                        .frame(width: 80)
+                                        .foregroundColor(theme.textPrimary)
+                                    if !memberLimitText.isEmpty {
+                                        Button {
+                                            memberLimitText = ""
+                                        } label: {
+                                            Image(systemName: "xmark.circle.fill")
+                                                .foregroundColor(theme.textTertiary)
+                                        }
+                                    }
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 10)
+                            }
+                            .background(theme.backgroundCard)
+                            .cornerRadius(14)
+                        }
+
+                        if let error {
+                            Text(error)
+                                .font(.system(size: 13))
+                                .foregroundColor(theme.danger)
+                        }
+                    }
+                    .padding(.horizontal, 24)
+                    .padding(.top, 16)
+                    .padding(.bottom, 40)
+                }
+            }
+            .navigationTitle(user.email)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                        .foregroundColor(theme.textSecondary)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button {
+                        Task { await save() }
+                    } label: {
+                        if isSaving {
+                            ProgressView().tint(theme.accentLight).scaleEffect(0.8)
+                        } else {
+                            Text("Save")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(theme.accentLight)
+                        }
+                    }
+                    .disabled(isSaving)
+                }
+            }
+        }
+    }
+
+    private func infoRow(label: String, value: String) -> some View {
+        HStack {
+            Text(label)
+                .font(.system(size: 15))
+                .foregroundColor(theme.textSecondary)
+            Spacer()
+            Text(value)
+                .font(.system(size: 14))
+                .foregroundColor(theme.textPrimary)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+    }
+
+    private func formatBytes(_ bytes: Int) -> String {
+        let formatter = ByteCountFormatter()
+        formatter.countStyle = .file
+        return formatter.string(fromByteCount: Int64(bytes))
+    }
+
+    private func save() async {
+        guard let api = store.api else { return }
+        isSaving = true
+        error = nil
+
+        let memberLimit = Int(memberLimitText)
+        let clearLimit = memberLimitText.isEmpty && user.memberLimit != nil
+
+        let update = AdminUserUpdate(
+            tier: selectedTier != user.tier ? selectedTier : nil,
+            isAdmin: isAdmin != user.isAdmin ? isAdmin : nil,
+            memberLimit: memberLimit,
+            clearMemberLimit: clearLimit ? true : nil
+        )
+
+        do {
+            let updated = try await api.updateAdminUser(userID: user.id, update: update)
+            onSave(updated)
+            dismiss()
+        } catch {
+            self.error = error.localizedDescription
+        }
+        isSaving = false
     }
 }
