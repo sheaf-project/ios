@@ -17,6 +17,7 @@
 		2ADC391C2F70DD9600FC9769 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2ACEC10E2F6D1AD700B4AB57 /* WidgetKit.framework */; };
 		2ADC391D2F70DD9600FC9769 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2ACEC1102F6D1AD700B4AB57 /* SwiftUI.framework */; };
 		2ADC392C2F70DD9800FC9769 /* SheafWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 2ADC391B2F70DD9600FC9769 /* SheafWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		2ADC39382F711B7700FC9769 /* openapi.json in Resources */ = {isa = PBXBuildFile; fileRef = 2ADC39372F711B7700FC9769 /* openapi.json */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -95,6 +96,7 @@
 		2ACEC1B02F6D28AB00B4AB57 /* SheafWatchWidgetExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = SheafWatchWidgetExtension.entitlements; sourceTree = "<group>"; };
 		2ADC391B2F70DD9600FC9769 /* SheafWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = SheafWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		2ADC39322F70DDA800FC9769 /* SheafWidgetExtensionExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = SheafWidgetExtensionExtension.entitlements; sourceTree = "<group>"; };
+		2ADC39372F711B7700FC9769 /* openapi.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = openapi.json; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -231,6 +233,7 @@
 		2A20278E2F6B92F10084B22F = {
 			isa = PBXGroup;
 			children = (
+				2ADC39372F711B7700FC9769 /* openapi.json */,
 				2ADC39322F70DDA800FC9769 /* SheafWidgetExtensionExtension.entitlements */,
 				2A4546A42F6F0425006A8EE3 /* SheafWatch Watch AppRelease.entitlements */,
 				2A8D15EE2F6E210C001F5282 /* SheafWatchWidgetExtensionDebug.entitlements */,
@@ -419,6 +422,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				2ADC39382F711B7700FC9769 /* openapi.json in Resources */,
 				2A063BB22F6CE58000321DA6 /* README.md in Resources */,
 				2A2028962F6C8D350084B22F /* .gitignore in Resources */,
 			);

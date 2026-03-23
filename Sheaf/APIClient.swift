@@ -438,6 +438,73 @@ class APIClient {
         _ = try await request("/v1/auth/keys/\(id)", method: "DELETE")
     }
 
+    // MARK: - Admin
+
+    /// Returns whether step-up auth has been completed.
+    /// The response schema is loosely defined — if `is_authenticated` is missing,
+    /// we assume step-up is not required and return true.
+    func getAdminAuthStatus() async throws -> Bool {
+        let data = try await request("/v1/admin/auth")
+        if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let isAuthed = json["is_authenticated"] as? Bool {
+            return isAuthed
+        }
+        // Field missing or not a bool — assume step-up not required
+        return true
+    }
+
+    func adminStepUp(_ verify: AdminStepUpVerify) async throws {
+        let body = try JSONEncoder.iso.encode(verify)
+        _ = try await request("/v1/admin/auth", method: "POST", body: body)
+    }
+
+    /// Stats response schema is loosely defined in the spec — decode what we can.
+    func getAdminStats() async throws -> [String: Int] {
+        let data = try await request("/v1/admin/stats")
+        if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            var result: [String: Int] = [:]
+            for (key, value) in json {
+                if let intVal = value as? Int {
+                    result[key] = intVal
+                }
+            }
+            return result
+        }
+        return [:]
+    }
+
+    func getAdminUsers(search: String? = nil, page: Int = 1, limit: Int = 50) async throws -> [AdminUserRead] {
+        var path = "/v1/admin/users?page=\(page)&limit=\(limit)"
+        if let search, !search.isEmpty {
+            path += "&search=\(search.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? search)"
+        }
+        let data = try await request(path)
+        return try JSONDecoder.iso.decode([AdminUserRead].self, from: data)
+    }
+
+    func updateAdminUser(userID: String, update: AdminUserUpdate) async throws -> AdminUserRead {
+        let body = try JSONEncoder.iso.encode(update)
+        let data = try await request("/v1/admin/users/\(userID)", method: "PATCH", body: body)
+        return try JSONDecoder.iso.decode(AdminUserRead.self, from: data)
+    }
+
+    func setUserMemberLimit(userID: String, limit: MemberLimitOverride) async throws {
+        let body = try JSONEncoder.iso.encode(limit)
+        _ = try await request("/v1/admin/users/\(userID)/member-limit", method: "PUT", body: body)
+    }
+
+    func runRetention() async throws {
+        _ = try await request("/v1/admin/retention/run", method: "POST")
+    }
+
+    func runCleanup() async throws {
+        _ = try await request("/v1/admin/cleanup/run", method: "POST")
+    }
+
+    func runStorageAudit() async throws {
+        _ = try await request("/v1/admin/storage/audit", method: "POST")
+    }
+
     // MARK: - Export
 
     func exportData() async throws -> Data {

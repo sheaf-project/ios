@@ -502,6 +502,68 @@ func resolveAvatarURL(_ avatarURL: String?, baseURL: String) -> URL? {
     return URL(string: avatarURL)
 }
 
+// MARK: - Admin Models
+
+enum UserTier: String, Codable, CaseIterable {
+    case free = "free"
+    case plus = "plus"
+    case selfHosted = "self_hosted"
+}
+
+struct AdminUserRead: Codable, Identifiable {
+    let id: String
+    let email: String
+    let tier: UserTier
+    let isAdmin: Bool
+    let memberLimit: Int?
+    let storageUsedBytes: Int
+    let memberCount: Int
+    let createdAt: Date
+    let lastLoginAt: Date?
+
+    enum CodingKeys: String, CodingKey {
+        case id, email, tier
+        case isAdmin         = "is_admin"
+        case memberLimit     = "member_limit"
+        case storageUsedBytes = "storage_used_bytes"
+        case memberCount     = "member_count"
+        case createdAt       = "created_at"
+        case lastLoginAt     = "last_login_at"
+    }
+}
+
+struct AdminUserUpdate: Codable {
+    var tier: UserTier?
+    var isAdmin: Bool?
+    var memberLimit: Int?
+    var clearMemberLimit: Bool?
+
+    enum CodingKeys: String, CodingKey {
+        case tier
+        case isAdmin         = "is_admin"
+        case memberLimit     = "member_limit"
+        case clearMemberLimit = "clear_member_limit"
+    }
+}
+
+struct AdminStepUpVerify: Codable {
+    var password: String?
+    var totpCode: String?
+
+    enum CodingKeys: String, CodingKey {
+        case password
+        case totpCode = "totp_code"
+    }
+}
+
+struct MemberLimitOverride: Codable {
+    var memberLimit: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case memberLimit = "member_limit"
+    }
+}
+
 // MARK: - Simply Plural Import Models
 struct SPPreviewMember: Codable, Identifiable {
     let id: String
