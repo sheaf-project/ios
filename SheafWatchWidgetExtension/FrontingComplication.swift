@@ -134,6 +134,7 @@ struct FrontingComplicationView: View {
         case .accessoryCorner:
             CornerComplicationView(entry: entry)
         #endif
+
         default:
             Text("Sheaf")
         }
@@ -302,6 +303,8 @@ struct CornerComplicationView: View {
         }
     }
 }
+
+
 
 // MARK: - Widget Configuration
 struct FrontingComplication: Widget {

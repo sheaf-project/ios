@@ -104,9 +104,8 @@ struct GroupCard: View {
                         .foregroundColor(theme.textPrimary)
 
                     if let desc = group.description, !desc.isEmpty {
-                        Text(desc)
+                        MarkdownText(desc, color: theme.textSecondary)
                             .font(.system(size: 13))
-                            .foregroundColor(theme.textSecondary)
                             .lineLimit(1)
                     }
 
@@ -173,9 +172,8 @@ struct GroupDetailSheet: View {
                                 .foregroundColor(group.displayColor)
                         }
                         if let desc = group.description, !desc.isEmpty {
-                            Text(desc)
+                            MarkdownText(desc, color: theme.textSecondary)
                                 .font(.system(size: 14))
-                                .foregroundColor(theme.textSecondary)
                                 .multilineTextAlignment(.center)
                         }
                     }

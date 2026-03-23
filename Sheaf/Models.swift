@@ -340,6 +340,7 @@ struct UserRead: Codable {
     let id: String
     let email: String
     let totpEnabled: Bool
+    let isAdmin: Bool
     let tier: String
     let createdAt: Date
     let lastLoginAt: Date?
@@ -347,6 +348,7 @@ struct UserRead: Codable {
     enum CodingKeys: String, CodingKey {
         case id, email, tier
         case totpEnabled  = "totp_enabled"
+        case isAdmin      = "is_admin"
         case createdAt    = "created_at"
         case lastLoginAt  = "last_login_at"
     }
@@ -374,6 +376,51 @@ struct TokenRefresh: Codable {
 
     enum CodingKeys: String, CodingKey {
         case refreshToken = "refresh_token"
+    }
+}
+
+// MARK: - API Keys
+struct ApiKeyRead: Identifiable, Codable {
+    let id: String
+    let name: String
+    let scopes: [String]
+    let lastUsedAt: Date?
+    let expiresAt: Date?
+    let createdAt: Date
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, scopes
+        case lastUsedAt = "last_used_at"
+        case expiresAt  = "expires_at"
+        case createdAt  = "created_at"
+    }
+}
+
+struct ApiKeyCreate: Codable {
+    var name: String
+    var scopes: [String]
+    var expiresAt: Date?
+
+    enum CodingKeys: String, CodingKey {
+        case name, scopes
+        case expiresAt = "expires_at"
+    }
+}
+
+struct ApiKeyCreated: Codable {
+    let id: String
+    let name: String
+    let scopes: [String]
+    let lastUsedAt: Date?
+    let expiresAt: Date?
+    let createdAt: Date
+    let key: String
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, scopes, key
+        case lastUsedAt = "last_used_at"
+        case expiresAt  = "expires_at"
+        case createdAt  = "created_at"
     }
 }
 

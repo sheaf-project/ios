@@ -315,13 +315,12 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## Roadmap
 
-- [ ] Migrate to Keychain for credential storage
-- [ ] Add widgets for Home Screen and Lock Screen
-- [ ] Add complications for watchOS
+- [X] Migrate to Keychain for credential storage
+- [X] Add widgets for Home Screen and Lock Screen
+- [X] Add complications for watchOS
 - [ ] iCloud sync support
-- [ ] Offline mode with local caching
+- [X] Offline mode with local caching
 - [ ] Custom notifications for system events
-- [ ] macOS companion app
 
 ## Known Issues
 

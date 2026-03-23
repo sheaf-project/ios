@@ -96,20 +96,11 @@ struct CustomFieldsView: View {
     }
 
     private func deleteField(_ field: CustomField) async {
-        guard let api = store.api else { return }
-        do {
-            try await api.deleteField(id: field.id)
-            await MainActor.run {
-                store.fields.removeAll { $0.id == field.id }
-            }
-        } catch {
-            store.errorMessage = error.localizedDescription
-        }
+        await store.deleteField(id: field.id)
     }
 
     private func refreshFields() async {
-        guard let api = store.api else { return }
-        store.fields = (try? await api.getFields()) ?? store.fields
+        await store.reloadFields()
     }
 
     private func fieldTypeIcon(_ type: FieldType) -> String {
@@ -204,24 +195,11 @@ struct EditCustomFieldSheet: View {
     }
 
     private func save() async {
-        guard let api = store.api else { return }
         isSaving = true
         error = nil
-        do {
-            let updated = try await api.updateField(id: field.id, name: name, privacy: privacy)
-            await MainActor.run {
-                if let idx = store.fields.firstIndex(where: { $0.id == field.id }) {
-                    store.fields[idx] = updated
-                }
-                isSaving = false
-            }
-            dismiss()
-        } catch {
-            await MainActor.run {
-                self.error = error.localizedDescription
-                isSaving = false
-            }
-        }
+        await store.updateField(id: field.id, name: name, privacy: privacy)
+        isSaving = false
+        dismiss()
     }
 }
 
@@ -300,27 +278,17 @@ struct AddCustomFieldSheet: View {
     }
 
     private func save() async {
-        guard !name.isEmpty, let api = store.api else { return }
+        guard !name.isEmpty else { return }
         isSaving = true
         error = nil
-        do {
-            let created = try await api.createField(CustomFieldCreate(
-                name: name,
-                fieldType: fieldType,
-                options: nil,
-                order: store.fields.count,
-                privacy: privacy
-            ))
-            await MainActor.run {
-                store.fields.append(created)
-                isSaving = false
-            }
-            dismiss()
-        } catch {
-            await MainActor.run {
-                self.error = error.localizedDescription
-                isSaving = false
-            }
-        }
+        _ = await store.createField(CustomFieldCreate(
+            name: name,
+            fieldType: fieldType,
+            options: nil,
+            order: store.fields.count,
+            privacy: privacy
+        ))
+        isSaving = false
+        dismiss()
     }
 }
