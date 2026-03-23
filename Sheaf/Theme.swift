@@ -109,3 +109,34 @@ extension EnvironmentValues {
         set { self[ThemeKey.self] = newValue }
     }
 }
+
+// MARK: - Markdown Text
+/// Renders a markdown string with inline styling (bold, italic, links, code).
+/// Falls back to plain text if parsing fails.
+struct MarkdownText: View {
+    let markdown: String
+    let color: Color
+
+    init(_ markdown: String, color: Color = .primary) {
+        self.markdown = markdown
+        self.color = color
+    }
+
+    var body: some View {
+        if let attributed = try? AttributedString(
+            markdown: markdown,
+            options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)
+        ) {
+            Text(applyColor(attributed))
+        } else {
+            Text(markdown)
+                .foregroundColor(color)
+        }
+    }
+
+    private func applyColor(_ string: AttributedString) -> AttributedString {
+        var result = string
+        result.foregroundColor = color
+        return result
+    }
+}

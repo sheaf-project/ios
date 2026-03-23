@@ -115,29 +115,7 @@ struct HistoryView: View {
 
 
     func deleteFrontEntry(_ entry: FrontEntry) async {
-        guard let api = store.api else { return }
-        
-        // Store whether this was active BEFORE we start any UI updates
-        let wasActive = entry.endedAt == nil
-        let entryID = entry.id
-        
-        do {
-            // First make the API call
-            try await api.deleteFront(id: entryID)
-            
-            // Only after successful deletion, update the UI
-            await MainActor.run {
-                store.frontHistory.removeAll { $0.id == entryID }
-                if wasActive {
-                    store.currentFronts.removeAll { $0.id == entryID }
-                }
-            }
-        } catch {
-            // On error, just show the error (don't modify UI)
-            await MainActor.run {
-                store.errorMessage = error.localizedDescription
-            }
-        }
+        await store.deleteFront(id: entry.id)
     }
 
     func reload() async {

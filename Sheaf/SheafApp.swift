@@ -5,9 +5,10 @@ import UIKit
 @main
 struct SheafApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-    @StateObject private var authManager   = AuthManager()
-    @StateObject private var systemStore   = SystemStore()
-    @StateObject private var themeManager  = ThemeManager()
+    @StateObject private var authManager      = AuthManager()
+    @StateObject private var systemStore      = SystemStore()
+    @StateObject private var themeManager     = ThemeManager()
+    @StateObject private var networkMonitor   = NetworkMonitor.shared
     @ObservedObject private var quickActions = QuickActionHandler.shared
     @State private var selectedTab = 0
 
@@ -24,6 +25,7 @@ struct SheafApp: App {
                 .environmentObject(systemStore)
                 .environmentObject(themeManager)
                 .environmentObject(quickActions)
+                .environmentObject(networkMonitor)
                 .preferredColorScheme(themeManager.colorScheme)
         }
     }

@@ -421,6 +421,23 @@ class APIClient {
         return try JSONDecoder.iso.decode([CustomFieldValue].self, from: data)
     }
 
+    // MARK: - API Keys
+
+    func listApiKeys() async throws -> [ApiKeyRead] {
+        let data = try await request("/v1/auth/keys")
+        return try JSONDecoder.iso.decode([ApiKeyRead].self, from: data)
+    }
+
+    func createApiKey(_ create: ApiKeyCreate) async throws -> ApiKeyCreated {
+        let body = try JSONEncoder.iso.encode(create)
+        let data = try await request("/v1/auth/keys", method: "POST", body: body)
+        return try JSONDecoder.iso.decode(ApiKeyCreated.self, from: data)
+    }
+
+    func revokeApiKey(id: String) async throws {
+        _ = try await request("/v1/auth/keys/\(id)", method: "DELETE")
+    }
+
     // MARK: - Export
 
     func exportData() async throws -> Data {

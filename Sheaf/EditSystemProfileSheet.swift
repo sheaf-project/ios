@@ -1,4 +1,5 @@
 import SwiftUI
+import PhotosUI
 
 struct EditSystemProfileSheet: View {
     @EnvironmentObject var store: SystemStore
@@ -13,6 +14,9 @@ struct EditSystemProfileSheet: View {
     @State private var privacy: PrivacyLevel = .private
     @State private var isSaving    = false
     @State private var error: String?
+    @State private var selectedPhoto: PhotosPickerItem?
+    @State private var isUploadingAvatar = false
+    @State private var avatarMode: AvatarInputMode = .url
 
     var body: some View {
         NavigationStack {
@@ -21,8 +25,16 @@ struct EditSystemProfileSheet: View {
                     field("System Name", placeholder: "Your system's name", value: $name)
                     field("Tag", placeholder: "Short tag, e.g. SYS", value: $tag)
                         .autocapitalization(.allCharacters)
-                    field("Avatar URL", placeholder: "https://...", value: $avatarURL)
-                        .keyboardType(.URL)
+                }
+
+                Section("Avatar") {
+                    AvatarInputSection(
+                        avatarURL: $avatarURL,
+                        mode: $avatarMode,
+                        selectedPhoto: $selectedPhoto,
+                        isUploading: $isUploadingAvatar,
+                        api: store.api
+                    )
                 }
 
                 Section("About") {
@@ -112,28 +124,17 @@ struct EditSystemProfileSheet: View {
     }
 
     private func save() async {
-        guard let api = store.api else { return }
         isSaving = true
         error = nil
-        do {
-            let updated = try await api.updateMySystem(SystemUpdate(
-                name:        name.isEmpty        ? nil : name,
-                description: description.isEmpty ? nil : description,
-                tag:         tag.isEmpty         ? nil : tag,
-                avatarURL:   avatarURL.isEmpty   ? nil : avatarURL,
-                color:       colorHex,
-                privacy:     privacy
-            ))
-            await MainActor.run {
-                store.systemProfile = updated
-                isSaving = false
-            }
-            dismiss()
-        } catch {
-            await MainActor.run {
-                self.error = error.localizedDescription
-                isSaving = false
-            }
-        }
+        await store.updateSystem(SystemUpdate(
+            name:        name.isEmpty        ? nil : name,
+            description: description.isEmpty ? nil : description,
+            tag:         tag.isEmpty         ? nil : tag,
+            avatarURL:   avatarURL.isEmpty   ? nil : avatarURL,
+            color:       colorHex,
+            privacy:     privacy
+        ))
+        isSaving = false
+        dismiss()
     }
 }

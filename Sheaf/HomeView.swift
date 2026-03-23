@@ -159,7 +159,7 @@ struct FrontingMemberCard: View {
                 if let pronouns = member.pronouns, !pronouns.isEmpty {
                     Text(pronouns)
                         .font(.system(size: 13))
-                        .foregroundColor(member.displayColor.opacity(0.9))
+                        .foregroundColor(theme.textSecondary)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 3)
                         .background(member.displayColor.opacity(0.15))

@@ -1,4 +1,5 @@
 import SwiftUI
+import PhotosUI
 
 struct MembersView: View {
     @EnvironmentObject var store: SystemStore
@@ -300,9 +301,8 @@ struct MemberDetailSheet: View {
 
                         // Description
                         if let desc = member.description, !desc.isEmpty {
-                            Text(desc)
+                            MarkdownText(desc, color: theme.textSecondary)
                                 .font(.system(size: 15))
-                                .foregroundColor(theme.textSecondary)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(16)
                                 .background(theme.backgroundCard)
@@ -328,9 +328,8 @@ struct MemberDetailSheet: View {
                                                     .font(.system(size: 14))
                                                     .foregroundColor(theme.textSecondary)
                                                     .frame(width: 100, alignment: .leading)
-                                                Text(displayValue(fv.value, field: field))
+                                                MarkdownText(displayValue(fv.value, field: field), color: theme.textPrimary)
                                                     .font(.system(size: 14, weight: .medium))
-                                                    .foregroundColor(theme.textPrimary)
                                                     .frame(maxWidth: .infinity, alignment: .leading)
                                             }
                                             .padding(.horizontal, 16)
@@ -383,9 +382,8 @@ struct MemberDetailSheet: View {
     }
 
     private func loadFieldValues() async {
-        guard let api = store.api else { return }
         loadingFields = true
-        fieldValues = (try? await api.getMemberFieldValues(memberID: member.id)) ?? []
+        fieldValues = await store.getMemberFieldValues(memberID: member.id)
         loadingFields = false
     }
 
@@ -432,6 +430,9 @@ struct MemberEditSheet: View {
     @State private var privacy: PrivacyLevel = .private
     @State private var isSaving = false
     @State private var fieldValues: [String: String] = [:]  // fieldID -> string value
+    @State private var selectedPhoto: PhotosPickerItem?
+    @State private var isUploadingAvatar = false
+    @State private var avatarMode: AvatarInputMode = .url
 
     var isNew: Bool { member == nil }
 
@@ -464,7 +465,15 @@ struct MemberEditSheet: View {
                         formField("Display Name", value: $displayName, placeholder: "Shown to others")
                         formField("Pronouns", value: $pronouns, placeholder: "e.g. she/her")
                         formField("Description", value: $description, placeholder: "Brief description", multiline: true)
-                        formField("Avatar URL", value: $avatarURL, placeholder: "https://...")
+
+                        // Avatar section
+                        AvatarInputSection(
+                            avatarURL: $avatarURL,
+                            mode: $avatarMode,
+                            selectedPhoto: $selectedPhoto,
+                            isUploading: $isUploadingAvatar,
+                            api: store.api
+                        )
 
                         // Color picker
                         HStack {
@@ -527,8 +536,8 @@ struct MemberEditSheet: View {
         privacy     = m.privacy
         // Load existing field values
         Task {
-            guard let api = store.api, let memberID = member?.id else { return }
-            let values = (try? await api.getMemberFieldValues(memberID: memberID)) ?? []
+            guard let memberID = member?.id else { return }
+            let values = await store.getMemberFieldValues(memberID: memberID)
             await MainActor.run {
                 for v in values {
                     if let s = v.value.value as? String { fieldValues[v.fieldID] = s }
@@ -571,7 +580,7 @@ struct MemberEditSheet: View {
             await store.saveMember(existing: member, create: create)
             // Save custom field values if editing existing member
             if let memberID = member?.id ?? store.members.last?.id,
-               let api = store.api, !fieldValues.isEmpty {
+               !fieldValues.isEmpty {
                 let sets: [CustomFieldValueSet] = store.fields.compactMap { field in
                     guard let val = fieldValues[field.id], !val.isEmpty else { return nil }
                     return CustomFieldValueSet(
@@ -580,7 +589,7 @@ struct MemberEditSheet: View {
                     )
                 }
                 if !sets.isEmpty {
-                    _ = try? await api.setMemberFieldValues(memberID: memberID, values: sets)
+                    await store.setMemberFieldValues(memberID: memberID, values: sets)
                 }
             }
             isSaving = false
@@ -623,6 +632,163 @@ struct MemberEditSheet: View {
                 ))
                 .autocorrectionDisabled()
                 .padding(12).background(theme.backgroundCard).cornerRadius(12).foregroundColor(theme.textPrimary)
+            }
+        }
+    }
+}
+
+// MARK: - Avatar Input Mode
+enum AvatarInputMode {
+    case url
+    case upload
+}
+
+// MARK: - Avatar Input Section
+struct AvatarInputSection: View {
+    @Environment(\.theme) var theme
+    @Binding var avatarURL: String
+    @Binding var mode: AvatarInputMode
+    @Binding var selectedPhoto: PhotosPickerItem?
+    @Binding var isUploading: Bool
+    var api: APIClient?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Avatar")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(theme.textSecondary)
+
+            // Preview
+            if !avatarURL.isEmpty, let url = URL(string: avatarURL) {
+                HStack {
+                    Spacer()
+                    AsyncImage(url: url) { phase in
+                        switch phase {
+                        case .success(let image):
+                            image.resizable().scaledToFill()
+                                .frame(width: 72, height: 72)
+                                .clipShape(Circle())
+                        case .failure:
+                            Circle().fill(theme.backgroundCard)
+                                .frame(width: 72, height: 72)
+                                .overlay(
+                                    Image(systemName: "exclamationmark.triangle")
+                                        .foregroundColor(theme.textTertiary)
+                                )
+                        default:
+                            Circle().fill(theme.backgroundCard)
+                                .frame(width: 72, height: 72)
+                                .overlay(ProgressView().tint(theme.accentLight))
+                        }
+                    }
+                    Spacer()
+                }
+                .padding(.bottom, 4)
+            }
+
+            // Mode picker
+            Picker("", selection: $mode) {
+                Text("Upload Image").tag(AvatarInputMode.upload)
+                Text("Enter URL").tag(AvatarInputMode.url)
+            }
+            .pickerStyle(.segmented)
+
+            switch mode {
+            case .upload:
+                HStack(spacing: 12) {
+                    PhotosPicker(selection: $selectedPhoto, matching: .images) {
+                        HStack(spacing: 8) {
+                            if isUploading {
+                                ProgressView().tint(.white).scaleEffect(0.8)
+                            } else {
+                                Image(systemName: "photo.on.rectangle.angled")
+                            }
+                            Text(isUploading ? "Uploading..." : "Choose Photo")
+                                .font(.system(size: 14, weight: .medium))
+                        }
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(12)
+                        .background(LinearGradient(colors: [theme.accentLight, theme.accent],
+                                                   startPoint: .leading, endPoint: .trailing))
+                        .cornerRadius(12)
+                    }
+                    .disabled(isUploading)
+                    .onChange(of: selectedPhoto) { _, newItem in
+                        guard let newItem else { return }
+                        Task { await uploadPhoto(newItem) }
+                    }
+
+                    if !avatarURL.isEmpty {
+                        Button {
+                            avatarURL = ""
+                        } label: {
+                            Image(systemName: "trash")
+                                .foregroundColor(theme.danger)
+                                .padding(12)
+                                .background(theme.danger.opacity(0.1))
+                                .cornerRadius(12)
+                        }
+                    }
+                }
+            case .url:
+                HStack(spacing: 8) {
+                    TextField("https://...", text: $avatarURL)
+                        .autocorrectionDisabled()
+                        .autocapitalization(.none)
+                        .keyboardType(.URL)
+                        .padding(12)
+                        .background(theme.backgroundCard)
+                        .cornerRadius(12)
+                        .foregroundColor(theme.textPrimary)
+
+                    if !avatarURL.isEmpty {
+                        Button {
+                            avatarURL = ""
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundColor(theme.textTertiary)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func uploadPhoto(_ item: PhotosPickerItem) async {
+        isUploading = true
+        defer { isUploading = false }
+
+        guard let data = try? await item.loadTransferable(type: Data.self),
+              let api else { return }
+
+        // Determine MIME type
+        let mimeType: String
+        if let uti = item.supportedContentTypes.first {
+            if uti.conforms(to: .png) {
+                mimeType = "image/png"
+            } else if uti.conforms(to: .gif) {
+                mimeType = "image/gif"
+            } else if uti.conforms(to: .webP) {
+                mimeType = "image/webp"
+            } else {
+                mimeType = "image/jpeg"
+            }
+        } else {
+            mimeType = "image/jpeg"
+        }
+
+        do {
+            let url = try await api.uploadFile(imageData: data, mimeType: mimeType)
+            await MainActor.run {
+                if !url.isEmpty {
+                    avatarURL = url
+                }
+                selectedPhoto = nil
+            }
+        } catch {
+            await MainActor.run {
+                selectedPhoto = nil
             }
         }
     }
