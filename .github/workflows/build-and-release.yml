@@ -46,13 +46,33 @@ jobs:
             VALIDATE_DEPENDENCIES=NO \
             build
 
-      - name: Build Widget Extension
+      - name: Build Watch Widget Extension
         run: |
           xcodebuild \
             -project "${{ env.PROJECT }}" \
             -target SheafWatchWidgetExtension \
             -configuration "${{ env.CONFIGURATION }}" \
             -destination 'generic/platform=watchOS' \
+            SYMROOT="$RUNNER_TEMP/Build" \
+            ONLY_ACTIVE_ARCH=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGN_IDENTITY=- \
+            CODE_SIGN_ENTITLEMENTS= \
+            DEVELOPMENT_TEAM= \
+            PROVISIONING_PROFILE_SPECIFIER= \
+            ASSETCATALOG_COMPILER_APPICON_NAME= \
+            SKIP_INSTALL=YES \
+            VALIDATE_DEPENDENCIES=NO \
+            build
+
+      - name: Build iOS Widget Extension
+        run: |
+          xcodebuild \
+            -project "${{ env.PROJECT }}" \
+            -target SheafWidgetExtension \
+            -configuration "${{ env.CONFIGURATION }}" \
+            -destination 'generic/platform=iOS' \
             SYMROOT="$RUNNER_TEMP/Build" \
             ONLY_ACTIVE_ARCH=NO \
             CODE_SIGNING_REQUIRED=NO \
