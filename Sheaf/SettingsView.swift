@@ -227,8 +227,7 @@ struct SettingsView: View {
                                     Circle()
                                         .fill(Color(hex: profile.color ?? "#8B5CF6") ?? .purple)
                                         .frame(width: 44, height: 44)
-                                    if let url = profile.avatarURL, !url.isEmpty,
-                                       let imageURL = URL(string: url) {
+                                    if let imageURL = resolveAvatarURL(profile.avatarURL, baseURL: authManager.baseURL) {
                                         AsyncImage(url: imageURL) { img in
                                             img.resizable().scaledToFill()
                                                 .frame(width: 44, height: 44)

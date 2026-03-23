@@ -526,10 +526,14 @@ class APIClient {
             throw NSError(domain: "APIError", code: (response as? HTTPURLResponse)?.statusCode ?? 0,
                           userInfo: [NSLocalizedDescriptionKey: msg])
         }
-        // API returns freeform JSON — just extract a url string if present
-        if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-           let urlStr = json["url"] as? String {
-            return urlStr
+        // API returns {"url": "...", "key": "...", "size": N}
+        // Return the URL (which may be a relative signed path like /v1/files/avatars/...)
+        // so the caller can use it for both storage and immediate preview.
+        // The server will accept this URL as avatar_url and serve signed URLs on reads.
+        if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            if let urlStr = json["url"] as? String, !urlStr.isEmpty {
+                return urlStr
+            }
         }
         return ""
     }

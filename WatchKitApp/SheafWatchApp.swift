@@ -17,6 +17,7 @@ struct SheafWatchApp: App {
                     WatchTabView()
                         .environmentObject(authManager)
                         .environmentObject(store)
+                        .environment(\.apiBaseURL, authManager.baseURL)
                         .onAppear {
                             store.configure(auth: authManager)
                             store.loadAll()

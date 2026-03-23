@@ -659,7 +659,7 @@ struct AvatarInputSection: View {
                 .foregroundColor(theme.textSecondary)
 
             // Preview
-            if !avatarURL.isEmpty, let url = URL(string: avatarURL) {
+            if !avatarURL.isEmpty, let url = resolveAvatarURL(avatarURL, baseURL: api?.auth.baseURL ?? "") {
                 HStack {
                     Spacer()
                     AsyncImage(url: url) { phase in

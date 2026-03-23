@@ -3,10 +3,11 @@ import SwiftUI
 struct AvatarView: View {
     let member: Member
     let size: CGFloat
+    @Environment(\.apiBaseURL) private var baseURL
 
     var body: some View {
         ZStack {
-            if let urlStr = member.avatarURL, let url = URL(string: urlStr) {
+            if let url = resolveAvatarURL(member.avatarURL, baseURL: baseURL) {
                 AsyncImage(url: url) { phase in
                     switch phase {
                     case .success(let image):
