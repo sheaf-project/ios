@@ -98,7 +98,7 @@ struct Theme {
     var inputBorderFocused: Color { accentLight }
 }
 
-// MARK: - Environment Key
+// MARK: - Environment Keys
 struct ThemeKey: EnvironmentKey {
     static let defaultValue = Theme(isDark: true)
 }

@@ -474,6 +474,34 @@ extension Color {
     }
 }
 
+// MARK: - API Base URL Environment Key
+
+struct APIBaseURLKey: EnvironmentKey {
+    static let defaultValue = ""
+}
+
+extension EnvironmentValues {
+    var apiBaseURL: String {
+        get { self[APIBaseURLKey.self] }
+        set { self[APIBaseURLKey.self] = newValue }
+    }
+}
+
+// MARK: - Avatar URL Resolution
+
+/// Resolves an avatar URL string into a full URL.
+/// Handles three cases:
+/// - Relative paths (`/v1/files/...`) — prepends the API base URL
+/// - Absolute URLs (`https://...`) — used as-is
+/// - Nil/empty — returns nil
+func resolveAvatarURL(_ avatarURL: String?, baseURL: String) -> URL? {
+    guard let avatarURL, !avatarURL.isEmpty else { return nil }
+    if avatarURL.hasPrefix("/") {
+        return URL(string: baseURL + avatarURL)
+    }
+    return URL(string: avatarURL)
+}
+
 // MARK: - Simply Plural Import Models
 struct SPPreviewMember: Codable, Identifiable {
     let id: String
