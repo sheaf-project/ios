@@ -83,3 +83,6 @@ gen/
 .env
 .env.local
 secrets.xcconfig
+
+# API
+openapi.json
