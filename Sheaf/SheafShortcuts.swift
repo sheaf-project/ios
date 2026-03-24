@@ -17,8 +17,8 @@ struct SheafShortcuts: AppShortcutsProvider {
         AppShortcut(
             intent: AddToFrontIntent(),
             phrases: [
-                "Add someone to front in \(.applicationName)",
                 "Add to front in \(.applicationName)",
+                "Add someone to front in \(.applicationName)",
                 "Co-front in \(.applicationName)",
                 ],
             shortTitle: "Add to Front",
@@ -27,8 +27,8 @@ struct SheafShortcuts: AppShortcutsProvider {
         AppShortcut(
             intent: RemoveFromFrontIntent(),
             phrases: [
-                "Remove someone from front in \(.applicationName)",
                 "Remove from front in \(.applicationName)",
+                "Remove someone from front in \(.applicationName)",
                 ],
             shortTitle: "Remove from Front",
             systemImageName: "person.fill.xmark"
@@ -154,12 +154,9 @@ struct AddToFrontIntent: AppIntent {
         description: "Who to add to front",
         requestValueDialog: IntentDialog("Who should be added to front?")
     )
-    var member: MemberEntity?
+    var member: MemberEntity
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
-        guard let member else {
-            throw $member.needsValueError("Who should be added to front?")
-        }
         let store = ShortcutsDataStore.shared
         let currentIDs = await store.currentFrontingIDs
         let newIDs = Array(Set(currentIDs + [member.id]))
@@ -200,12 +197,9 @@ struct RemoveFromFrontIntent: AppIntent {
         description: "Who to remove from front",
         requestValueDialog: IntentDialog("Who should be removed from front?")
     )
-    var member: MemberEntity?
+    var member: MemberEntity
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
-        guard let member else {
-            throw $member.needsValueError("Who should be removed from front?")
-        }
         let store = ShortcutsDataStore.shared
         let currentIDs = await store.currentFrontingIDs
 

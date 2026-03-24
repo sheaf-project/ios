@@ -20,11 +20,9 @@ struct SimplyPluralImportSheet: View {
 
     // Import options
     @State private var importSystemProfile = true
-    @State private var importCustomFronts  = true
     @State private var importCustomFields  = true
     @State private var importGroups        = true
     @State private var importFrontHistory  = false
-    @State private var importNotes         = false
 
     // Member selection for selective import
     @State private var selectedMemberIDs: Set<String> = []
@@ -139,15 +137,11 @@ struct SimplyPluralImportSheet: View {
                 VStack(spacing: 0) {
                     summaryRow(icon: "person.2.fill",     label: "Members",        count: preview.memberCount)
                     Divider().background(theme.divider)
-                    summaryRow(icon: "person.fill.badge.plus", label: "Custom Fronts", count: preview.customFrontCount)
-                    Divider().background(theme.divider)
                     summaryRow(icon: "arrow.left.arrow.right", label: "Front History", count: preview.frontHistoryCount)
                     Divider().background(theme.divider)
                     summaryRow(icon: "square.grid.2x2.fill",  label: "Groups",         count: preview.groupCount)
                     Divider().background(theme.divider)
                     summaryRow(icon: "list.bullet",            label: "Custom Fields",  count: preview.customFieldCount)
-                    Divider().background(theme.divider)
-                    summaryRow(icon: "note.text",              label: "Notes",          count: preview.noteCount)
                 }
                 .background(theme.backgroundCard)
                 .cornerRadius(16)
@@ -209,15 +203,11 @@ struct SimplyPluralImportSheet: View {
                 Divider().background(theme.divider).padding(.leading, 52)
                 toggleRow(label: "Members",          icon: "person.2.fill",             value: .constant(true), disabled: true)
                 Divider().background(theme.divider).padding(.leading, 52)
-                toggleRow(label: "Custom Fronts",   icon: "person.fill.badge.plus",    value: $importCustomFronts)
-                Divider().background(theme.divider).padding(.leading, 52)
                 toggleRow(label: "Custom Fields",   icon: "list.bullet",               value: $importCustomFields)
                 Divider().background(theme.divider).padding(.leading, 52)
                 toggleRow(label: "Groups",           icon: "square.grid.2x2.fill",      value: $importGroups)
                 Divider().background(theme.divider).padding(.leading, 52)
                 toggleRow(label: "Front History",   icon: "clock.fill",                value: $importFrontHistory)
-                Divider().background(theme.divider).padding(.leading, 52)
-                toggleRow(label: "Notes",            icon: "note.text",                 value: $importNotes)
             }
             .background(theme.backgroundCard)
             .cornerRadius(16)
@@ -328,8 +318,6 @@ struct SimplyPluralImportSheet: View {
             if let result {
                 VStack(spacing: 0) {
                     resultRow(icon: "person.2.fill",          label: "Members imported",       count: result.membersImported)
-                    Divider().background(theme.divider)
-                    resultRow(icon: "person.fill.badge.plus", label: "Custom fronts imported", count: result.customFrontsImported)
                     Divider().background(theme.divider)
                     resultRow(icon: "clock.fill",             label: "Fronts imported",        count: result.frontsImported)
                     Divider().background(theme.divider)
@@ -457,11 +445,9 @@ struct SimplyPluralImportSheet: View {
                 filename: fileName,
                 systemProfile: importSystemProfile,
                 memberIDs: ids,
-                customFronts: importCustomFronts,
                 customFields: importCustomFields,
                 groups: importGroups,
                 frontHistory: importFrontHistory,
-                notes: importNotes
             )
             await MainActor.run {
                 result = importResult
