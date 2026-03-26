@@ -129,19 +129,11 @@ struct AddFrontEntrySheet: View {
         isSaving = true
         error = nil
         do {
-            let create = FrontCreate(
+            try await store.addFrontEntry(
                 memberIDs: Array(selectedIDs),
-                startedAt: startedAt
+                startedAt: startedAt,
+                endedAt: isOngoing ? nil : endedAt
             )
-            var entry = try await store.api!.createFront(create)
-
-            // If not ongoing, immediately patch with the end time
-            if !isOngoing {
-                entry = try await store.api!.updateFront(
-                    id: entry.id,
-                    update: FrontUpdate(endedAt: endedAt, memberIDs: nil)
-                )
-            }
             isSaving = false
             dismiss()
         } catch {

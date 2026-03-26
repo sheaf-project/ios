@@ -257,14 +257,8 @@ struct GroupDetailSheet: View {
         let newIDs = members
             .filter { $0.id != member.id }
             .map { $0.id }
-        do {
-            try await store.api?.setGroupMembers(groupID: group.id, memberIDs: newIDs)
-            await MainActor.run {
-                members.removeAll { $0.id == member.id }
-            }
-        } catch {
-            store.errorMessage = error.localizedDescription
-        }
+        await store.setGroupMembers(groupID: group.id, memberIDs: newIDs)
+        members.removeAll { $0.id == member.id }
     }
 }
 
