@@ -16,13 +16,7 @@ struct MembersView: View {
             .filter { $0.id != member.id }
             .map { $0.id }
         if remaining.isEmpty {
-            for front in store.currentFronts where front.endedAt == nil {
-                _ = try? await store.api?.updateFront(
-                    id: front.id,
-                    update: FrontUpdate(endedAt: Date(), memberIDs: nil)
-                )
-            }
-            await MainActor.run { store.currentFronts = [] }
+            await store.endAllFronts()
         } else {
             await store.switchFronting(to: remaining)
         }
@@ -225,13 +219,7 @@ struct MemberRow: View {
             .filter { $0.id != member.id }
             .map { $0.id }
         if remaining.isEmpty {
-            for front in store.currentFronts where front.endedAt == nil {
-                _ = try? await store.api?.updateFront(
-                    id: front.id,
-                    update: FrontUpdate(endedAt: Date(), memberIDs: nil)
-                )
-            }
-            await MainActor.run { store.currentFronts = [] }
+            await store.endAllFronts()
         } else {
             await store.switchFronting(to: remaining)
         }

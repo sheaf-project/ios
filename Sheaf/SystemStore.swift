@@ -508,6 +508,55 @@ class SystemStore: ObservableObject {
         }
     }
 
+    /// End all currently active fronts.
+    func endAllFronts() async {
+        let now = Date()
+        for front in currentFronts where front.endedAt == nil {
+            await updateFront(id: front.id, update: FrontUpdate(endedAt: now, memberIDs: nil))
+        }
+        // updateFront sets endedAt on currentFronts entries — filter them out
+        currentFronts.removeAll { $0.endedAt != nil }
+        saveAllToCache()
+    }
+
+    /// Create a front entry (possibly already-ended) and update local state.
+    func addFrontEntry(memberIDs: [String], startedAt: Date, endedAt: Date?) async throws {
+        guard let api else { throw URLError(.badURL) }
+
+        if NetworkMonitor.shared.isOnline {
+            var entry = try await api.createFront(FrontCreate(memberIDs: memberIDs, startedAt: startedAt))
+            if let endedAt {
+                entry = try await api.updateFront(id: entry.id, update: FrontUpdate(endedAt: endedAt, memberIDs: nil))
+            }
+            frontHistory.insert(entry, at: 0)
+            if entry.endedAt == nil {
+                currentFronts.append(entry)
+            }
+            saveAllToCache()
+        } else {
+            let tempID = UUID().uuidString
+            let create = FrontCreate(memberIDs: memberIDs, startedAt: startedAt)
+            if let body = try? JSONEncoder.iso.encode(create) {
+                enqueue(.createFront, tempID: tempID, body: body)
+            }
+            if let endedAt {
+                let update = FrontUpdate(endedAt: endedAt, memberIDs: nil)
+                if let body = try? JSONEncoder.iso.encode(update) {
+                    enqueue(.updateFront, resourceID: tempID, body: body)
+                }
+            }
+            let optimistic = FrontEntry(
+                id: tempID, systemID: systemProfile?.id ?? "",
+                startedAt: startedAt, endedAt: endedAt, memberIDs: memberIDs
+            )
+            frontHistory.insert(optimistic, at: 0)
+            if endedAt == nil {
+                currentFronts.append(optimistic)
+            }
+            saveAllToCache()
+        }
+    }
+
     // MARK: - Members
 
     func saveMember(existing: Member? = nil, create: MemberCreate) async {
