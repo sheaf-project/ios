@@ -1,6 +1,455 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
+// MARK: - Sheaf Import Sheet
+struct SheafImportSheet: View {
+    @EnvironmentObject var store: SystemStore
+    @Environment(\.theme) var theme
+    @Environment(\.dismiss) var dismiss
+
+    enum Step { case pick, preview, options, importing, done, failed }
+
+    @State private var step: Step = .pick
+    @State private var fileData: Data?
+    @State private var fileName: String = ""
+    @State private var previewSummary: [String: Any] = [:]
+    @State private var errorMessage: String = ""
+    @State private var isLoading = false
+    @State private var showFilePicker = false
+
+    // Import options
+    @State private var importSystemProfile = true
+    @State private var importFronts        = true
+    @State private var importGroups        = true
+    @State private var importTags          = true
+    @State private var importCustomFields  = true
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 0) {
+                    switch step {
+                    case .pick:      sheafPickStep
+                    case .preview:   sheafPreviewStep
+                    case .options:   sheafOptionsStep
+                    case .importing: sheafImportingStep
+                    case .done:      sheafDoneStep
+                    case .failed:    sheafFailedStep
+                    }
+                }
+                .padding(.horizontal, 24)
+                .padding(.top, 8)
+                .padding(.bottom, 48)
+                .frame(maxWidth: .infinity, alignment: .top)
+            }
+            .background(theme.backgroundPrimary)
+            .navigationTitle(sheafHeaderTitle)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                if step != .done {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") { dismiss() }
+                            .foregroundColor(theme.accentLight)
+                    }
+                }
+            }
+        }
+        .presentationDetents([.large])
+        .fileImporter(
+            isPresented: $showFilePicker,
+            allowedContentTypes: [.json],
+            allowsMultipleSelection: false
+        ) { result in
+            handleSheafFilePick(result)
+        }
+    }
+
+    // MARK: - Steps
+
+    var sheafPickStep: some View {
+        VStack(spacing: 24) {
+            VStack(spacing: 12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 20)
+                        .fill(theme.accentSoft)
+                        .frame(width: 72, height: 72)
+                    Image(systemName: "arrow.down.doc.fill")
+                        .font(.system(size: 30))
+                        .foregroundColor(theme.accentLight)
+                }
+                Text("Import from Sheaf Export")
+                    .font(.system(size: 20, weight: .bold, design: .rounded))
+                    .foregroundColor(theme.textPrimary)
+                Text("Select a Sheaf export JSON file to preview and import your data.")
+                    .font(.system(size: 14))
+                    .foregroundColor(theme.textSecondary)
+                    .multilineTextAlignment(.center)
+            }
+            .padding(.top, 8)
+
+            VStack(alignment: .leading, spacing: 12) {
+                sheafInstructionRow(number: "1", text: "Go to Settings and tap \"Export All Data\"")
+                sheafInstructionRow(number: "2", text: "Save the JSON file to your device")
+                sheafInstructionRow(number: "3", text: "Come back here and select that file")
+            }
+            .padding(16)
+            .background(theme.backgroundCard)
+            .cornerRadius(16)
+            .overlay(RoundedRectangle(cornerRadius: 16).stroke(theme.border, lineWidth: 1))
+
+            sheafPrimaryButton(label: "Choose Export File", icon: "doc.badge.plus") {
+                showFilePicker = true
+            }
+        }
+    }
+
+    var sheafPreviewStep: some View {
+        VStack(spacing: 20) {
+            if isLoading {
+                VStack(spacing: 16) {
+                    ProgressView().tint(theme.accentLight).scaleEffect(1.3)
+                    Text("Analyzing file...")
+                        .font(.system(size: 14))
+                        .foregroundColor(theme.textSecondary)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.top, 40)
+            } else {
+                // Display whatever summary the server returned
+                VStack(spacing: 0) {
+                    if let members = previewSummary["members"] as? Int {
+                        sheafSummaryRow(icon: "person.2.fill", label: "Members", count: members)
+                        Divider().background(theme.divider)
+                    }
+                    if let fronts = previewSummary["fronts"] as? Int {
+                        sheafSummaryRow(icon: "arrow.left.arrow.right", label: "Fronts", count: fronts)
+                        Divider().background(theme.divider)
+                    }
+                    if let groups = previewSummary["groups"] as? Int {
+                        sheafSummaryRow(icon: "square.grid.2x2.fill", label: "Groups", count: groups)
+                        Divider().background(theme.divider)
+                    }
+                    if let tags = previewSummary["tags"] as? Int {
+                        sheafSummaryRow(icon: "tag.fill", label: "Tags", count: tags)
+                        Divider().background(theme.divider)
+                    }
+                    if let fields = previewSummary["custom_fields"] as? Int {
+                        sheafSummaryRow(icon: "list.bullet", label: "Custom Fields", count: fields)
+                    }
+
+                    // If server returned no recognizable counts, show a generic message
+                    if previewSummary.isEmpty || !previewSummary.values.contains(where: { $0 is Int }) {
+                        HStack {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundColor(theme.success)
+                            Text("File is valid and ready to import")
+                                .font(.system(size: 15))
+                                .foregroundColor(theme.textPrimary)
+                            Spacer()
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 14)
+                    }
+                }
+                .background(theme.backgroundCard)
+                .cornerRadius(16)
+                .overlay(RoundedRectangle(cornerRadius: 16).stroke(theme.border, lineWidth: 1))
+
+                sheafPrimaryButton(label: "Configure Import", icon: "slider.horizontal.3") {
+                    withAnimation { step = .options }
+                }
+
+                Button {
+                    step = .pick
+                    previewSummary = [:]
+                    fileData = nil
+                } label: {
+                    Text("Choose a different file")
+                        .font(.system(size: 14))
+                        .foregroundColor(theme.textTertiary)
+                }
+            }
+        }
+    }
+
+    var sheafOptionsStep: some View {
+        VStack(spacing: 20) {
+            VStack(alignment: .leading, spacing: 0) {
+                sheafSectionHeader("What to import")
+                sheafToggleRow(label: "System Profile", icon: "sparkles", value: $importSystemProfile)
+                Divider().background(theme.divider).padding(.leading, 52)
+                sheafToggleRow(label: "Fronts", icon: "arrow.left.arrow.right", value: $importFronts)
+                Divider().background(theme.divider).padding(.leading, 52)
+                sheafToggleRow(label: "Groups", icon: "square.grid.2x2.fill", value: $importGroups)
+                Divider().background(theme.divider).padding(.leading, 52)
+                sheafToggleRow(label: "Tags", icon: "tag.fill", value: $importTags)
+                Divider().background(theme.divider).padding(.leading, 52)
+                sheafToggleRow(label: "Custom Fields", icon: "list.bullet", value: $importCustomFields)
+            }
+            .background(theme.backgroundCard)
+            .cornerRadius(16)
+            .overlay(RoundedRectangle(cornerRadius: 16).stroke(theme.border, lineWidth: 1))
+
+            sheafPrimaryButton(label: "Start Import", icon: "square.and.arrow.down.fill") {
+                Task { await runSheafImport() }
+            }
+
+            Button { withAnimation { step = .preview } } label: {
+                Text("Back")
+                    .font(.system(size: 14))
+                    .foregroundColor(theme.textTertiary)
+            }
+        }
+    }
+
+    var sheafImportingStep: some View {
+        VStack(spacing: 20) {
+            Spacer().frame(height: 40)
+            ProgressView()
+                .tint(theme.accentLight)
+                .scaleEffect(1.5)
+            Text("Importing your data...")
+                .font(.system(size: 16, weight: .medium))
+                .foregroundColor(theme.textPrimary)
+            Text("This may take a moment")
+                .font(.system(size: 13))
+                .foregroundColor(theme.textSecondary)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    var sheafDoneStep: some View {
+        VStack(spacing: 20) {
+            Spacer().frame(height: 20)
+
+            ZStack {
+                Circle()
+                    .fill(theme.success.opacity(0.15))
+                    .frame(width: 88, height: 88)
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 48))
+                    .foregroundColor(theme.success)
+            }
+            .shadow(color: theme.success.opacity(0.3), radius: 16)
+
+            Text("Import Complete!")
+                .font(.system(size: 22, weight: .bold, design: .rounded))
+                .foregroundColor(theme.textPrimary)
+
+            Text("Your Sheaf data has been imported successfully.")
+                .font(.system(size: 14))
+                .foregroundColor(theme.textSecondary)
+                .multilineTextAlignment(.center)
+
+            sheafPrimaryButton(label: "Done", icon: "checkmark") {
+                store.loadAll()
+                dismiss()
+            }
+        }
+    }
+
+    var sheafFailedStep: some View {
+        VStack(spacing: 20) {
+            Spacer().frame(height: 20)
+
+            ZStack {
+                Circle()
+                    .fill(theme.danger.opacity(0.12))
+                    .frame(width: 88, height: 88)
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 48))
+                    .foregroundColor(theme.danger)
+            }
+
+            Text("Import Failed")
+                .font(.system(size: 22, weight: .bold, design: .rounded))
+                .foregroundColor(theme.textPrimary)
+
+            Text(errorMessage)
+                .font(.system(size: 14))
+                .foregroundColor(theme.textSecondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 8)
+
+            sheafPrimaryButton(label: "Try Again", icon: "arrow.clockwise") {
+                withAnimation { step = .pick }
+                fileData = nil
+                previewSummary = [:]
+                errorMessage = ""
+            }
+
+            Button { dismiss() } label: {
+                Text("Cancel")
+                    .font(.system(size: 14))
+                    .foregroundColor(theme.textTertiary)
+            }
+        }
+    }
+
+    // MARK: - Actions
+
+    private func handleSheafFilePick(_ result: Result<[URL], Error>) {
+        switch result {
+        case .failure(let e):
+            errorMessage = e.localizedDescription
+            step = .failed
+        case .success(let urls):
+            guard let url = urls.first else { return }
+            let accessing = url.startAccessingSecurityScopedResource()
+            defer { if accessing { url.stopAccessingSecurityScopedResource() } }
+            guard let data = try? Data(contentsOf: url) else {
+                errorMessage = "Could not read the file. Make sure it's a valid JSON file."
+                step = .failed
+                return
+            }
+            fileData = data
+            fileName = url.lastPathComponent
+            step = .preview
+            isLoading = true
+            Task { await loadSheafPreview(data: data, filename: url.lastPathComponent) }
+        }
+    }
+
+    private func loadSheafPreview(data: Data, filename: String) async {
+        guard let api = store.api else { return }
+        do {
+            let responseData = try await api.previewSheafImport(fileData: data, filename: filename)
+            let summary = (try? JSONSerialization.jsonObject(with: responseData) as? [String: Any]) ?? [:]
+            await MainActor.run {
+                previewSummary = summary
+                isLoading = false
+            }
+        } catch {
+            await MainActor.run {
+                errorMessage = error.localizedDescription
+                isLoading = false
+                step = .failed
+            }
+        }
+    }
+
+    private func runSheafImport() async {
+        guard let api = store.api, let data = fileData else { return }
+        withAnimation { step = .importing }
+        do {
+            _ = try await api.doSheafImport(
+                fileData: data,
+                filename: fileName,
+                systemProfile: importSystemProfile,
+                fronts: importFronts,
+                groups: importGroups,
+                tags: importTags,
+                customFields: importCustomFields
+            )
+            await MainActor.run {
+                withAnimation { step = .done }
+            }
+        } catch {
+            await MainActor.run {
+                errorMessage = error.localizedDescription
+                withAnimation { step = .failed }
+            }
+        }
+    }
+
+    // MARK: - Helpers
+
+    var sheafHeaderTitle: String {
+        switch step {
+        case .pick:      return "Import from Sheaf"
+        case .preview:   return "Preview"
+        case .options:   return "Import Options"
+        case .importing: return "Importing..."
+        case .done:      return "All Done"
+        case .failed:    return "Error"
+        }
+    }
+
+    func sheafInstructionRow(number: String, text: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill(theme.accentSoft)
+                    .frame(width: 24, height: 24)
+                Text(number)
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(theme.accentLight)
+            }
+            Text(text)
+                .font(.system(size: 14))
+                .foregroundColor(theme.textSecondary)
+            Spacer()
+        }
+    }
+
+    func sheafSummaryRow(icon: String, label: String, count: Int) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .foregroundColor(theme.accentLight)
+                .frame(width: 20)
+            Text(label)
+                .font(.system(size: 15))
+                .foregroundColor(theme.textPrimary)
+            Spacer()
+            Text("\(count)")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(count > 0 ? theme.accentLight : theme.textTertiary)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+    }
+
+    func sheafSectionHeader(_ title: String) -> some View {
+        Text(title)
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundColor(theme.textTertiary)
+            .textCase(.uppercase)
+            .kerning(0.8)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    func sheafToggleRow(label: String, icon: String, value: Binding<Bool>) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .foregroundColor(theme.accentLight)
+                .frame(width: 20)
+            Text(label)
+                .font(.system(size: 15))
+                .foregroundColor(theme.textPrimary)
+            Spacer()
+            Toggle("", isOn: value)
+                .labelsHidden()
+                .tint(theme.accentLight)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+    }
+
+    func sheafPrimaryButton(label: String, icon: String, disabled: Bool = false, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack {
+                Text(label).font(.system(size: 16, weight: .semibold))
+                Image(systemName: icon)
+            }
+            .foregroundColor(.white)
+            .frame(maxWidth: .infinity)
+            .padding(16)
+            .background(Group {
+                if disabled {
+                    theme.backgroundElevated
+                } else {
+                    LinearGradient(colors: [theme.accentLight, theme.accent],
+                                   startPoint: .leading, endPoint: .trailing)
+                }
+            })
+            .cornerRadius(14)
+        }
+        .disabled(disabled)
+    }
+}
+
 // MARK: - Simply Plural Import Sheet
 struct SimplyPluralImportSheet: View {
     @EnvironmentObject var store: SystemStore

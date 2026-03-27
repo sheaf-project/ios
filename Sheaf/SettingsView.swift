@@ -11,6 +11,7 @@ struct SettingsView: View {
     @State private var showLogoutConfirm = false
     @State private var showEditSystem = false
     @State private var showImport = false
+    @State private var showSheafImport = false
     @State private var showEditConnection = false
     @State private var showTOTPSetup = false
     @State private var newBaseURL = ""
@@ -137,7 +138,7 @@ struct SettingsView: View {
                     // Data Management
                     settingsSection(title: "Data Management") {
                         VStack(spacing: 0) {
-                            // Import
+                            // Import from Simply Plural
                             Button { showImport = true } label: {
                                 HStack {
                                     Image(systemName: "square.and.arrow.down.fill")
@@ -153,7 +154,26 @@ struct SettingsView: View {
                                 }
                                 .padding(.horizontal, 16).padding(.vertical, 14)
                             }
-                            
+
+                            Divider().background(theme.divider)
+
+                            // Import from Sheaf
+                            Button { showSheafImport = true } label: {
+                                HStack {
+                                    Image(systemName: "square.and.arrow.down.on.square.fill")
+                                        .foregroundColor(theme.accentLight)
+                                        .frame(width: 20)
+                                    Text("Import from Sheaf Export")
+                                        .font(.system(size: 15, weight: .medium))
+                                        .foregroundColor(theme.textPrimary)
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 12))
+                                        .foregroundColor(theme.textTertiary)
+                                }
+                                .padding(.horizontal, 16).padding(.vertical, 14)
+                            }
+
                             Divider().background(theme.divider)
                             
                             // Export
@@ -389,6 +409,10 @@ struct SettingsView: View {
         }
         .sheet(isPresented: $showImport) {
             SimplyPluralImportSheet()
+                .environmentObject(store)
+        }
+        .sheet(isPresented: $showSheafImport) {
+            SheafImportSheet()
                 .environmentObject(store)
         }
         .sheet(isPresented: $showEditConnection) {
@@ -1507,6 +1531,9 @@ struct AdminPanelView: View {
     private var adminContent: some View {
         ScrollView {
             VStack(spacing: 24) {
+                // Pending Approvals
+                approvalsSection
+
                 // Stats
                 statsSection
 
@@ -1522,6 +1549,168 @@ struct AdminPanelView: View {
         .refreshable {
             await loadStats()
             await loadUsers(reset: true)
+        }
+    }
+
+    // MARK: - Approvals Section
+
+    @State private var approvals: [PendingUserRead] = []
+    @State private var isLoadingApprovals = false
+    @State private var approvalToApprove: PendingUserRead?
+    @State private var approvalToReject: PendingUserRead?
+
+    private var approvalsSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("PENDING APPROVALS")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(theme.textSecondary)
+                .textCase(.uppercase)
+                .kerning(0.8)
+                .padding(.horizontal, 24)
+
+            if isLoadingApprovals {
+                HStack { Spacer(); ProgressView().tint(theme.accentLight); Spacer() }
+                    .padding(.vertical, 20)
+            } else if approvals.isEmpty {
+                HStack {
+                    Spacer()
+                    VStack(spacing: 8) {
+                        Image(systemName: "checkmark.seal.fill")
+                            .font(.system(size: 28))
+                            .foregroundColor(theme.success)
+                        Text("No pending approvals")
+                            .font(.system(size: 14))
+                            .foregroundColor(theme.textSecondary)
+                    }
+                    .padding(.vertical, 20)
+                    Spacer()
+                }
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(approvals) { user in
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(user.email)
+                                        .font(.system(size: 15, weight: .medium))
+                                        .foregroundColor(theme.textPrimary)
+                                    HStack(spacing: 8) {
+                                        Text(user.createdAt, style: .date)
+                                            .font(.system(size: 12))
+                                            .foregroundColor(theme.textTertiary)
+                                        if let ip = user.signupIp {
+                                            Text(ip)
+                                                .font(.system(size: 11, design: .monospaced))
+                                                .foregroundColor(theme.textTertiary)
+                                        }
+                                        if !user.emailVerified {
+                                            Text("Unverified")
+                                                .font(.system(size: 10, weight: .medium))
+                                                .foregroundColor(theme.warning)
+                                                .padding(.horizontal, 6)
+                                                .padding(.vertical, 2)
+                                                .background(theme.warning.opacity(0.12))
+                                                .cornerRadius(4)
+                                        }
+                                    }
+                                }
+                                Spacer()
+                            }
+                            HStack(spacing: 10) {
+                                Button {
+                                    approvalToApprove = user
+                                } label: {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "checkmark.circle.fill")
+                                        Text("Approve")
+                                    }
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundColor(theme.success)
+                                    .padding(.horizontal, 14)
+                                    .padding(.vertical, 8)
+                                    .background(theme.success.opacity(0.12))
+                                    .cornerRadius(10)
+                                }
+                                Button {
+                                    approvalToReject = user
+                                } label: {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "xmark.circle.fill")
+                                        Text("Reject")
+                                    }
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundColor(theme.danger)
+                                    .padding(.horizontal, 14)
+                                    .padding(.vertical, 8)
+                                    .background(theme.danger.opacity(0.12))
+                                    .cornerRadius(10)
+                                }
+                                Spacer()
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+
+                        if user.id != approvals.last?.id {
+                            Divider().background(theme.divider).padding(.leading, 16)
+                        }
+                    }
+                }
+                .background(theme.backgroundCard)
+                .cornerRadius(14)
+                .padding(.horizontal, 24)
+            }
+        }
+        .task { await loadApprovals() }
+        .confirmationDialog("Approve this user?", isPresented: .init(
+            get: { approvalToApprove != nil },
+            set: { if !$0 { approvalToApprove = nil } }
+        ), titleVisibility: .visible) {
+            Button("Approve") {
+                if let user = approvalToApprove {
+                    Task { await performApproval(userID: user.id, approve: true) }
+                }
+            }
+            Button("Cancel", role: .cancel) { approvalToApprove = nil }
+        } message: {
+            Text("This will activate the account for \(approvalToApprove?.email ?? "this user").")
+        }
+        .confirmationDialog("Reject this user?", isPresented: .init(
+            get: { approvalToReject != nil },
+            set: { if !$0 { approvalToReject = nil } }
+        ), titleVisibility: .visible) {
+            Button("Reject", role: .destructive) {
+                if let user = approvalToReject {
+                    Task { await performApproval(userID: user.id, approve: false) }
+                }
+            }
+            Button("Cancel", role: .cancel) { approvalToReject = nil }
+        } message: {
+            Text("This will reject and delete the account for \(approvalToReject?.email ?? "this user").")
+        }
+    }
+
+    private func loadApprovals() async {
+        guard let api = store.api else { return }
+        isLoadingApprovals = true
+        approvals = (try? await api.getApprovals()) ?? []
+        isLoadingApprovals = false
+    }
+
+    private func performApproval(userID: String, approve: Bool) async {
+        guard let api = store.api else { return }
+        do {
+            if approve {
+                try await api.approveUser(userID: userID)
+            } else {
+                try await api.rejectUser(userID: userID)
+            }
+            withAnimation {
+                approvals.removeAll { $0.id == userID }
+            }
+        } catch {
+            // Reload on error
+            await loadApprovals()
         }
     }
 

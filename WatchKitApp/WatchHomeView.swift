@@ -64,6 +64,7 @@ struct WatchHomeView: View {
                 }
             }
         }
+        .onAppear { store.loadAll() }
     }
 
     private func removeFromFront(member: Member) async {

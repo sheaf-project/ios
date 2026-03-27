@@ -27,8 +27,10 @@ class WatchStore: ObservableObject {
             defer { isLoading = false }
             do {
                 async let m  = api?.getMembers()       ?? []
+                async let g  = api?.getGroups()        ?? []
                 async let fr = api?.getCurrentFronts() ?? []
                 members       = try await m
+                groups        = try await g
                 currentFronts = try await fr
                 
                 // Update complication data
@@ -53,6 +55,47 @@ class WatchStore: ObservableObject {
         do {
             let created = try await api.createMember(MemberCreate(name: name, pronouns: pronouns))
             members.append(created)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    // MARK: - Groups
+
+    func createGroup(name: String) async {
+        guard let api else { return }
+        do {
+            let created = try await api.createGroup(GroupCreate(name: name))
+            groups.append(created)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func deleteGroup(id: String) async {
+        guard let api else { return }
+        do {
+            try await api.deleteGroup(id: id)
+            groups.removeAll { $0.id == id }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func getGroupMembers(groupID: String) async -> [Member] {
+        guard let api else { return [] }
+        do {
+            return try await api.getGroupMembers(groupID: groupID)
+        } catch {
+            errorMessage = error.localizedDescription
+            return []
+        }
+    }
+
+    func setGroupMembers(groupID: String, memberIDs: [String]) async {
+        guard let api else { return }
+        do {
+            _ = try await api.setGroupMembers(groupID: groupID, memberIDs: memberIDs)
         } catch {
             errorMessage = error.localizedDescription
         }
