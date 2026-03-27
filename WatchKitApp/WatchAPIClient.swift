@@ -72,6 +72,12 @@ class WatchAPIClient {
         return try JSONDecoder.iso.decode(FrontEntry.self, from: data)
     }
 
+    func createMember(_ create: MemberCreate) async throws -> Member {
+        let body = try JSONEncoder.iso.encode(create)
+        let data = try await request("/v1/members", method: "POST", body: body)
+        return try JSONDecoder.iso.decode(Member.self, from: data)
+    }
+
     func updateFront(id: String, update: FrontUpdate) async throws -> FrontEntry {
         let body = try JSONEncoder.iso.encode(update)
         let data = try await request("/v1/fronts/\(id)", method: "PATCH", body: body)
