@@ -48,6 +48,16 @@ class WatchStore: ObservableObject {
         currentFronts.min(by: { $0.startedAt < $1.startedAt })
     }
 
+    func createMember(name: String, pronouns: String? = nil) async {
+        guard let api else { return }
+        do {
+            let created = try await api.createMember(MemberCreate(name: name, pronouns: pronouns))
+            members.append(created)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
     func switchFronting(to memberIDs: [String]) async {
         guard let api else { return }
         do {

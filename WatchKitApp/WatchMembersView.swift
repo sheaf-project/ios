@@ -3,6 +3,7 @@ import SwiftUI
 // MARK: - Members list page
 struct WatchMembersView: View {
     @EnvironmentObject var store: WatchStore
+    @State private var showAddMember = false
 
     var body: some View {
         List {
@@ -62,6 +63,19 @@ struct WatchMembersView: View {
             }
         }
         .navigationTitle("Members")
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    showAddMember = true
+                } label: {
+                    Image(systemName: "plus")
+                }
+            }
+        }
+        .sheet(isPresented: $showAddMember) {
+            WatchAddMemberSheet()
+                .environmentObject(store)
+        }
     }
 
     private func addToFront(_ member: Member) async {
@@ -205,6 +219,40 @@ struct WatchMemberTile: View {
                 Circle()
                     .fill(Color.green)
                     .frame(width: 7, height: 7)
+            }
+        }
+    }
+}
+
+// MARK: - Add Member Sheet
+struct WatchAddMemberSheet: View {
+    @EnvironmentObject var store: WatchStore
+    @Environment(\.dismiss) private var dismiss
+    @State private var name = ""
+    @State private var pronouns = ""
+    @State private var isSaving = false
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                TextField("Name", text: $name)
+                TextField("Pronouns", text: $pronouns)
+            }
+            .navigationTitle("New Member")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Add") {
+                        isSaving = true
+                        Task {
+                            await store.createMember(name: name, pronouns: pronouns.isEmpty ? nil : pronouns)
+                            dismiss()
+                        }
+                    }
+                    .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty || isSaving)
+                }
             }
         }
     }
