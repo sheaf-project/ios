@@ -1,6 +1,13 @@
 import Foundation
 import SwiftUI
 
+// MARK: - Account Status
+enum AccountStatus: String, Codable {
+    case active = "active"
+    case pending = "pending"
+    case rejected = "rejected"
+}
+
 // MARK: - Privacy Level
 enum PrivacyLevel: String, Codable, CaseIterable {
     case `public` = "public"
@@ -342,21 +349,44 @@ struct UserRead: Codable {
     let totpEnabled: Bool
     let isAdmin: Bool
     let tier: String
+    let accountStatus: AccountStatus
+    let emailVerified: Bool
     let createdAt: Date
     let lastLoginAt: Date?
 
     enum CodingKeys: String, CodingKey {
         case id, email, tier
-        case totpEnabled  = "totp_enabled"
-        case isAdmin      = "is_admin"
-        case createdAt    = "created_at"
-        case lastLoginAt  = "last_login_at"
+        case totpEnabled   = "totp_enabled"
+        case isAdmin       = "is_admin"
+        case accountStatus = "account_status"
+        case emailVerified = "email_verified"
+        case createdAt     = "created_at"
+        case lastLoginAt   = "last_login_at"
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id            = try c.decode(String.self, forKey: .id)
+        email         = try c.decode(String.self, forKey: .email)
+        totpEnabled   = try c.decode(Bool.self, forKey: .totpEnabled)
+        isAdmin       = try c.decode(Bool.self, forKey: .isAdmin)
+        tier          = try c.decode(String.self, forKey: .tier)
+        accountStatus = try c.decodeIfPresent(AccountStatus.self, forKey: .accountStatus) ?? .active
+        emailVerified = try c.decodeIfPresent(Bool.self, forKey: .emailVerified) ?? true
+        createdAt     = try c.decode(Date.self, forKey: .createdAt)
+        lastLoginAt   = try c.decodeIfPresent(Date.self, forKey: .lastLoginAt)
     }
 }
 
 struct UserRegister: Codable {
     var email: String
     var password: String
+    var inviteCode: String?
+
+    enum CodingKeys: String, CodingKey {
+        case email, password
+        case inviteCode = "invite_code"
+    }
 }
 
 struct TokenResponse: Codable {
@@ -515,6 +545,9 @@ struct AdminUserRead: Codable, Identifiable {
     let email: String
     let tier: UserTier
     let isAdmin: Bool
+    let accountStatus: AccountStatus
+    let emailVerified: Bool
+    let signupIp: String?
     let memberLimit: Int?
     let storageUsedBytes: Int
     let memberCount: Int
@@ -523,12 +556,15 @@ struct AdminUserRead: Codable, Identifiable {
 
     enum CodingKeys: String, CodingKey {
         case id, email, tier
-        case isAdmin         = "is_admin"
-        case memberLimit     = "member_limit"
+        case isAdmin          = "is_admin"
+        case accountStatus    = "account_status"
+        case emailVerified    = "email_verified"
+        case signupIp         = "signup_ip"
+        case memberLimit      = "member_limit"
         case storageUsedBytes = "storage_used_bytes"
-        case memberCount     = "member_count"
-        case createdAt       = "created_at"
-        case lastLoginAt     = "last_login_at"
+        case memberCount      = "member_count"
+        case createdAt        = "created_at"
+        case lastLoginAt      = "last_login_at"
     }
 }
 
@@ -561,6 +597,22 @@ struct MemberLimitOverride: Codable {
 
     enum CodingKeys: String, CodingKey {
         case memberLimit = "member_limit"
+    }
+}
+
+// MARK: - Pending User (Admin Approvals)
+struct PendingUserRead: Codable, Identifiable {
+    let id: String
+    let email: String
+    let emailVerified: Bool
+    let signupIp: String?
+    let createdAt: Date
+
+    enum CodingKeys: String, CodingKey {
+        case id, email
+        case emailVerified = "email_verified"
+        case signupIp      = "signup_ip"
+        case createdAt     = "created_at"
     }
 }
 

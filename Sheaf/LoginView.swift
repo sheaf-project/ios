@@ -130,8 +130,16 @@ struct SignInForm: View {
                 // Login succeeded, save credentials
                 await MainActor.run {
                     authManager.save(baseURL: cleanURL, tokens: tokens)
-                    isLoading = false
                 }
+                // Check account status after login
+                let authedAPI = APIClient(auth: authManager)
+                if let me = try? await authedAPI.getMe() {
+                    await MainActor.run {
+                        authManager.accountStatus = me.accountStatus
+                        authManager.emailVerified = me.emailVerified
+                    }
+                }
+                await MainActor.run { isLoading = false }
             } catch let loginError as NSError {
                 // Check if login failed due to TOTP requirement
                 let errorMessage = loginError.localizedDescription.lowercased()
@@ -236,10 +244,11 @@ struct RegisterForm: View {
     @State private var email            = ""
     @State private var password         = ""
     @State private var confirmPassword  = ""
+    @State private var inviteCode       = ""
     @State private var error            = ""
     @State private var isLoading        = false
     @FocusState private var focused: Field?
-    enum Field { case url, email, password, confirm }
+    enum Field { case url, email, password, confirm, invite }
 
     var body: some View {
         VStack(spacing: 20) {
@@ -247,6 +256,7 @@ struct RegisterForm: View {
             formField(icon: "envelope.fill", label: String(localized: "Email"),              placeholder: String(localized: "you@example.com"),              value: $email,           field: .email,   keyboard: .emailAddress)
             secureField(                     label: String(localized: "Password"),            placeholder: String(localized: "At least 8 characters"),        value: $password,        field: .password)
             secureField(                     label: String(localized: "Confirm Password"),    placeholder: String(localized: "••••••••"),                     value: $confirmPassword, field: .confirm)
+            formField(icon: "ticket.fill",   label: String(localized: "Invite Code"),         placeholder: String(localized: "Optional"),                     value: $inviteCode,      field: .invite,  keyboard: .default)
 
             // Password strength indicator
             if !password.isEmpty {
@@ -295,11 +305,24 @@ struct RegisterForm: View {
         let api = APIClient(auth: tempAuth)
         Task {
             do {
-                let tokens = try await api.register(email: email, password: password)
+                let code = inviteCode.trimmingCharacters(in: .whitespacesAndNewlines)
+                let tokens = try await api.register(
+                    email: email,
+                    password: password,
+                    inviteCode: code.isEmpty ? nil : code
+                )
                 await MainActor.run {
                     authManager.save(baseURL: cleanURL, tokens: tokens)
-                    isLoading = false
                 }
+                // Check account status after registration
+                let authedAPI = APIClient(auth: authManager)
+                if let me = try? await authedAPI.getMe() {
+                    await MainActor.run {
+                        authManager.accountStatus = me.accountStatus
+                        authManager.emailVerified = me.emailVerified
+                    }
+                }
+                await MainActor.run { isLoading = false }
             } catch {
                 await MainActor.run { self.error = error.localizedDescription; isLoading = false }
             }
@@ -416,6 +439,306 @@ struct PasswordStrengthBar: View {
             Text(label)
                 .font(.system(size: 11, weight: .medium))
                 .foregroundColor(color)
+        }
+    }
+}
+
+// MARK: - Email Verification Gate
+struct EmailVerificationGateView: View {
+    @EnvironmentObject var authManager: AuthManager
+    @Environment(\.theme) var theme
+    @State private var isResending = false
+    @State private var isChecking = false
+    @State private var message = ""
+
+    var body: some View {
+        ZStack {
+            theme.loginGradient
+                .ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                Spacer()
+
+                ZStack {
+                    Circle()
+                        .fill(LinearGradient(
+                            colors: [theme.accentLight, theme.accent],
+                            startPoint: .topLeading, endPoint: .bottomTrailing))
+                        .frame(width: 72, height: 72)
+                    Image(systemName: "envelope.badge.fill")
+                        .font(.system(size: 30))
+                        .foregroundColor(.white)
+                }
+                .shadow(color: theme.accentLight.opacity(0.5), radius: 20)
+
+                Spacer().frame(height: 24)
+
+                Text("Check Your Email")
+                    .font(.system(size: 26, weight: .bold, design: .rounded))
+                    .foregroundColor(theme.textPrimary)
+
+                Spacer().frame(height: 8)
+
+                Text("We sent a verification link to your email. Please check your inbox and click the link to continue.")
+                    .font(.system(size: 14))
+                    .foregroundColor(theme.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 48)
+
+                Spacer().frame(height: 32)
+
+                if !message.isEmpty {
+                    Text(message)
+                        .font(.system(size: 13))
+                        .foregroundColor(theme.success)
+                        .padding(.bottom, 16)
+                }
+
+                // Resend button
+                Button {
+                    resendVerification()
+                } label: {
+                    HStack {
+                        if isResending { ProgressView().tint(.white) }
+                        else {
+                            Text("Resend Verification Email")
+                                .font(.system(size: 16, weight: .semibold))
+                            Image(systemName: "envelope.arrow.triangle.branch")
+                        }
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(16)
+                    .background(LinearGradient(colors: [theme.accentLight, theme.accent],
+                                               startPoint: .leading, endPoint: .trailing))
+                    .cornerRadius(14)
+                }
+                .disabled(isResending)
+                .padding(.horizontal, 40)
+
+                Spacer().frame(height: 12)
+
+                // Check status button
+                Button {
+                    checkStatus()
+                } label: {
+                    HStack {
+                        if isChecking { ProgressView().tint(theme.accentLight) }
+                        else {
+                            Text("I've Verified — Check Status")
+                                .font(.system(size: 15, weight: .medium))
+                        }
+                    }
+                    .foregroundColor(theme.accentLight)
+                    .frame(maxWidth: .infinity)
+                    .padding(14)
+                    .background(theme.accentSoft)
+                    .cornerRadius(14)
+                }
+                .disabled(isChecking)
+                .padding(.horizontal, 40)
+
+                Spacer().frame(height: 24)
+
+                Button { authManager.logout() } label: {
+                    Text("Log Out")
+                        .font(.system(size: 14))
+                        .foregroundColor(theme.textTertiary)
+                }
+
+                Spacer()
+            }
+        }
+    }
+
+    private func resendVerification() {
+        isResending = true
+        message = ""
+        let api = APIClient(auth: authManager)
+        Task {
+            do {
+                try await api.resendVerification()
+                await MainActor.run {
+                    message = "Verification email sent!"
+                    isResending = false
+                }
+            } catch {
+                await MainActor.run {
+                    message = error.localizedDescription
+                    isResending = false
+                }
+            }
+        }
+    }
+
+    private func checkStatus() {
+        isChecking = true
+        let api = APIClient(auth: authManager)
+        Task {
+            if let me = try? await api.getMe() {
+                await MainActor.run {
+                    authManager.emailVerified = me.emailVerified
+                    authManager.accountStatus = me.accountStatus
+                    isChecking = false
+                }
+            } else {
+                await MainActor.run { isChecking = false }
+            }
+        }
+    }
+}
+
+// MARK: - Account Pending Gate
+struct AccountPendingGateView: View {
+    @EnvironmentObject var authManager: AuthManager
+    @Environment(\.theme) var theme
+    @State private var isChecking = false
+
+    var body: some View {
+        ZStack {
+            theme.loginGradient
+                .ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                Spacer()
+
+                ZStack {
+                    Circle()
+                        .fill(LinearGradient(
+                            colors: [theme.warning, theme.warning.opacity(0.7)],
+                            startPoint: .topLeading, endPoint: .bottomTrailing))
+                        .frame(width: 72, height: 72)
+                    Image(systemName: "hourglass")
+                        .font(.system(size: 30))
+                        .foregroundColor(.white)
+                }
+                .shadow(color: theme.warning.opacity(0.5), radius: 20)
+
+                Spacer().frame(height: 24)
+
+                Text("Awaiting Approval")
+                    .font(.system(size: 26, weight: .bold, design: .rounded))
+                    .foregroundColor(theme.textPrimary)
+
+                Spacer().frame(height: 8)
+
+                Text("Your account has been created and is waiting for an administrator to approve it. You'll be able to use the app once approved.")
+                    .font(.system(size: 14))
+                    .foregroundColor(theme.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 48)
+
+                Spacer().frame(height: 32)
+
+                Button {
+                    checkStatus()
+                } label: {
+                    HStack {
+                        if isChecking { ProgressView().tint(.white) }
+                        else {
+                            Text("Check Again")
+                                .font(.system(size: 16, weight: .semibold))
+                            Image(systemName: "arrow.clockwise")
+                        }
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(16)
+                    .background(LinearGradient(colors: [theme.accentLight, theme.accent],
+                                               startPoint: .leading, endPoint: .trailing))
+                    .cornerRadius(14)
+                }
+                .disabled(isChecking)
+                .padding(.horizontal, 40)
+
+                Spacer().frame(height: 24)
+
+                Button { authManager.logout() } label: {
+                    Text("Log Out")
+                        .font(.system(size: 14))
+                        .foregroundColor(theme.textTertiary)
+                }
+
+                Spacer()
+            }
+        }
+    }
+
+    private func checkStatus() {
+        isChecking = true
+        let api = APIClient(auth: authManager)
+        Task {
+            if let me = try? await api.getMe() {
+                await MainActor.run {
+                    authManager.accountStatus = me.accountStatus
+                    authManager.emailVerified = me.emailVerified
+                    isChecking = false
+                }
+            } else {
+                await MainActor.run { isChecking = false }
+            }
+        }
+    }
+}
+
+// MARK: - Account Rejected Gate
+struct AccountRejectedGateView: View {
+    @EnvironmentObject var authManager: AuthManager
+    @Environment(\.theme) var theme
+
+    var body: some View {
+        ZStack {
+            theme.loginGradient
+                .ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                Spacer()
+
+                ZStack {
+                    Circle()
+                        .fill(LinearGradient(
+                            colors: [theme.danger, theme.danger.opacity(0.7)],
+                            startPoint: .topLeading, endPoint: .bottomTrailing))
+                        .frame(width: 72, height: 72)
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 30))
+                        .foregroundColor(.white)
+                }
+                .shadow(color: theme.danger.opacity(0.5), radius: 20)
+
+                Spacer().frame(height: 24)
+
+                Text("Account Not Approved")
+                    .font(.system(size: 26, weight: .bold, design: .rounded))
+                    .foregroundColor(theme.textPrimary)
+
+                Spacer().frame(height: 8)
+
+                Text("Your account registration was not approved. If you believe this is a mistake, please contact the server administrator.")
+                    .font(.system(size: 14))
+                    .foregroundColor(theme.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 48)
+
+                Spacer().frame(height: 32)
+
+                Button { authManager.logout() } label: {
+                    HStack {
+                        Text("Log Out")
+                            .font(.system(size: 16, weight: .semibold))
+                        Image(systemName: "rectangle.portrait.and.arrow.right")
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(16)
+                    .background(LinearGradient(colors: [theme.danger, theme.danger.opacity(0.8)],
+                                               startPoint: .leading, endPoint: .trailing))
+                    .cornerRadius(14)
+                }
+                .padding(.horizontal, 40)
+
+                Spacer()
+            }
         }
     }
 }

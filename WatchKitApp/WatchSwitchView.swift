@@ -83,6 +83,7 @@ struct WatchSwitchView: View {
             .padding()
         }
         .onAppear {
+            store.loadAll()
             // Pre-select currently fronting members
             selectedIDs = Set(store.frontingMembers.map { $0.id })
         }

@@ -42,13 +42,19 @@ struct RootView: View {
 
     var body: some View {
         Group {
-            if authManager.isAuthenticated {
-                MainView(selectedTab: $selectedTab)
-            } else if authManager.needsTOTP {
-                TOTPView()
-            } else {
+            if !authManager.isAuthenticated && !authManager.needsTOTP {
                 LoginView()
                     .onAppear { selectedTab = 0 }
+            } else if authManager.needsTOTP {
+                TOTPView()
+            } else if !authManager.emailVerified {
+                EmailVerificationGateView()
+            } else if authManager.accountStatus == .pending {
+                AccountPendingGateView()
+            } else if authManager.accountStatus == .rejected {
+                AccountRejectedGateView()
+            } else {
+                MainView(selectedTab: $selectedTab)
             }
         }
         .environment(\.theme, resolvedTheme)
@@ -103,6 +109,16 @@ struct MainView: View {
                 PhoneConnectivityManager.shared.syncCredentials()
                 SheafShortcuts.updateAppShortcutParameters()
                 donateQuickActions()
+                // Refresh account status
+                Task {
+                    let api = APIClient(auth: authManager)
+                    if let me = try? await api.getMe() {
+                        await MainActor.run {
+                            authManager.accountStatus = me.accountStatus
+                            authManager.emailVerified = me.emailVerified
+                        }
+                    }
+                }
             }
             .onReceive(quickActions.$pendingAction) { action in
                 guard let action else { return }

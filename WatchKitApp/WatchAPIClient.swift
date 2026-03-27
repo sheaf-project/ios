@@ -78,6 +78,34 @@ class WatchAPIClient {
         return try JSONDecoder.iso.decode(Member.self, from: data)
     }
 
+    // MARK: - Groups
+
+    func getGroups() async throws -> [SystemGroup] {
+        let data = try await request("/v1/groups")
+        return try JSONDecoder.iso.decode([SystemGroup].self, from: data)
+    }
+
+    func createGroup(_ create: GroupCreate) async throws -> SystemGroup {
+        let body = try JSONEncoder.iso.encode(create)
+        let data = try await request("/v1/groups", method: "POST", body: body)
+        return try JSONDecoder.iso.decode(SystemGroup.self, from: data)
+    }
+
+    func deleteGroup(id: String) async throws {
+        _ = try await request("/v1/groups/\(id)", method: "DELETE")
+    }
+
+    func getGroupMembers(groupID: String) async throws -> [Member] {
+        let data = try await request("/v1/groups/\(groupID)/members")
+        return try JSONDecoder.iso.decode([Member].self, from: data)
+    }
+
+    func setGroupMembers(groupID: String, memberIDs: [String]) async throws -> [Member] {
+        let body = try JSONEncoder.iso.encode(GroupMemberUpdate(memberIDs: memberIDs))
+        let data = try await request("/v1/groups/\(groupID)/members", method: "PUT", body: body)
+        return try JSONDecoder.iso.decode([Member].self, from: data)
+    }
+
     func updateFront(id: String, update: FrontUpdate) async throws -> FrontEntry {
         let body = try JSONEncoder.iso.encode(update)
         let data = try await request("/v1/fronts/\(id)", method: "PATCH", body: body)

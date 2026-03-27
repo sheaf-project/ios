@@ -22,6 +22,13 @@ struct WatchTabView: View {
                 }
 
                 NavigationLink {
+                    WatchGroupsView()
+                        .environmentObject(store)
+                } label: {
+                    Label("Groups", systemImage: "folder.fill")
+                }
+
+                NavigationLink {
                     WatchSwitchView()
                         .environmentObject(store)
                 } label: {

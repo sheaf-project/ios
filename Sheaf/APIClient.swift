@@ -12,6 +12,8 @@ final class AuthManager: ObservableObject {
     @Published var accessToken: String = ""
     @Published var refreshToken: String = ""
     @Published var baseURL: String = ""
+    @Published var accountStatus: AccountStatus = .active
+    @Published var emailVerified: Bool = true
 
     // Held during TOTP step so we can finalize after verification
     private(set) var pendingTokens: TokenResponse?
@@ -108,6 +110,8 @@ final class AuthManager: ObservableObject {
         isAuthenticated = false
         needsTOTP      = false
         pendingTokens  = nil
+        accountStatus  = .active
+        emailVerified  = true
         
         // Delete from Keychain
         KeychainHelper.deleteAll()
@@ -220,8 +224,8 @@ class APIClient {
         return try JSONDecoder.iso.decode(TokenResponse.self, from: data)
     }
 
-    func register(email: String, password: String) async throws -> TokenResponse {
-        let body = try JSONEncoder.iso.encode(UserRegister(email: email, password: password))
+    func register(email: String, password: String, inviteCode: String? = nil) async throws -> TokenResponse {
+        let body = try JSONEncoder.iso.encode(UserRegister(email: email, password: password, inviteCode: inviteCode))
         // Don't use request() because register endpoints shouldn't trigger token refresh
         let (data, status) = try await perform("/v1/auth/register", method: "POST", body: body)
         guard (200...201).contains(status) else {
@@ -248,6 +252,61 @@ class APIClient {
     func setupTOTP() async throws -> TOTPSetupResponse {
         let data = try await request("/v1/auth/totp/setup", method: "POST")
         return try JSONDecoder.iso.decode(TOTPSetupResponse.self, from: data)
+    }
+
+    // MARK: - Email Verification
+
+    func verifyEmail(token: String) async throws {
+        guard let encoded = token.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else {
+            throw URLError(.badURL)
+        }
+        _ = try await request("/v1/auth/verify-email?token=\(encoded)")
+    }
+
+    func resendVerification() async throws {
+        _ = try await request("/v1/auth/resend-verification", method: "POST")
+    }
+
+    // MARK: - Admin Approvals
+
+    func getApprovals() async throws -> [PendingUserRead] {
+        let data = try await request("/v1/admin/approvals")
+        return try JSONDecoder.iso.decode([PendingUserRead].self, from: data)
+    }
+
+    func approveUser(userID: String) async throws {
+        _ = try await request("/v1/admin/users/\(userID)/approve", method: "POST")
+    }
+
+    func rejectUser(userID: String) async throws {
+        _ = try await request("/v1/admin/users/\(userID)/reject", method: "POST")
+    }
+
+    // MARK: - Sheaf Import
+
+    func previewSheafImport(fileData: Data, filename: String) async throws -> Data {
+        return try await multipartRequest(
+            path: "/v1/import/sheaf/preview",
+            fileData: fileData,
+            filename: filename
+        )
+    }
+
+    func doSheafImport(
+        fileData: Data,
+        filename: String,
+        systemProfile: Bool = true,
+        memberIds: String? = nil,
+        fronts: Bool = true,
+        groups: Bool = true,
+        tags: Bool = true,
+        customFields: Bool = true
+    ) async throws -> Data {
+        var path = "/v1/import/sheaf?system_profile=\(systemProfile)&fronts=\(fronts)&groups=\(groups)&tags=\(tags)&custom_fields=\(customFields)"
+        if let ids = memberIds, !ids.isEmpty {
+            path += "&member_ids=\(ids.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ids)"
+        }
+        return try await multipartRequest(path: path, fileData: fileData, filename: filename)
     }
 
     // MARK: - System
