@@ -179,7 +179,7 @@ struct WatchMemberDetailView: View {
                     Button {
                         Task { await store.switchFronting(to: [member.id]) }
                     } label: {
-                        Label("Switch to Only Fronter", systemImage: "arrow.left.arrow.right")
+                        Label("Set as sole fronter", systemImage: "arrow.left.arrow.right")
                             .font(.system(size: 13))
                     }
                     .buttonStyle(.bordered)
