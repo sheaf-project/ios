@@ -1,4 +1,5 @@
 import SwiftUI
+import SafariServices
 
 struct LoginView: View {
     @EnvironmentObject var authManager: AuthManager
@@ -67,7 +68,7 @@ struct SignInForm: View {
     @State private var error    = ""
     @State private var isLoading = false
     @State private var needsTOTP = false
-    @State private var showForgotPassword = false
+    @State private var forgotPasswordURL: URL?
     @FocusState private var focused: Field?
     enum Field { case url, email, password, totp }
 
@@ -93,7 +94,7 @@ struct SignInForm: View {
             .opacity(baseURL.isEmpty || email.isEmpty || password.isEmpty || (needsTOTP && totpCode.count != 6) ? 0.5 : 1)
 
             // Forgot password
-            Button { showForgotPassword = true } label: {
+            Button { openForgotPassword() } label: {
                 Text("Forgot Password?")
                     .font(.system(size: 14))
                     .foregroundColor(theme.accentLight)
@@ -117,8 +118,9 @@ struct SignInForm: View {
         .cornerRadius(24)
         .overlay(RoundedRectangle(cornerRadius: 24).stroke(theme.border, lineWidth: 1))
         .padding(.horizontal, 24)
-        .sheet(isPresented: $showForgotPassword) {
-            ForgotPasswordSheet(baseURL: baseURL, prefillEmail: email)
+        .sheet(item: $forgotPasswordURL) { url in
+            SafariView(url: url)
+                .ignoresSafeArea()
         }
     }
 
@@ -177,6 +179,25 @@ struct SignInForm: View {
                         isLoading = false
                     }
                 }
+            }
+        }
+    }
+
+    private func openForgotPassword() {
+        var cleanURL = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        if cleanURL.hasSuffix("/") { cleanURL = String(cleanURL.dropLast()) }
+        guard !cleanURL.isEmpty else { return }
+        let tempAuth = AuthManager()
+        tempAuth.baseURL = cleanURL
+        let api = APIClient(auth: tempAuth)
+        Task {
+            if let config = try? await api.getAuthConfig(),
+               let webBase = config["base_url"] as? String,
+               let url = URL(string: webBase + "/forgot-password") {
+                await MainActor.run { forgotPasswordURL = url }
+            } else if let url = URL(string: cleanURL + "/forgot-password") {
+                // Fallback: use the API base URL directly
+                await MainActor.run { forgotPasswordURL = url }
             }
         }
     }
@@ -455,154 +476,19 @@ struct PasswordStrengthBar: View {
     }
 }
 
-// MARK: - Forgot Password Sheet
-struct ForgotPasswordSheet: View {
-    @Environment(\.theme) var theme
-    @Environment(\.dismiss) var dismiss
+// MARK: - Safari View
+struct SafariView: UIViewControllerRepresentable {
+    let url: URL
 
-    let baseURL: String
-    let prefillEmail: String
-
-    @State private var email = ""
-    @State private var isSending = false
-    @State private var sent = false
-    @State private var error = ""
-
-    var body: some View {
-        NavigationStack {
-            ZStack {
-                theme.backgroundPrimary.ignoresSafeArea()
-
-                ScrollView {
-                    VStack(spacing: 24) {
-                        if sent {
-                            // Success state
-                            VStack(spacing: 16) {
-                                Spacer().frame(height: 20)
-
-                                ZStack {
-                                    Circle()
-                                        .fill(theme.success.opacity(0.15))
-                                        .frame(width: 80, height: 80)
-                                    Image(systemName: "envelope.badge.fill")
-                                        .font(.system(size: 34))
-                                        .foregroundColor(theme.success)
-                                }
-                                .shadow(color: theme.success.opacity(0.3), radius: 16)
-
-                                Text("Check Your Email")
-                                    .font(.system(size: 22, weight: .bold, design: .rounded))
-                                    .foregroundColor(theme.textPrimary)
-
-                                Text("If an account exists with that email, we've sent a password reset link.")
-                                    .font(.system(size: 14))
-                                    .foregroundColor(theme.textSecondary)
-                                    .multilineTextAlignment(.center)
-                                    .padding(.horizontal, 24)
-                            }
-                        } else {
-                            // Request form
-                            VStack(spacing: 16) {
-                                Spacer().frame(height: 8)
-
-                                Image(systemName: "key.fill")
-                                    .font(.system(size: 40))
-                                    .foregroundColor(theme.accentLight)
-
-                                Text("Enter your email address and we'll send you a link to reset your password.")
-                                    .font(.system(size: 14))
-                                    .foregroundColor(theme.textSecondary)
-                                    .multilineTextAlignment(.center)
-                                    .padding(.horizontal, 24)
-
-                                VStack(alignment: .leading, spacing: 8) {
-                                    Label("Email", systemImage: "envelope.fill")
-                                        .font(.system(size: 13, weight: .semibold))
-                                        .foregroundColor(theme.textSecondary)
-                                    TextField("you@example.com", text: $email)
-                                        .keyboardType(.emailAddress)
-                                        .autocapitalization(.none)
-                                        .autocorrectionDisabled()
-                                        .padding(14)
-                                        .background(theme.inputBackground)
-                                        .cornerRadius(12)
-                                        .overlay(RoundedRectangle(cornerRadius: 12)
-                                            .stroke(theme.inputBorder, lineWidth: 1.5))
-                                        .foregroundColor(theme.textPrimary)
-                                }
-                                .padding(.horizontal, 24)
-
-                                if !error.isEmpty {
-                                    HStack(spacing: 8) {
-                                        Image(systemName: "exclamationmark.triangle.fill").foregroundColor(theme.danger)
-                                        Text(error).font(.system(size: 13)).foregroundColor(theme.danger)
-                                    }
-                                    .padding(.horizontal, 24)
-                                }
-
-                                Button { sendReset() } label: {
-                                    HStack {
-                                        if isSending { ProgressView().tint(.white) }
-                                        else {
-                                            Text("Send Reset Link")
-                                                .font(.system(size: 16, weight: .semibold))
-                                            Image(systemName: "paperplane.fill")
-                                        }
-                                    }
-                                    .foregroundColor(.white)
-                                    .frame(maxWidth: .infinity)
-                                    .padding(16)
-                                    .background(LinearGradient(colors: [theme.accentLight, theme.accent],
-                                                               startPoint: .leading, endPoint: .trailing))
-                                    .cornerRadius(14)
-                                }
-                                .disabled(email.isEmpty || isSending)
-                                .opacity(email.isEmpty ? 0.5 : 1)
-                                .padding(.horizontal, 24)
-                            }
-                        }
-                    }
-                    .padding(.top, 8)
-                }
-            }
-            .navigationTitle("Reset Password")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(sent ? "Done" : "Cancel") { dismiss() }
-                        .foregroundColor(theme.accentLight)
-                }
-            }
-        }
-        .presentationDetents([.medium])
-        .onAppear {
-            if email.isEmpty { email = prefillEmail }
-        }
+    func makeUIViewController(context: Context) -> SFSafariViewController {
+        SFSafariViewController(url: url)
     }
 
-    private func sendReset() {
-        error = ""
-        isSending = true
-        var cleanURL = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
-        if cleanURL.hasSuffix("/") { cleanURL = String(cleanURL.dropLast()) }
-        let tempAuth = AuthManager()
-        tempAuth.baseURL = cleanURL
-        let api = APIClient(auth: tempAuth)
-        Task {
-            do {
-                try await api.requestPasswordReset(email: email)
-                await MainActor.run {
-                    sent = true
-                    isSending = false
-                }
-            } catch {
-                await MainActor.run {
-                    self.error = error.localizedDescription
-                    isSending = false
-                }
-            }
-        }
-    }
+    func updateUIViewController(_ uiViewController: SFSafariViewController, context: Context) {}
+}
+
+extension URL: @retroactive Identifiable {
+    public var id: String { absoluteString }
 }
 
 // MARK: - Email Verification Gate
