@@ -448,7 +448,7 @@ struct MemberSelectRow: View {
                 }
                 Spacer()
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .foregroundColor(isSelected ? theme.accentLight : Color.white.opacity(0.3))
+                    .foregroundColor(isSelected ? theme.accentLight : theme.textTertiary)
                     .font(.system(size: 22))
             }
             .padding(14)

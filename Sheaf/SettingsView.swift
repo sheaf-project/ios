@@ -14,12 +14,17 @@ struct SettingsView: View {
     @State private var showSheafImport = false
     @State private var showEditConnection = false
     @State private var showTOTPSetup = false
+    @State private var showTOTPManage = false
     @State private var newBaseURL = ""
     @State private var newToken = ""
     @State private var me: UserRead?
     @State private var isExporting = false
     @State private var exportError: String?
     @State private var showExportSuccess = false
+    @State private var deleteConfirmLevel: DeleteConfirmation = .none
+    @State private var showDeleteConfirmSheet = false
+    @State private var isLoadingFileUsage = false
+    @State private var fileUsageDisplay = "—"
 
     var body: some View {
         NavigationStack {
@@ -95,7 +100,7 @@ struct SettingsView: View {
                                 Image(systemName: "lock.shield.fill")
                                     .foregroundColor(me?.totpEnabled == true
                                         ? theme.success
-                                        : Color.white.opacity(0.4))
+                                        : theme.textTertiary)
                                     .frame(width: 20)
                                 Text("Two-Factor Auth")
                                     .font(.system(size: 15))
@@ -106,7 +111,7 @@ struct SettingsView: View {
                                         .font(.system(size: 13, weight: .medium))
                                         .foregroundColor(me.totpEnabled
                                             ? theme.success
-                                            : Color.white.opacity(0.3))
+                                            : theme.textTertiary)
                                 } else {
                                     ProgressView().tint(theme.accentLight).scaleEffect(0.7)
                                 }
@@ -116,15 +121,54 @@ struct SettingsView: View {
                             Divider().background(theme.backgroundCard)
 
                             // Setup / manage button
-                            Button { showTOTPSetup = true } label: {
-                                HStack {
-                                    Image(systemName: me?.totpEnabled == true
-                                          ? "gearshape.fill" : "plus.circle.fill")
+                            if me?.totpEnabled == true {
+                                Button { showTOTPManage = true } label: {
+                                    HStack {
+                                        Image(systemName: "gearshape.fill")
+                                            .foregroundColor(theme.accentLight)
+                                        Text("Manage Two-Factor Auth")
+                                            .font(.system(size: 15, weight: .medium))
+                                            .foregroundColor(theme.accentLight)
+                                        Spacer()
+                                        Image(systemName: "chevron.right")
+                                            .font(.system(size: 12))
+                                            .foregroundColor(theme.textTertiary)
+                                    }
+                                    .padding(.horizontal, 16).padding(.vertical, 14)
+                                }
+                            } else {
+                                Button { showTOTPSetup = true } label: {
+                                    HStack {
+                                        Image(systemName: "plus.circle.fill")
+                                            .foregroundColor(theme.accentLight)
+                                        Text("Set Up Two-Factor Auth")
+                                            .font(.system(size: 15, weight: .medium))
+                                            .foregroundColor(theme.accentLight)
+                                        Spacer()
+                                        Image(systemName: "chevron.right")
+                                            .font(.system(size: 12))
+                                            .foregroundColor(theme.textTertiary)
+                                    }
+                                    .padding(.horizontal, 16).padding(.vertical, 14)
+                                }
+                            }
+
+                            Divider().background(theme.backgroundCard)
+
+                            // Delete confirmation level
+                            Button { showDeleteConfirmSheet = true } label: {
+                                HStack(spacing: 12) {
+                                    Image(systemName: "trash.slash.fill")
                                         .foregroundColor(theme.accentLight)
-                                    Text(me?.totpEnabled == true
-                                         ? String(localized: "Manage Two-Factor Auth") : String(localized: "Set Up Two-Factor Auth"))
-                                        .font(.system(size: 15, weight: .medium))
-                                        .foregroundColor(theme.accentLight)
+                                        .frame(width: 20)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("Delete Confirmation")
+                                            .font(.system(size: 15, weight: .medium))
+                                            .foregroundColor(theme.textPrimary)
+                                        Text(deleteConfirmLabel)
+                                            .font(.system(size: 12))
+                                            .foregroundColor(theme.textTertiary)
+                                    }
                                     Spacer()
                                     Image(systemName: "chevron.right")
                                         .font(.system(size: 12))
@@ -132,6 +176,30 @@ struct SettingsView: View {
                                 }
                                 .padding(.horizontal, 16).padding(.vertical, 14)
                             }
+                        }
+                    }
+
+                    // Files
+                    settingsSection(title: "Files") {
+                        VStack(spacing: 0) {
+                            // Storage usage
+                            HStack(spacing: 12) {
+                                Image(systemName: "externaldrive.fill")
+                                    .foregroundColor(theme.accentLight)
+                                    .frame(width: 20)
+                                Text("Storage Used")
+                                    .font(.system(size: 15))
+                                    .foregroundColor(theme.textSecondary)
+                                Spacer()
+                                if isLoadingFileUsage {
+                                    ProgressView().tint(theme.accentLight).scaleEffect(0.7)
+                                } else {
+                                    Text(fileUsageDisplay)
+                                        .font(.system(size: 14, weight: .medium))
+                                        .foregroundColor(theme.textPrimary)
+                                }
+                            }
+                            .padding(.horizontal, 16).padding(.vertical, 14)
                         }
                     }
 
@@ -428,6 +496,18 @@ struct SettingsView: View {
             TOTPSetupSheet()
                 .environmentObject(authManager)
         }
+        .sheet(isPresented: $showTOTPManage, onDismiss: { Task { await loadMe() } }) {
+            TOTPManageSheet()
+                .environmentObject(authManager)
+                .environmentObject(store)
+        }
+        .sheet(isPresented: $showDeleteConfirmSheet, onDismiss: { Task { await loadMe() } }) {
+            DeleteConfirmationSheet(currentLevel: deleteConfirmLevel) { newLevel in
+                deleteConfirmLevel = newLevel
+            }
+            .environmentObject(authManager)
+            .environmentObject(store)
+        }
         .alert("Export Successful", isPresented: $showExportSuccess) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -446,8 +526,38 @@ struct SettingsView: View {
     private func loadMe() async {
         guard let api = store.api else { return }
         me = try? await api.getMe()
+        // Load delete confirmation level from system profile
+        if let profile = store.systemProfile {
+            deleteConfirmLevel = profile.deleteConfirmation
+        } else if let profile = try? await api.getMySystem() {
+            deleteConfirmLevel = profile.deleteConfirmation
+        }
+        // Load file usage
+        await loadFileUsage()
     }
-    
+
+    private func loadFileUsage() async {
+        guard let api = store.api else { return }
+        isLoadingFileUsage = true
+        if let usage = try? await api.getFileUsage() {
+            let bytes = usage["total_bytes"] as? Int ?? usage["used_bytes"] as? Int ?? 0
+            let count = usage["total_files"] as? Int ?? usage["file_count"] as? Int ?? 0
+            let formatter = ByteCountFormatter()
+            formatter.countStyle = .file
+            fileUsageDisplay = "\(formatter.string(fromByteCount: Int64(bytes))) (\(count) files)"
+        }
+        isLoadingFileUsage = false
+    }
+
+    private var deleteConfirmLabel: String {
+        switch deleteConfirmLevel {
+        case .none: return "No confirmation required"
+        case .password: return "Requires password"
+        case .totp: return "Requires 2FA code"
+        case .both: return "Requires password + 2FA"
+        }
+    }
+
     private func exportData() async {
         guard let api = store.api else { return }
         
@@ -918,6 +1028,563 @@ struct TOTPSetupSheet: View {
         let scaled = output.transformed(by: CGAffineTransform(scaleX: 10, y: 10))
         guard let cgImage = context.createCGImage(scaled, from: scaled.extent) else { return nil }
         return UIImage(cgImage: cgImage)
+    }
+}
+
+// MARK: - Delete Confirmation Sheet
+struct DeleteConfirmationSheet: View {
+    @Environment(\.theme) var theme
+    @EnvironmentObject var authManager: AuthManager
+    @EnvironmentObject var store: SystemStore
+    @Environment(\.dismiss) var dismiss
+
+    let currentLevel: DeleteConfirmation
+    let onUpdate: (DeleteConfirmation) -> Void
+
+    @State private var selectedLevel: DeleteConfirmation
+    @State private var password = ""
+    @State private var totpCode = ""
+    @State private var isSaving = false
+    @State private var error = ""
+
+    init(currentLevel: DeleteConfirmation, onUpdate: @escaping (DeleteConfirmation) -> Void) {
+        self.currentLevel = currentLevel
+        self.onUpdate = onUpdate
+        _selectedLevel = State(initialValue: currentLevel)
+    }
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                theme.backgroundPrimary.ignoresSafeArea()
+
+                ScrollView {
+                    VStack(spacing: 20) {
+                        Text("Choose the level of confirmation required when deleting members or other data.")
+                            .font(.system(size: 14))
+                            .foregroundColor(theme.textSecondary)
+                            .padding(.horizontal, 4)
+
+                        // Level picker
+                        VStack(spacing: 0) {
+                            confirmOption(.none, title: "None", desc: "No confirmation required")
+                            Divider().background(theme.divider)
+                            confirmOption(.password, title: "Password", desc: "Require password to delete")
+                            Divider().background(theme.divider)
+                            confirmOption(.totp, title: "2FA Code", desc: "Require authenticator code")
+                            Divider().background(theme.divider)
+                            confirmOption(.both, title: "Password + 2FA", desc: "Require both to delete")
+                        }
+                        .background(theme.backgroundCard)
+                        .cornerRadius(14)
+
+                        if selectedLevel != currentLevel {
+                            // Password confirmation
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Confirm with your password")
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundColor(theme.textSecondary)
+                                SecureField("Password", text: $password)
+                                    .autocapitalization(.none)
+                                    .autocorrectionDisabled()
+                                    .padding(14)
+                                    .background(theme.inputBackground)
+                                    .cornerRadius(12)
+                                    .overlay(RoundedRectangle(cornerRadius: 12)
+                                        .stroke(theme.inputBorder, lineWidth: 1.5))
+                                    .foregroundColor(theme.textPrimary)
+                            }
+
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("2FA Code (if enabled)")
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundColor(theme.textSecondary)
+                                TextField("6-digit code", text: $totpCode)
+                                    .keyboardType(.numberPad)
+                                    .padding(14)
+                                    .background(theme.inputBackground)
+                                    .cornerRadius(12)
+                                    .overlay(RoundedRectangle(cornerRadius: 12)
+                                        .stroke(theme.inputBorder, lineWidth: 1.5))
+                                    .foregroundColor(theme.textPrimary)
+                            }
+                        }
+
+                        if !error.isEmpty {
+                            Text(error)
+                                .font(.system(size: 13))
+                                .foregroundColor(theme.danger)
+                        }
+                    }
+                    .padding(.horizontal, 24)
+                    .padding(.top, 16)
+                    .padding(.bottom, 40)
+                }
+            }
+            .navigationTitle("Delete Confirmation")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                        .foregroundColor(theme.textSecondary)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button {
+                        Task { await save() }
+                    } label: {
+                        if isSaving {
+                            ProgressView().tint(theme.accentLight).scaleEffect(0.8)
+                        } else {
+                            Text("Save")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(selectedLevel != currentLevel && !password.isEmpty ? theme.accentLight : theme.textTertiary)
+                        }
+                    }
+                    .disabled(selectedLevel == currentLevel || password.isEmpty || isSaving)
+                }
+            }
+        }
+        .presentationDetents([.large])
+    }
+
+    private func confirmOption(_ level: DeleteConfirmation, title: String, desc: String) -> some View {
+        Button {
+            selectedLevel = level
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: selectedLevel == level ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 20))
+                    .foregroundColor(selectedLevel == level ? theme.accentLight : theme.textTertiary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundColor(theme.textPrimary)
+                    Text(desc)
+                        .font(.system(size: 12))
+                        .foregroundColor(theme.textTertiary)
+                }
+                Spacer()
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+        }
+    }
+
+    private func save() async {
+        guard let api = store.api else { return }
+        isSaving = true
+        error = ""
+        do {
+            let update = DeleteConfirmationUpdate(
+                level: selectedLevel,
+                password: password,
+                totpCode: totpCode.isEmpty ? nil : totpCode
+            )
+            _ = try await api.updateDeleteConfirmation(update)
+            await MainActor.run {
+                onUpdate(selectedLevel)
+                isSaving = false
+                dismiss()
+            }
+        } catch {
+            await MainActor.run {
+                self.error = error.localizedDescription
+                isSaving = false
+            }
+        }
+    }
+}
+
+// MARK: - TOTP Manage Sheet
+struct TOTPManageSheet: View {
+    @Environment(\.theme) var theme
+    @EnvironmentObject var authManager: AuthManager
+    @EnvironmentObject var store: SystemStore
+    @Environment(\.dismiss) var dismiss
+
+    enum Page { case menu, disableConfirm, regenerateConfirm, recoveryCodes, disabled }
+
+    @State private var page: Page = .menu
+    @State private var password = ""
+    @State private var totpCode = ""
+    @State private var error = ""
+    @State private var isProcessing = false
+    @State private var recoveryCodes: [String] = []
+    @State private var copiedCodes = false
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 0) {
+                    switch page {
+                    case .menu:              menuPage
+                    case .disableConfirm:    disableConfirmPage
+                    case .regenerateConfirm: regenerateConfirmPage
+                    case .recoveryCodes:     recoveryCodesPage
+                    case .disabled:          disabledPage
+                    }
+                }
+                .padding(.horizontal, 24)
+                .padding(.top, 8)
+                .padding(.bottom, 40)
+                .frame(maxWidth: .infinity, alignment: .top)
+            }
+            .background(theme.backgroundPrimary)
+            .navigationTitle(pageTitle)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(page == .disabled || page == .recoveryCodes ? "Done" : "Cancel") { dismiss() }
+                        .foregroundColor(theme.accentLight)
+                }
+            }
+        }
+        .presentationDetents([.large])
+    }
+
+    private var pageTitle: String {
+        switch page {
+        case .menu:              return "Manage 2FA"
+        case .disableConfirm:    return "Disable 2FA"
+        case .regenerateConfirm: return "Regenerate Codes"
+        case .recoveryCodes:     return "Recovery Codes"
+        case .disabled:          return "2FA Disabled"
+        }
+    }
+
+    // MARK: - Menu
+
+    private var menuPage: some View {
+        VStack(spacing: 16) {
+            Spacer().frame(height: 20)
+
+            ZStack {
+                Circle()
+                    .fill(theme.success.opacity(0.15))
+                    .frame(width: 80, height: 80)
+                Image(systemName: "lock.shield.fill")
+                    .font(.system(size: 36))
+                    .foregroundColor(theme.success)
+            }
+            .shadow(color: theme.success.opacity(0.3), radius: 16)
+
+            Text("Two-factor authentication is enabled")
+                .font(.system(size: 15))
+                .foregroundColor(theme.textSecondary)
+                .multilineTextAlignment(.center)
+
+            Spacer().frame(height: 12)
+
+            // Regenerate recovery codes
+            Button {
+                withAnimation { page = .regenerateConfirm }
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .font(.system(size: 18))
+                        .foregroundColor(theme.accentLight)
+                        .frame(width: 28)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Regenerate Recovery Codes")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundColor(theme.textPrimary)
+                        Text("Get new one-time backup codes")
+                            .font(.system(size: 12))
+                            .foregroundColor(theme.textTertiary)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12))
+                        .foregroundColor(theme.textTertiary)
+                }
+                .padding(16)
+                .background(theme.backgroundCard)
+                .cornerRadius(14)
+            }
+
+            // Disable TOTP
+            Button {
+                withAnimation { page = .disableConfirm }
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "lock.open.fill")
+                        .font(.system(size: 18))
+                        .foregroundColor(theme.danger)
+                        .frame(width: 28)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Disable Two-Factor Auth")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundColor(theme.danger)
+                        Text("Remove 2FA protection from your account")
+                            .font(.system(size: 12))
+                            .foregroundColor(theme.textTertiary)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12))
+                        .foregroundColor(theme.textTertiary)
+                }
+                .padding(16)
+                .background(theme.backgroundCard)
+                .cornerRadius(14)
+            }
+        }
+    }
+
+    // MARK: - Disable Confirm
+
+    private var disableConfirmPage: some View {
+        VStack(spacing: 20) {
+            Spacer().frame(height: 12)
+
+            Image(systemName: "exclamationmark.shield.fill")
+                .font(.system(size: 48))
+                .foregroundColor(theme.warning)
+
+            Text("This will remove two-factor authentication from your account. You'll need to verify your identity.")
+                .font(.system(size: 14))
+                .foregroundColor(theme.textSecondary)
+                .multilineTextAlignment(.center)
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Password")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(theme.textSecondary)
+                SecureField("Enter your password", text: $password)
+                    .autocapitalization(.none)
+                    .autocorrectionDisabled()
+                    .padding(14)
+                    .background(theme.inputBackground)
+                    .cornerRadius(12)
+                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(theme.inputBorder, lineWidth: 1.5))
+                    .foregroundColor(theme.textPrimary)
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Current 2FA Code")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(theme.textSecondary)
+                TextField("6-digit code", text: $totpCode)
+                    .keyboardType(.numberPad)
+                    .padding(14)
+                    .background(theme.inputBackground)
+                    .cornerRadius(12)
+                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(theme.inputBorder, lineWidth: 1.5))
+                    .foregroundColor(theme.textPrimary)
+            }
+
+            if !error.isEmpty {
+                Text(error)
+                    .font(.system(size: 13))
+                    .foregroundColor(theme.danger)
+            }
+
+            Button { Task { await disableTOTP() } } label: {
+                HStack {
+                    if isProcessing { ProgressView().tint(.white) }
+                    else { Text("Disable Two-Factor Auth").font(.system(size: 16, weight: .semibold)) }
+                }
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(16)
+                .background(theme.danger)
+                .cornerRadius(14)
+            }
+            .disabled(password.isEmpty || isProcessing)
+            .opacity(password.isEmpty ? 0.5 : 1)
+
+            Button { withAnimation { page = .menu } } label: {
+                Text("Back")
+                    .font(.system(size: 14))
+                    .foregroundColor(theme.textTertiary)
+            }
+        }
+    }
+
+    // MARK: - Regenerate Confirm
+
+    private var regenerateConfirmPage: some View {
+        VStack(spacing: 20) {
+            Spacer().frame(height: 12)
+
+            Image(systemName: "arrow.triangle.2.circlepath")
+                .font(.system(size: 48))
+                .foregroundColor(theme.warning)
+
+            Text("This will invalidate your current recovery codes and generate new ones. Enter your current 2FA code to confirm.")
+                .font(.system(size: 14))
+                .foregroundColor(theme.textSecondary)
+                .multilineTextAlignment(.center)
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Current 2FA Code")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(theme.textSecondary)
+                TextField("6-digit code", text: $totpCode)
+                    .keyboardType(.numberPad)
+                    .padding(14)
+                    .background(theme.inputBackground)
+                    .cornerRadius(12)
+                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(theme.inputBorder, lineWidth: 1.5))
+                    .foregroundColor(theme.textPrimary)
+            }
+
+            if !error.isEmpty {
+                Text(error)
+                    .font(.system(size: 13))
+                    .foregroundColor(theme.danger)
+            }
+
+            Button { Task { await regenerateCodes() } } label: {
+                HStack {
+                    if isProcessing { ProgressView().tint(.white) }
+                    else { Text("Regenerate Codes").font(.system(size: 16, weight: .semibold)) }
+                }
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(16)
+                .background(LinearGradient(colors: [theme.accentLight, theme.accent],
+                                           startPoint: .leading, endPoint: .trailing))
+                .cornerRadius(14)
+            }
+            .disabled(totpCode.count != 6 || isProcessing)
+            .opacity(totpCode.count != 6 ? 0.5 : 1)
+
+            Button { withAnimation { page = .menu } } label: {
+                Text("Back")
+                    .font(.system(size: 14))
+                    .foregroundColor(theme.textTertiary)
+            }
+        }
+    }
+
+    // MARK: - Recovery Codes
+
+    private var recoveryCodesPage: some View {
+        VStack(spacing: 20) {
+            Spacer().frame(height: 8)
+
+            Image(systemName: "list.bullet.rectangle.portrait.fill")
+                .font(.system(size: 40))
+                .foregroundColor(theme.warning)
+
+            VStack(spacing: 6) {
+                Text("New Recovery Codes")
+                    .font(.system(size: 20, weight: .bold, design: .rounded))
+                    .foregroundColor(theme.textPrimary)
+                Text("Your old recovery codes are now invalid. Save these new codes somewhere safe.")
+                    .font(.system(size: 13))
+                    .foregroundColor(theme.textSecondary)
+                    .multilineTextAlignment(.center)
+            }
+
+            VStack(spacing: 0) {
+                ForEach(Array(recoveryCodes.enumerated()), id: \.offset) { i, code in
+                    HStack {
+                        Text("\(i + 1).")
+                            .font(.system(size: 12))
+                            .foregroundColor(theme.textTertiary)
+                            .frame(width: 20, alignment: .trailing)
+                        Text(code)
+                            .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                            .foregroundColor(theme.textPrimary)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 16).padding(.vertical, 10)
+                    if i < recoveryCodes.count - 1 {
+                        Divider().background(theme.backgroundCard)
+                    }
+                }
+            }
+            .background(theme.backgroundCard)
+            .cornerRadius(14)
+            .overlay(RoundedRectangle(cornerRadius: 14).stroke(theme.backgroundElevated, lineWidth: 1))
+
+            Button {
+                UIPasteboard.general.string = recoveryCodes.joined(separator: "\n")
+                copiedCodes = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2) { copiedCodes = false }
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: copiedCodes ? "checkmark" : "doc.on.doc")
+                    Text(copiedCodes ? "Copied!" : "Copy All Codes")
+                        .font(.system(size: 14, weight: .medium))
+                }
+                .foregroundColor(copiedCodes ? theme.success : theme.accentLight)
+            }
+        }
+    }
+
+    // MARK: - Disabled
+
+    private var disabledPage: some View {
+        VStack(spacing: 20) {
+            Spacer().frame(height: 60)
+
+            ZStack {
+                Circle()
+                    .fill(theme.warning.opacity(0.15))
+                    .frame(width: 100, height: 100)
+                Image(systemName: "lock.open.fill")
+                    .font(.system(size: 44))
+                    .foregroundColor(theme.warning)
+            }
+            .shadow(color: theme.warning.opacity(0.3), radius: 20)
+
+            Text("Two-factor auth disabled")
+                .font(.system(size: 22, weight: .bold, design: .rounded))
+                .foregroundColor(theme.textPrimary)
+
+            Text("Your account is no longer protected by two-factor authentication. You can re-enable it from Settings.")
+                .font(.system(size: 14))
+                .foregroundColor(theme.textSecondary)
+                .multilineTextAlignment(.center)
+        }
+    }
+
+    // MARK: - Actions
+
+    private func disableTOTP() async {
+        guard let api = store.api else { return }
+        isProcessing = true
+        error = ""
+        do {
+            // The API expects email + password + optional totp code
+            let me = try await api.getMe()
+            try await api.disableTOTP(
+                email: me.email,
+                password: password,
+                totpCode: totpCode.isEmpty ? nil : totpCode
+            )
+            await MainActor.run {
+                isProcessing = false
+                withAnimation { page = .disabled }
+            }
+        } catch {
+            await MainActor.run {
+                self.error = error.localizedDescription
+                isProcessing = false
+            }
+        }
+    }
+
+    private func regenerateCodes() async {
+        guard let api = store.api else { return }
+        isProcessing = true
+        error = ""
+        do {
+            let codes = try await api.regenerateRecoveryCodes(code: totpCode)
+            await MainActor.run {
+                recoveryCodes = codes
+                isProcessing = false
+                withAnimation { page = .recoveryCodes }
+            }
+        } catch {
+            await MainActor.run {
+                self.error = error.localizedDescription
+                isProcessing = false
+            }
+        }
     }
 }
 
@@ -1398,6 +2065,11 @@ struct AdminPanelView: View {
     @State private var showMaintenanceResult = false
     @State private var isRunningMaintenance = false
 
+    // File cleanup
+    @State private var showFileCleanupConfirm = false
+    @State private var fileCleanupResult: String?
+    @State private var showFileCleanupResult = false
+
     var body: some View {
         ZStack {
             theme.backgroundPrimary.ignoresSafeArea()
@@ -1439,11 +2111,22 @@ struct AdminPanelView: View {
         } message: {
             Text("This will run cleanup tasks on the server.")
         }
-        .confirmationDialog("Run Storage Audit?", isPresented: $showAuditConfirm, titleVisibility: .visible) {
-            Button("Run Storage Audit", role: .destructive) { Task { await runMaintenance(.storageAudit) } }
+        .confirmationDialog("View Storage Stats?", isPresented: $showAuditConfirm, titleVisibility: .visible) {
+            Button("Get Storage Stats") { Task { await runMaintenance(.storageStats) } }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This will audit storage usage across all users.")
+            Text("This will fetch storage usage statistics from the server.")
+        }
+        .confirmationDialog("Clean Up Orphaned Files?", isPresented: $showFileCleanupConfirm, titleVisibility: .visible) {
+            Button("Clean Up", role: .destructive) { Task { await runFileCleanup() } }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This will permanently remove orphaned files that are no longer referenced by any member or system profile.")
+        }
+        .alert("File Cleanup", isPresented: $showFileCleanupResult) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(fileCleanupResult ?? "")
         }
     }
 
@@ -1534,6 +2217,9 @@ struct AdminPanelView: View {
                 // Pending Approvals
                 approvalsSection
 
+                // Invite Codes
+                invitesSection
+
                 // Stats
                 statsSection
 
@@ -1549,6 +2235,7 @@ struct AdminPanelView: View {
         .refreshable {
             await loadStats()
             await loadUsers(reset: true)
+            await loadInvites()
         }
     }
 
@@ -1711,6 +2398,193 @@ struct AdminPanelView: View {
         } catch {
             // Reload on error
             await loadApprovals()
+        }
+    }
+
+    // MARK: - Invites Section
+
+    @State private var invites: [InviteCodeRead] = []
+    @State private var isLoadingInvites = false
+    @State private var showCreateInvite = false
+    @State private var inviteToDelete: InviteCodeRead?
+    @State private var copiedInviteCode: String?
+
+    private var invitesSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("INVITE CODES")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(theme.textSecondary)
+                    .textCase(.uppercase)
+                    .kerning(0.8)
+                Spacer()
+                Button {
+                    showCreateInvite = true
+                } label: {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.system(size: 20))
+                        .foregroundColor(theme.accentLight)
+                }
+            }
+            .padding(.horizontal, 24)
+
+            if isLoadingInvites {
+                HStack { Spacer(); ProgressView().tint(theme.accentLight); Spacer() }
+                    .padding(.vertical, 20)
+            } else if invites.isEmpty {
+                HStack {
+                    Spacer()
+                    VStack(spacing: 8) {
+                        Image(systemName: "ticket")
+                            .font(.system(size: 28))
+                            .foregroundColor(theme.textTertiary)
+                        Text("No invite codes")
+                            .font(.system(size: 14))
+                            .foregroundColor(theme.textSecondary)
+                    }
+                    .padding(.vertical, 20)
+                    Spacer()
+                }
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(invites) { invite in
+                        inviteRow(invite)
+
+                        if invite.id != invites.last?.id {
+                            Divider().background(theme.divider).padding(.leading, 16)
+                        }
+                    }
+                }
+                .background(theme.backgroundCard)
+                .cornerRadius(14)
+                .padding(.horizontal, 24)
+            }
+        }
+        .task { await loadInvites() }
+        .sheet(isPresented: $showCreateInvite) {
+            CreateInviteSheet { _ in
+                Task { await loadInvites() }
+            }
+            .environmentObject(authManager)
+            .environmentObject(store)
+        }
+        .confirmationDialog("Delete this invite code?", isPresented: .init(
+            get: { inviteToDelete != nil },
+            set: { if !$0 { inviteToDelete = nil } }
+        ), titleVisibility: .visible) {
+            Button("Delete", role: .destructive) {
+                if let invite = inviteToDelete {
+                    Task { await deleteInvite(id: invite.id) }
+                }
+            }
+            Button("Cancel", role: .cancel) { inviteToDelete = nil }
+        } message: {
+            Text("This invite code will be permanently deleted.")
+        }
+    }
+
+    private func inviteRow(_ invite: InviteCodeRead) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(invite.code)
+                    .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                    .foregroundColor(theme.textPrimary)
+                    .lineLimit(1)
+
+                Button {
+                    UIPasteboard.general.string = invite.code
+                    copiedInviteCode = invite.id
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                        if copiedInviteCode == invite.id { copiedInviteCode = nil }
+                    }
+                } label: {
+                    Image(systemName: copiedInviteCode == invite.id ? "checkmark" : "doc.on.doc")
+                        .font(.system(size: 12))
+                        .foregroundColor(copiedInviteCode == invite.id ? theme.success : theme.textTertiary)
+                }
+
+                Spacer()
+
+                // Status badge
+                if invite.isExpired {
+                    inviteBadge("Expired", color: theme.danger)
+                } else if invite.isExhausted {
+                    inviteBadge("Used up", color: theme.warning)
+                } else {
+                    inviteBadge("Active", color: theme.success)
+                }
+            }
+
+            HStack(spacing: 12) {
+                // Uses
+                Label(invite.maxUses > 0 ? "\(invite.useCount)/\(invite.maxUses) uses" : "\(invite.useCount) uses",
+                      systemImage: "person.2")
+                    .font(.system(size: 11))
+                    .foregroundColor(theme.textTertiary)
+
+                // Expiry
+                if let exp = invite.expiresAt {
+                    if exp < Date() {
+                        Label("Expired \(exp, style: .relative) ago", systemImage: "clock")
+                            .font(.system(size: 11))
+                            .foregroundColor(theme.danger)
+                    } else {
+                        Label("Expires \(exp, style: .relative)", systemImage: "clock")
+                            .font(.system(size: 11))
+                            .foregroundColor(theme.textTertiary)
+                    }
+                } else {
+                    Label("No expiry", systemImage: "infinity")
+                        .font(.system(size: 11))
+                        .foregroundColor(theme.textTertiary)
+                }
+
+                Spacer()
+
+                // Delete button
+                Button { inviteToDelete = invite } label: {
+                    Image(systemName: "trash")
+                        .font(.system(size: 13))
+                        .foregroundColor(theme.danger.opacity(0.7))
+                }
+            }
+
+            // Note
+            if let note = invite.note, !note.isEmpty {
+                Text(note)
+                    .font(.system(size: 12))
+                    .foregroundColor(theme.textSecondary)
+                    .lineLimit(2)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+    }
+
+    private func inviteBadge(_ text: String, color: Color) -> some View {
+        Text(text)
+            .font(.system(size: 10, weight: .semibold))
+            .foregroundColor(color)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(color.opacity(0.12))
+            .cornerRadius(6)
+    }
+
+    private func loadInvites() async {
+        guard let api = store.api else { return }
+        isLoadingInvites = true
+        invites = (try? await api.getInvites()) ?? []
+        isLoadingInvites = false
+    }
+
+    private func deleteInvite(id: String) async {
+        guard let api = store.api else { return }
+        do {
+            try await api.deleteInvite(id: id)
+            withAnimation { invites.removeAll { $0.id == id } }
+        } catch {
+            await loadInvites()
         }
     }
 
@@ -1925,6 +2799,26 @@ struct AdminPanelView: View {
                 ) {
                     showAuditConfirm = true
                 }
+
+                Divider().background(theme.divider).padding(.leading, 52)
+
+                maintenanceButton(
+                    icon: "magnifyingglass",
+                    title: "Check for Orphaned Files",
+                    subtitle: "Preview what file cleanup would remove"
+                ) {
+                    Task { await runFileCleanupDryRun() }
+                }
+
+                Divider().background(theme.divider).padding(.leading, 52)
+
+                maintenanceButton(
+                    icon: "doc.badge.gearshape",
+                    title: "Clean Up Orphaned Files",
+                    subtitle: "Remove unreferenced uploaded files"
+                ) {
+                    showFileCleanupConfirm = true
+                }
             }
             .background(theme.backgroundCard)
             .cornerRadius(14)
@@ -2030,7 +2924,7 @@ struct AdminPanelView: View {
     }
 
     private enum MaintenanceAction {
-        case retention, cleanup, storageAudit
+        case retention, cleanup, storageStats
     }
 
     private func runMaintenance(_ action: MaintenanceAction) async {
@@ -2044,15 +2938,48 @@ struct AdminPanelView: View {
             case .cleanup:
                 try await api.runCleanup()
                 maintenanceResult = "Cleanup completed successfully."
-            case .storageAudit:
-                try await api.runStorageAudit()
-                maintenanceResult = "Storage audit completed successfully."
+            case .storageStats:
+                let stats = try await api.getStorageStats()
+                let summary = stats.map { "\($0.key): \($0.value)" }.joined(separator: "\n")
+                maintenanceResult = summary.isEmpty ? "No storage stats available." : summary
             }
         } catch {
             maintenanceResult = "Error: \(error.localizedDescription)"
         }
         isRunningMaintenance = false
         showMaintenanceResult = true
+    }
+
+    // MARK: - File Cleanup
+
+    private func runFileCleanupDryRun() async {
+        guard let api = store.api else { return }
+        isRunningMaintenance = true
+        do {
+            let result = try await api.cleanupFilesDryRun()
+            let count = result["files_to_remove"] as? Int ?? result["count"] as? Int ?? 0
+            fileCleanupResult = count > 0
+                ? "\(count) orphaned file(s) found. Use 'Clean Up Orphaned Files' to remove them."
+                : "No orphaned files found."
+        } catch {
+            fileCleanupResult = "Error: \(error.localizedDescription)"
+        }
+        isRunningMaintenance = false
+        showFileCleanupResult = true
+    }
+
+    private func runFileCleanup() async {
+        guard let api = store.api else { return }
+        isRunningMaintenance = true
+        do {
+            let result = try await api.cleanupFiles()
+            let count = result["files_removed"] as? Int ?? result["count"] as? Int ?? 0
+            fileCleanupResult = "Cleaned up \(count) file(s)."
+        } catch {
+            fileCleanupResult = "Error: \(error.localizedDescription)"
+        }
+        isRunningMaintenance = false
+        showFileCleanupResult = true
     }
 
     // MARK: - Helpers
@@ -2068,6 +2995,7 @@ struct AdminPanelView: View {
         case .free: return "Free"
         case .plus: return "Plus"
         case .selfHosted: return "Self-Hosted"
+        case .unknown: return "Unknown"
         }
     }
 }
@@ -2274,5 +3202,246 @@ struct AdminUserEditSheet: View {
             self.error = error.localizedDescription
         }
         isSaving = false
+    }
+}
+
+// MARK: - Create Invite Sheet
+struct CreateInviteSheet: View {
+    @Environment(\.theme) var theme
+    @EnvironmentObject var authManager: AuthManager
+    @EnvironmentObject var store: SystemStore
+    @Environment(\.dismiss) var dismiss
+
+    let onCreate: (InviteCodeRead) -> Void
+
+    @State private var note = ""
+    @State private var maxUsesText = ""
+    @State private var hasExpiry = false
+    @State private var expiresAt = Calendar.current.date(byAdding: .month, value: 1, to: Date()) ?? Date()
+    @State private var isCreating = false
+    @State private var error: String?
+    @State private var createdInvite: InviteCodeRead?
+    @State private var copiedCode = false
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                theme.backgroundPrimary.ignoresSafeArea()
+
+                ScrollView {
+                    VStack(spacing: 20) {
+                        if let invite = createdInvite {
+                            createdView(invite)
+                        } else {
+                            formView
+                        }
+                    }
+                    .padding(.horizontal, 24)
+                    .padding(.top, 16)
+                    .padding(.bottom, 40)
+                }
+            }
+            .navigationTitle(createdInvite != nil ? "Invite Created" : "New Invite Code")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(createdInvite != nil ? "Done" : "Cancel") {
+                        if let invite = createdInvite {
+                            onCreate(invite)
+                        }
+                        dismiss()
+                    }
+                    .foregroundColor(theme.textSecondary)
+                }
+                if createdInvite == nil {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button {
+                            Task { await create() }
+                        } label: {
+                            if isCreating {
+                                ProgressView().tint(theme.accentLight).scaleEffect(0.8)
+                            } else {
+                                Text("Create")
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundColor(theme.accentLight)
+                            }
+                        }
+                        .disabled(isCreating)
+                    }
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+    }
+
+    private var formView: some View {
+        VStack(spacing: 16) {
+            // Note
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Note")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(theme.textSecondary)
+                TextField("Optional description", text: $note)
+                    .autocorrectionDisabled()
+                    .padding(12)
+                    .background(theme.backgroundCard)
+                    .cornerRadius(12)
+                    .foregroundColor(theme.textPrimary)
+            }
+
+            // Max uses
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Max Uses")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(theme.textSecondary)
+                HStack {
+                    TextField("Unlimited", text: $maxUsesText)
+                        .keyboardType(.numberPad)
+                        .padding(12)
+                        .background(theme.backgroundCard)
+                        .cornerRadius(12)
+                        .foregroundColor(theme.textPrimary)
+                }
+                Text("Leave empty for unlimited uses")
+                    .font(.system(size: 11))
+                    .foregroundColor(theme.textTertiary)
+            }
+
+            // Expiry
+            VStack(alignment: .leading, spacing: 6) {
+                Toggle(isOn: $hasExpiry) {
+                    Text("Expires")
+                        .font(.system(size: 15))
+                        .foregroundColor(theme.textPrimary)
+                }
+                .tint(theme.accentLight)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .background(theme.backgroundCard)
+                .cornerRadius(12)
+
+                if hasExpiry {
+                    DatePicker("Expiry Date", selection: $expiresAt, in: Date()..., displayedComponents: [.date, .hourAndMinute])
+                        .datePickerStyle(.compact)
+                        .tint(theme.accentLight)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 10)
+                        .background(theme.backgroundCard)
+                        .cornerRadius(12)
+                        .foregroundColor(theme.textPrimary)
+                }
+            }
+
+            if let error {
+                Text(error)
+                    .font(.system(size: 13))
+                    .foregroundColor(theme.danger)
+            }
+        }
+    }
+
+    private func createdView(_ invite: InviteCodeRead) -> some View {
+        VStack(spacing: 20) {
+            ZStack {
+                Circle()
+                    .fill(theme.success.opacity(0.15))
+                    .frame(width: 72, height: 72)
+                Image(systemName: "ticket.fill")
+                    .font(.system(size: 32))
+                    .foregroundColor(theme.success)
+            }
+            .shadow(color: theme.success.opacity(0.3), radius: 16)
+
+            Text("Invite Code Created")
+                .font(.system(size: 20, weight: .bold, design: .rounded))
+                .foregroundColor(theme.textPrimary)
+
+            // Code display
+            VStack(spacing: 8) {
+                Text(invite.code)
+                    .font(.system(size: 18, weight: .semibold, design: .monospaced))
+                    .foregroundColor(theme.textPrimary)
+                    .padding(16)
+                    .frame(maxWidth: .infinity)
+                    .background(theme.backgroundCard)
+                    .cornerRadius(12)
+                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(theme.border, lineWidth: 1))
+
+                Button {
+                    UIPasteboard.general.string = invite.code
+                    copiedCode = true
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) { copiedCode = false }
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: copiedCode ? "checkmark" : "doc.on.doc")
+                        Text(copiedCode ? "Copied!" : "Copy Code")
+                            .font(.system(size: 14, weight: .medium))
+                    }
+                    .foregroundColor(copiedCode ? theme.success : theme.accentLight)
+                    .frame(maxWidth: .infinity)
+                    .padding(14)
+                    .background(theme.backgroundCard)
+                    .cornerRadius(12)
+                }
+            }
+
+            // Details
+            VStack(spacing: 0) {
+                if invite.maxUses > 0 {
+                    HStack {
+                        Text("Max Uses")
+                            .font(.system(size: 14))
+                            .foregroundColor(theme.textSecondary)
+                        Spacer()
+                        Text("\(invite.maxUses)")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(theme.textPrimary)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    Divider().background(theme.divider)
+                }
+                if let exp = invite.expiresAt {
+                    HStack {
+                        Text("Expires")
+                            .font(.system(size: 14))
+                            .foregroundColor(theme.textSecondary)
+                        Spacer()
+                        Text(exp, style: .date)
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(theme.textPrimary)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                }
+            }
+            .background(theme.backgroundCard)
+            .cornerRadius(12)
+        }
+    }
+
+    private func create() async {
+        guard let api = store.api else { return }
+        isCreating = true
+        error = nil
+
+        let create = InviteCodeCreate(
+            maxUses: Int(maxUsesText),
+            note: note.isEmpty ? nil : note,
+            expiresAt: hasExpiry ? expiresAt : nil
+        )
+
+        do {
+            let invite = try await api.createInvite(create)
+            await MainActor.run {
+                createdInvite = invite
+                isCreating = false
+            }
+        } catch {
+            await MainActor.run {
+                self.error = error.localizedDescription
+                isCreating = false
+            }
+        }
     }
 }

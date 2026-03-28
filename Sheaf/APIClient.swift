@@ -104,6 +104,12 @@ final class AuthManager: ObservableObject {
     }
 
     func logout() {
+        // Server-side logout (best-effort, fire-and-forget)
+        if !accessToken.isEmpty, !baseURL.isEmpty {
+            let api = APIClient(auth: self)
+            Task { await api.logout() }
+        }
+
         accessToken  = ""
         refreshToken = ""
         baseURL      = ""
@@ -254,6 +260,73 @@ class APIClient {
         return try JSONDecoder.iso.decode(TOTPSetupResponse.self, from: data)
     }
 
+    // MARK: - Auth Config
+
+    func getAuthConfig() async throws -> [String: Any] {
+        guard let url = URL(string: auth.baseURL + "/v1/auth/config") else { throw URLError(.badURL) }
+        var req = URLRequest(url: url)
+        req.httpMethod = "GET"
+        req.setValue("application/json", forHTTPHeaderField: "Accept")
+        let (data, response) = try await URLSession.shared.data(for: req)
+        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+            throw URLError(.badServerResponse)
+        }
+        return (try? JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
+    }
+
+    // MARK: - Logout
+
+    func logout() async {
+        // Best-effort server-side session invalidation
+        _ = try? await request("/v1/auth/logout", method: "POST")
+    }
+
+    // MARK: - Password Reset
+
+    func requestPasswordReset(email: String) async throws {
+        let body = try JSONEncoder.iso.encode(PasswordResetRequest(email: email))
+        let (data, status) = try await perform("/v1/auth/request-password-reset", method: "POST", body: body)
+        guard (200...299).contains(status) else {
+            let msg = String(data: data, encoding: .utf8) ?? "Request failed"
+            throw NSError(domain: "APIError", code: status, userInfo: [NSLocalizedDescriptionKey: msg])
+        }
+    }
+
+    func resetPassword(token: String, newPassword: String) async throws {
+        let body = try JSONEncoder.iso.encode(PasswordReset(token: token, newPassword: newPassword))
+        let (data, status) = try await perform("/v1/auth/reset-password", method: "POST", body: body)
+        guard (200...299).contains(status) else {
+            let msg = String(data: data, encoding: .utf8) ?? "Request failed"
+            throw NSError(domain: "APIError", code: status, userInfo: [NSLocalizedDescriptionKey: msg])
+        }
+    }
+
+    // MARK: - TOTP Management
+
+    func disableTOTP(email: String, password: String, totpCode: String?) async throws {
+        let body = try JSONEncoder.iso.encode(UserLogin(email: email, password: password, totpCode: totpCode))
+        _ = try await request("/v1/auth/totp/disable", method: "POST", body: body)
+    }
+
+    func regenerateRecoveryCodes(code: String) async throws -> [String] {
+        let body = try JSONEncoder.iso.encode(TOTPVerify(code: code))
+        let data = try await request("/v1/auth/totp/regenerate-recovery-codes", method: "POST", body: body)
+        // Response may contain recovery_codes array or be loosely typed
+        if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let codes = json["recovery_codes"] as? [String] {
+            return codes
+        }
+        return []
+    }
+
+    // MARK: - Delete Confirmation
+
+    func updateDeleteConfirmation(_ update: DeleteConfirmationUpdate) async throws -> SystemProfile {
+        let body = try JSONEncoder.iso.encode(update)
+        let data = try await request("/v1/systems/me/delete-confirmation", method: "PUT", body: body)
+        return try JSONDecoder.iso.decode(SystemProfile.self, from: data)
+    }
+
     // MARK: - Email Verification
 
     func verifyEmail(token: String) async throws {
@@ -280,6 +353,23 @@ class APIClient {
 
     func rejectUser(userID: String) async throws {
         _ = try await request("/v1/admin/users/\(userID)/reject", method: "POST")
+    }
+
+    // MARK: - Admin Invites
+
+    func getInvites() async throws -> [InviteCodeRead] {
+        let data = try await request("/v1/admin/invites")
+        return try JSONDecoder.iso.decode([InviteCodeRead].self, from: data)
+    }
+
+    func createInvite(_ create: InviteCodeCreate) async throws -> InviteCodeRead {
+        let body = try JSONEncoder.iso.encode(create)
+        let data = try await request("/v1/admin/invites", method: "POST", body: body)
+        return try JSONDecoder.iso.decode(InviteCodeRead.self, from: data)
+    }
+
+    func deleteInvite(id: String) async throws {
+        _ = try await request("/v1/admin/invites/\(id)", method: "DELETE")
     }
 
     // MARK: - Sheaf Import
@@ -362,8 +452,9 @@ class APIClient {
         return try JSONDecoder.iso.decode(Member.self, from: data)
     }
 
-    func deleteMember(id: String) async throws {
-        _ = try await request("/v1/members/\(id)", method: "DELETE")
+    func deleteMember(id: String, confirmation: MemberDeleteConfirm? = nil) async throws {
+        let body = confirmation != nil ? try JSONEncoder.iso.encode(confirmation) : nil
+        _ = try await request("/v1/members/\(id)", method: "DELETE", body: body)
     }
 
     // MARK: - Fronts
@@ -442,6 +533,12 @@ class APIClient {
         return try JSONDecoder.iso.decode(Tag.self, from: data)
     }
 
+    func updateTag(id: String, update: TagUpdate) async throws -> Tag {
+        let body = try JSONEncoder.iso.encode(update)
+        let data = try await request("/v1/tags/\(id)", method: "PATCH", body: body)
+        return try JSONDecoder.iso.decode(Tag.self, from: data)
+    }
+
     func deleteTag(id: String) async throws {
         _ = try await request("/v1/tags/\(id)", method: "DELETE")
     }
@@ -450,8 +547,8 @@ class APIClient {
         _ = try await request("/v1/fields/\(id)", method: "DELETE")
     }
 
-    func updateField(id: String, name: String, privacy: PrivacyLevel) async throws -> CustomField {
-        let body = try JSONEncoder.iso.encode(["name": name, "privacy": privacy.rawValue])
+    func updateField(id: String, update: CustomFieldUpdate) async throws -> CustomField {
+        let body = try JSONEncoder.iso.encode(update)
         let data = try await request("/v1/fields/\(id)", method: "PATCH", body: body)
         return try JSONDecoder.iso.decode(CustomField.self, from: data)
     }
@@ -560,8 +657,12 @@ class APIClient {
         _ = try await request("/v1/admin/cleanup/run", method: "POST")
     }
 
-    func runStorageAudit() async throws {
-        _ = try await request("/v1/admin/storage/audit", method: "POST")
+    func getStorageStats() async throws -> [String: Any] {
+        let data = try await request("/v1/admin/storage/stats")
+        if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            return json
+        }
+        return [:]
     }
 
     // MARK: - Export
@@ -572,6 +673,35 @@ class APIClient {
 
     // MARK: - File Upload
 
+
+    // MARK: - File Management
+
+    func getFileUsage() async throws -> [String: Any] {
+        let data = try await request("/v1/files/usage")
+        return (try? JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
+    }
+
+    func listFiles() async throws -> [[String: Any]] {
+        let data = try await request("/v1/files/list")
+        if let arr = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
+            return arr
+        }
+        return []
+    }
+
+    func deleteFile(id: String) async throws {
+        _ = try await request("/v1/files/\(id)", method: "DELETE")
+    }
+
+    func cleanupFiles() async throws -> [String: Any] {
+        let data = try await request("/v1/files/cleanup", method: "POST")
+        return (try? JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
+    }
+
+    func cleanupFilesDryRun() async throws -> [String: Any] {
+        let data = try await request("/v1/files/cleanup/dry-run", method: "POST")
+        return (try? JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
+    }
 
     // MARK: - Simply Plural Import
 
@@ -673,10 +803,14 @@ struct SystemUpdate: Codable {
     var avatarURL: String?
     var color: String?
     var privacy: PrivacyLevel?
+    var dateFormat: DateFormat?
+    var replaceFrontsDefault: Bool?
 
     enum CodingKeys: String, CodingKey {
         case name, description, tag, color, privacy
-        case avatarURL = "avatar_url"
+        case avatarURL            = "avatar_url"
+        case dateFormat           = "date_format"
+        case replaceFrontsDefault = "replace_fronts_default"
     }
 }
 

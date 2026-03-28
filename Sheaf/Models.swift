@@ -106,6 +106,21 @@ struct MemberUpdate: Codable {
 }
 
 // MARK: - SystemRead
+// MARK: - Delete Confirmation
+enum DeleteConfirmation: String, Codable {
+    case none = "none"
+    case password = "password"
+    case totp = "totp"
+    case both = "both"
+}
+
+// MARK: - Date Format
+enum DateFormat: String, Codable {
+    case dmy = "dmy"
+    case mdy = "mdy"
+    case ymd = "ymd"
+}
+
 struct SystemProfile: Identifiable, Codable {
     let id: String
     var name: String
@@ -114,14 +129,36 @@ struct SystemProfile: Identifiable, Codable {
     var avatarURL: String?
     var color: String?
     var privacy: PrivacyLevel
+    var deleteConfirmation: DeleteConfirmation
+    var dateFormat: DateFormat
+    var replaceFrontsDefault: Bool
     let createdAt: Date
     let updatedAt: Date
 
     enum CodingKeys: String, CodingKey {
         case id, name, description, tag, color, privacy
-        case avatarURL  = "avatar_url"
-        case createdAt  = "created_at"
-        case updatedAt  = "updated_at"
+        case avatarURL            = "avatar_url"
+        case deleteConfirmation   = "delete_confirmation"
+        case dateFormat           = "date_format"
+        case replaceFrontsDefault = "replace_fronts_default"
+        case createdAt            = "created_at"
+        case updatedAt            = "updated_at"
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id                   = try c.decode(String.self, forKey: .id)
+        name                 = try c.decode(String.self, forKey: .name)
+        description          = try c.decodeIfPresent(String.self, forKey: .description)
+        tag                  = try c.decodeIfPresent(String.self, forKey: .tag)
+        avatarURL            = try c.decodeIfPresent(String.self, forKey: .avatarURL)
+        color                = try c.decodeIfPresent(String.self, forKey: .color)
+        privacy              = try c.decode(PrivacyLevel.self, forKey: .privacy)
+        deleteConfirmation   = try c.decodeIfPresent(DeleteConfirmation.self, forKey: .deleteConfirmation) ?? .none
+        dateFormat           = try c.decodeIfPresent(DateFormat.self, forKey: .dateFormat) ?? .mdy
+        replaceFrontsDefault = try c.decodeIfPresent(Bool.self, forKey: .replaceFrontsDefault) ?? false
+        createdAt            = try c.decode(Date.self, forKey: .createdAt)
+        updatedAt            = try c.decode(Date.self, forKey: .updatedAt)
     }
 }
 
@@ -146,10 +183,12 @@ struct FrontEntry: Identifiable, Codable {
 struct FrontCreate: Codable {
     var memberIDs: [String]
     var startedAt: Date?
+    var replaceFronts: Bool?
 
     enum CodingKeys: String, CodingKey {
-        case memberIDs = "member_ids"
-        case startedAt = "started_at"
+        case memberIDs     = "member_ids"
+        case startedAt     = "started_at"
+        case replaceFronts = "replace_fronts"
     }
 }
 
@@ -538,6 +577,12 @@ enum UserTier: String, Codable, CaseIterable {
     case free = "free"
     case plus = "plus"
     case selfHosted = "self_hosted"
+    case unknown = "unknown"
+
+    init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = UserTier(rawValue: raw) ?? .unknown
+    }
 }
 
 struct AdminUserRead: Codable, Identifiable {
@@ -597,6 +642,100 @@ struct MemberLimitOverride: Codable {
 
     enum CodingKeys: String, CodingKey {
         case memberLimit = "member_limit"
+    }
+}
+
+// MARK: - Password Reset
+struct PasswordResetRequest: Codable {
+    let email: String
+}
+
+struct PasswordReset: Codable {
+    let token: String
+    let newPassword: String
+
+    enum CodingKeys: String, CodingKey {
+        case token
+        case newPassword = "new_password"
+    }
+}
+
+// MARK: - Delete Confirmation Update
+struct DeleteConfirmationUpdate: Codable {
+    let level: DeleteConfirmation
+    let password: String
+    let totpCode: String?
+
+    enum CodingKeys: String, CodingKey {
+        case level, password
+        case totpCode = "totp_code"
+    }
+}
+
+// MARK: - Tag Update
+struct TagUpdate: Codable {
+    var name: String?
+    var color: String?
+}
+
+// MARK: - Custom Field Update
+struct CustomFieldUpdate: Codable {
+    var name: String?
+    var options: [String: String]?
+    var order: Int?
+    var privacy: PrivacyLevel?
+}
+
+// MARK: - Member Delete Confirmation
+struct MemberDeleteConfirm: Codable {
+    var password: String?
+    var totpCode: String?
+
+    enum CodingKeys: String, CodingKey {
+        case password
+        case totpCode = "totp_code"
+    }
+}
+
+// MARK: - Invite Codes (Admin)
+struct InviteCodeRead: Codable, Identifiable {
+    let id: String
+    let code: String
+    let createdByEmail: String?
+    let maxUses: Int
+    let useCount: Int
+    let note: String?
+    let expiresAt: Date?
+    let createdAt: Date
+
+    enum CodingKeys: String, CodingKey {
+        case id, code, note
+        case createdByEmail = "created_by_email"
+        case maxUses        = "max_uses"
+        case useCount       = "use_count"
+        case expiresAt      = "expires_at"
+        case createdAt      = "created_at"
+    }
+
+    var isExpired: Bool {
+        if let exp = expiresAt { return exp < Date() }
+        return false
+    }
+
+    var isExhausted: Bool {
+        maxUses > 0 && useCount >= maxUses
+    }
+}
+
+struct InviteCodeCreate: Codable {
+    var maxUses: Int?
+    var note: String?
+    var expiresAt: Date?
+
+    enum CodingKeys: String, CodingKey {
+        case maxUses   = "max_uses"
+        case note
+        case expiresAt = "expires_at"
     }
 }
 
