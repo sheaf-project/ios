@@ -88,9 +88,9 @@ struct Theme {
     var accentSoft:   Color { isDark ? Color(hex: "#A78BFA")!.opacity(0.15) : Color(hex: "#8B5CF6")!.opacity(0.1) }
 
     // Status
-    var success: Color { Color(hex: "#4ADE80")! }
-    var danger:  Color { Color(hex: "#F87171")! }
-    var warning: Color { Color(hex: "#FBBF24")! }
+    var success: Color { isDark ? Color(hex: "#4ADE80")! : Color(hex: "#16A34A")! }
+    var danger:  Color { isDark ? Color(hex: "#F87171")! : Color(hex: "#DC2626")! }
+    var warning: Color { isDark ? Color(hex: "#FBBF24")! : Color(hex: "#D97706")! }
 
     // Input fields
     var inputBackground: Color { isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05) }

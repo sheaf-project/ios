@@ -360,7 +360,7 @@ class SystemStore: ObservableObject {
                     if let rid = resolveID(op.resourceID) {
                         struct FieldUpdatePayload: Codable { let name: String; let privacy: PrivacyLevel }
                         let payload = try JSONDecoder.iso.decode(FieldUpdatePayload.self, from: op.bodyData)
-                        _ = try await api.updateField(id: rid, name: payload.name, privacy: payload.privacy)
+                        _ = try await api.updateField(id: rid, update: CustomFieldUpdate(name: payload.name, privacy: payload.privacy))
                     }
                 case .deleteField:
                     if let rid = resolveID(op.resourceID) {
@@ -753,7 +753,7 @@ class SystemStore: ObservableObject {
     func updateField(id: String, name: String, privacy: PrivacyLevel) async {
         if NetworkMonitor.shared.isOnline, let api {
             do {
-                let updated = try await api.updateField(id: id, name: name, privacy: privacy)
+                let updated = try await api.updateField(id: id, update: CustomFieldUpdate(name: name, privacy: privacy))
                 if let idx = fields.firstIndex(where: { $0.id == id }) {
                     fields[idx] = updated
                 }

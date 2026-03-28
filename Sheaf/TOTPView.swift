@@ -201,13 +201,13 @@ struct DigitBox: View {
     var borderColor: Color {
         if hasError { return theme.danger }
         if isFocused { return theme.accentLight }
-        return Color.white.opacity(digit.isEmpty ? 0.15 : 0.35)
+        return theme.inputBorder.opacity(digit.isEmpty ? 0.6 : 1.0)
     }
 
     var body: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 12)
-                .fill(Color.white.opacity(isFocused ? 0.1 : 0.05))
+                .fill(theme.inputBackground.opacity(isFocused ? 1.5 : 1.0))
                 .overlay(RoundedRectangle(cornerRadius: 12).stroke(borderColor, lineWidth: 2))
 
             if digit.isEmpty && isFocused {
