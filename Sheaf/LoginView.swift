@@ -154,30 +154,20 @@ struct SignInForm: View {
                     }
                 }
                 await MainActor.run { isLoading = false }
-            } catch let loginError as NSError {
-                // Check if login failed due to TOTP requirement
-                let errorMessage = loginError.localizedDescription.lowercased()
-                NSLog("📱 Login: Login failed")
-                NSLog("📱 Login: Error message: \(loginError.localizedDescription)")
-                
-                if errorMessage.contains("totp") || errorMessage.contains("code required") {
-                    // The server requires TOTP - show the TOTP field
-                    NSLog("📱 Login: TOTP required, showing 2FA field")
-                    await MainActor.run {
-                        withAnimation {
-                            needsTOTP = true
-                        }
-                        error = "Please enter your 6-digit authenticator code"
-                        focused = .totp
-                        isLoading = false
-                    }
-                } else {
-                    // Some other error - show it
-                    NSLog("📱 Login: Other login error, showing to user")
-                    await MainActor.run {
-                        error = loginError.localizedDescription
-                        isLoading = false
-                    }
+            } catch is APIClient.TOTPRequiredError {
+                // Server returned X-Sheaf-2FA: required — show the TOTP field
+                NSLog("📱 Login: TOTP required, showing 2FA field")
+                await MainActor.run {
+                    withAnimation { needsTOTP = true }
+                    error = "Please enter your 6-digit authenticator code"
+                    focused = .totp
+                    isLoading = false
+                }
+            } catch {
+                NSLog("📱 Login: Login failed: \(error.localizedDescription)")
+                await MainActor.run {
+                    self.error = error.localizedDescription
+                    isLoading = false
                 }
             }
         }
@@ -280,8 +270,18 @@ struct RegisterForm: View {
     @State private var inviteCode       = ""
     @State private var error            = ""
     @State private var isLoading        = false
+    @State private var registrationMode: String?   // "open", "invite", "approval", "closed"
+    @State private var configFetchTask: Task<Void, Never>?
     @FocusState private var focused: Field?
     enum Field { case url, email, password, confirm, invite }
+
+    private var showInviteCode: Bool {
+        registrationMode == "invite" || registrationMode == nil
+    }
+
+    private var isClosed: Bool {
+        registrationMode == "closed"
+    }
 
     var body: some View {
         VStack(spacing: 20) {
@@ -289,7 +289,19 @@ struct RegisterForm: View {
             formField(icon: "envelope.fill", label: String(localized: "Email"),              placeholder: String(localized: "you@example.com"),              value: $email,           field: .email,   keyboard: .emailAddress)
             secureField(                     label: String(localized: "Password"),            placeholder: String(localized: "At least 8 characters"),        value: $password,        field: .password)
             secureField(                     label: String(localized: "Confirm Password"),    placeholder: String(localized: "••••••••"),                     value: $confirmPassword, field: .confirm)
-            formField(icon: "ticket.fill",   label: String(localized: "Invite Code"),         placeholder: String(localized: "Optional"),                     value: $inviteCode,      field: .invite,  keyboard: .default)
+
+            if showInviteCode {
+                formField(icon: "ticket.fill", label: String(localized: "Invite Code"), placeholder: registrationMode == "invite" ? String(localized: "Required") : String(localized: "Optional"), value: $inviteCode, field: .invite, keyboard: .default)
+            }
+
+            if isClosed {
+                HStack(spacing: 8) {
+                    Image(systemName: "lock.fill").foregroundColor(theme.warning)
+                    Text("Registration is closed on this instance.")
+                        .font(.system(size: 13)).foregroundColor(theme.warning)
+                }
+                .padding(.horizontal, 4)
+            }
 
             // Password strength indicator
             if !password.isEmpty {
@@ -302,8 +314,8 @@ struct RegisterForm: View {
             Button { register() } label: {
                 buttonContent(label: String(localized: "Create Account"), icon: "person.badge.plus", loading: isLoading)
             }
-            .disabled(baseURL.isEmpty || email.isEmpty || password.isEmpty || confirmPassword.isEmpty || isLoading)
-            .opacity(baseURL.isEmpty || email.isEmpty || password.isEmpty || confirmPassword.isEmpty ? 0.5 : 1)
+            .disabled(isClosed || baseURL.isEmpty || email.isEmpty || password.isEmpty || confirmPassword.isEmpty || isLoading)
+            .opacity(isClosed || baseURL.isEmpty || email.isEmpty || password.isEmpty || confirmPassword.isEmpty ? 0.5 : 1)
 
             // Switch to sign in
             Button(action: onSwitch) {
@@ -322,6 +334,29 @@ struct RegisterForm: View {
         .cornerRadius(24)
         .overlay(RoundedRectangle(cornerRadius: 24).stroke(theme.border, lineWidth: 1))
         .padding(.horizontal, 24)
+        .onChange(of: baseURL) {
+            configFetchTask?.cancel()
+            configFetchTask = Task {
+                try? await Task.sleep(for: .milliseconds(500))
+                guard !Task.isCancelled else { return }
+                await fetchAuthConfig()
+            }
+        }
+    }
+
+    private func fetchAuthConfig() async {
+        var cleanURL = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        if cleanURL.hasSuffix("/") { cleanURL = String(cleanURL.dropLast()) }
+        guard cleanURL.lowercased().hasPrefix("http"),
+              URL(string: cleanURL + "/v1/auth/config") != nil else { return }
+        let tempAuth = AuthManager()
+        tempAuth.baseURL = cleanURL
+        let api = APIClient(auth: tempAuth)
+        if let config = try? await api.getAuthConfig() {
+            await MainActor.run {
+                registrationMode = config["registration_mode"] as? String
+            }
+        }
     }
 
     private func register() {

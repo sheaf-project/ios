@@ -142,6 +142,11 @@ class APIClient {
     /// Serialises concurrent refresh attempts so only one goes out at a time.
     private var refreshTask: Task<TokenResponse, Error>?
 
+    private var clientIdentifier: String {
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown"
+        return "Sheaf iOS/\(version)"
+    }
+
     init(auth: AuthManager) {
         self.auth = auth
     }
@@ -174,6 +179,7 @@ class APIClient {
         req.httpMethod = method
         req.setValue("Bearer \(auth.accessToken)", forHTTPHeaderField: "Authorization")
         req.setValue("application/json", forHTTPHeaderField: "Accept")
+        req.setValue(clientIdentifier, forHTTPHeaderField: "X-Sheaf-Client")
         if let body {
             req.setValue("application/json", forHTTPHeaderField: "Content-Type")
             req.httpBody = body
@@ -218,13 +224,29 @@ class APIClient {
 
     // MARK: - Auth
 
+    /// Error thrown when the server requires a TOTP code to complete login.
+    struct TOTPRequiredError: Error {}
+
     func login(email: String, password: String, totpCode: String? = nil) async throws -> TokenResponse {
         let body = try JSONEncoder.iso.encode(UserLogin(email: email, password: password, totpCode: totpCode))
         // Don't use request() because login endpoints shouldn't trigger token refresh
-        let (data, status) = try await perform("/v1/auth/login", method: "POST", body: body)
-        guard status == 200 else {
+        guard let url = URL(string: auth.baseURL + "/v1/auth/login") else { throw URLError(.badURL) }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue("application/json", forHTTPHeaderField: "Accept")
+        req.setValue(clientIdentifier, forHTTPHeaderField: "X-Sheaf-Client")
+        req.httpBody = body
+        let (data, response) = try await URLSession.shared.data(for: req)
+        guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
+        // Check for 2FA requirement via X-Sheaf-2FA header
+        if http.statusCode == 401,
+           http.value(forHTTPHeaderField: "X-Sheaf-2FA") == "required" {
+            throw TOTPRequiredError()
+        }
+        guard http.statusCode == 200 else {
             let message = String(data: data, encoding: .utf8) ?? "Login failed"
-            throw NSError(domain: "APIError", code: status,
+            throw NSError(domain: "APIError", code: http.statusCode,
                          userInfo: [NSLocalizedDescriptionKey: message])
         }
         return try JSONDecoder.iso.decode(TokenResponse.self, from: data)
@@ -594,6 +616,46 @@ class APIClient {
         _ = try await request("/v1/auth/keys/\(id)", method: "DELETE")
     }
 
+    // MARK: - Client Settings
+
+    static let clientSettingsId = "sheaf-ios"
+
+    func getClientSettings() async throws -> [String: Any] {
+        let data = try await request("/v1/settings/client/\(Self.clientSettingsId)")
+        return (try? JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
+    }
+
+    func saveClientSettings(_ settings: [String: Any]) async throws {
+        let payload = ["settings": settings]
+        let body = try JSONSerialization.data(withJSONObject: payload)
+        _ = try await request("/v1/settings/client/\(Self.clientSettingsId)", method: "PUT", body: body)
+    }
+
+    func deleteClientSettings() async throws {
+        _ = try await request("/v1/settings/client/\(Self.clientSettingsId)", method: "DELETE")
+    }
+
+    // MARK: - Sessions
+
+    func listSessions() async throws -> [SessionRead] {
+        let data = try await request("/v1/auth/sessions")
+        return try JSONDecoder.iso.decode([SessionRead].self, from: data)
+    }
+
+    func renameSession(id: String, nickname: String) async throws -> SessionRead {
+        let body = try JSONEncoder.iso.encode(SessionUpdate(nickname: nickname))
+        let data = try await request("/v1/auth/sessions/\(id)", method: "PATCH", body: body)
+        return try JSONDecoder.iso.decode(SessionRead.self, from: data)
+    }
+
+    func revokeSession(id: String) async throws {
+        _ = try await request("/v1/auth/sessions/\(id)", method: "DELETE")
+    }
+
+    func revokeOtherSessions() async throws {
+        _ = try await request("/v1/auth/sessions/revoke-others", method: "POST")
+    }
+
     // MARK: - Admin
 
     /// Returns whether step-up auth has been completed.
@@ -741,6 +803,7 @@ class APIClient {
         req.httpMethod = "POST"
         req.setValue("Bearer \(auth.accessToken)", forHTTPHeaderField: "Authorization")
         req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        req.setValue(clientIdentifier, forHTTPHeaderField: "X-Sheaf-Client")
         var body = Data()
         body.append("--\(boundary)\r\n".data(using: .utf8)!)
         body.append("Content-Disposition: form-data; name=\"file\"; filename=\"\(filename)\"\r\n".data(using: .utf8)!)
@@ -767,6 +830,7 @@ class APIClient {
         req.httpMethod = "POST"
         req.setValue("Bearer \(auth.accessToken)", forHTTPHeaderField: "Authorization")
         req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        req.setValue(clientIdentifier, forHTTPHeaderField: "X-Sheaf-Client")
 
         var body = Data()
         body.append("--\(boundary)\r\n".data(using: .utf8)!)
