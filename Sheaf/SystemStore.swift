@@ -131,6 +131,13 @@ class SystemStore: ObservableObject {
 
     var api: APIClient?
     private let cache = CacheManager.shared
+
+    /// Sets errorMessage unless the error is a 403 (handled by gate views).
+    private func showError(_ error: Error) {
+        let ns = error as NSError
+        if ns.domain == "APIError" && ns.code == 403 { return }
+        errorMessage = error.localizedDescription
+    }
     private var offlineQueue: [OfflineOperation] = []
     private var connectivityObserver: Any?
 
@@ -249,7 +256,7 @@ class SystemStore: ObservableObject {
                 saveAllToCache()
                 updateWatchComplication()
             } catch {
-                errorMessage = error.localizedDescription
+                showError(error)
             }
         }
     }
@@ -418,7 +425,7 @@ class SystemStore: ObservableObject {
                 saveAllToCache()
                 updateWatchComplication()
             } catch {
-                errorMessage = error.localizedDescription
+                showError(error)
             }
         } else {
             // Offline: queue end-front operations
@@ -451,7 +458,7 @@ class SystemStore: ObservableObject {
                 frontHistory = try await api.listFronts()
                 await cache.save(frontHistory, key: "frontHistory")
             } catch {
-                errorMessage = error.localizedDescription
+                showError(error)
             }
         }
         // If offline, frontHistory is already loaded from cache
@@ -471,7 +478,7 @@ class SystemStore: ObservableObject {
                 }
                 saveAllToCache()
             } catch {
-                errorMessage = error.localizedDescription
+                showError(error)
             }
         } else {
             if let body = try? JSONEncoder.iso.encode(update) {
@@ -498,7 +505,7 @@ class SystemStore: ObservableObject {
                 currentFronts.removeAll { $0.id == id }
                 saveAllToCache()
             } catch {
-                errorMessage = error.localizedDescription
+                showError(error)
             }
         } else {
             enqueue(.deleteFront, resourceID: id)
@@ -578,7 +585,7 @@ class SystemStore: ObservableObject {
                     members.append(created)
                 }
                 saveAllToCache()
-            } catch { errorMessage = error.localizedDescription }
+            } catch { showError(error) }
         } else {
             if let existing {
                 let update = MemberUpdate(
@@ -626,7 +633,7 @@ class SystemStore: ObservableObject {
                 try await api.deleteMember(id: id)
                 members.removeAll { $0.id == id }
                 saveAllToCache()
-            } catch { errorMessage = error.localizedDescription }
+            } catch { showError(error) }
         } else {
             enqueue(.deleteMember, resourceID: id)
             members.removeAll { $0.id == id }
@@ -651,7 +658,7 @@ class SystemStore: ObservableObject {
                     groups.append(created)
                 }
                 saveAllToCache()
-            } catch { errorMessage = error.localizedDescription }
+            } catch { showError(error) }
         } else {
             if let existing {
                 let update = GroupUpdate(name: create.name, description: create.description,
@@ -685,7 +692,7 @@ class SystemStore: ObservableObject {
     func setGroupMembers(groupID: String, memberIDs: [String]) async {
         if NetworkMonitor.shared.isOnline, let api {
             do { _ = try await api.setGroupMembers(groupID: groupID, memberIDs: memberIDs) }
-            catch { errorMessage = error.localizedDescription }
+            catch { showError(error) }
         } else {
             if let body = try? JSONEncoder.iso.encode(memberIDs) {
                 enqueue(.setGroupMembers, resourceID: groupID, body: body)
@@ -699,7 +706,7 @@ class SystemStore: ObservableObject {
                 try await api.deleteGroup(id: id)
                 groups.removeAll { $0.id == id }
                 saveAllToCache()
-            } catch { errorMessage = error.localizedDescription }
+            } catch { showError(error) }
         } else {
             enqueue(.deleteGroup, resourceID: id)
             groups.removeAll { $0.id == id }
@@ -715,7 +722,7 @@ class SystemStore: ObservableObject {
                 systemProfile = try await api.updateMySystem(update)
                 saveAllToCache()
             } catch {
-                errorMessage = error.localizedDescription
+                showError(error)
             }
         } else {
             if let body = try? JSONEncoder.iso.encode(update) {
@@ -741,7 +748,7 @@ class SystemStore: ObservableObject {
                 fields.removeAll { $0.id == id }
                 saveAllToCache()
             } catch {
-                errorMessage = error.localizedDescription
+                showError(error)
             }
         } else {
             enqueue(.deleteField, resourceID: id)
@@ -759,7 +766,7 @@ class SystemStore: ObservableObject {
                 }
                 saveAllToCache()
             } catch {
-                errorMessage = error.localizedDescription
+                showError(error)
             }
         } else {
             struct FieldUpdatePayload: Codable { let name: String; let privacy: PrivacyLevel }
@@ -782,7 +789,7 @@ class SystemStore: ObservableObject {
                 saveAllToCache()
                 return created
             } catch {
-                errorMessage = error.localizedDescription
+                showError(error)
                 return nil
             }
         } else {
@@ -820,7 +827,7 @@ class SystemStore: ObservableObject {
                 saveAllToCache()
                 return created
             } catch {
-                errorMessage = error.localizedDescription
+                showError(error)
                 return nil
             }
         } else {
@@ -846,7 +853,7 @@ class SystemStore: ObservableObject {
                 tags.removeAll { $0.id == id }
                 saveAllToCache()
             } catch {
-                errorMessage = error.localizedDescription
+                showError(error)
             }
         } else {
             enqueue(.deleteTag, resourceID: id)
@@ -869,7 +876,7 @@ class SystemStore: ObservableObject {
             do {
                 _ = try await api.setMemberFieldValues(memberID: memberID, values: values)
             } catch {
-                errorMessage = error.localizedDescription
+                showError(error)
             }
         } else {
             if let body = try? JSONEncoder.iso.encode(values) {

@@ -25,6 +25,11 @@ struct SettingsView: View {
     @State private var showDeleteConfirmSheet = false
     @State private var isLoadingFileUsage = false
     @State private var fileUsageDisplay = "—"
+    @State private var showDeleteAccount = false
+    @State private var showCancelDeletion = false
+    @State private var isCancellingDeletion = false
+    @State private var logoTapCount = 0
+    @State private var showDebugToken = false
 
     var body: some View {
         NavigationStack {
@@ -45,7 +50,11 @@ struct SettingsView: View {
                         VStack(spacing: 0) {
                             infoRow(icon: "link", label: String(localized: "API URL"), value: authManager.baseURL)
                             Divider().background(theme.backgroundCard)
-                            infoRow(icon: "key.fill", label: String(localized: "Token"), value: maskedToken)
+                            if showDebugToken {
+                                infoRow(icon: "key.fill", label: String(localized: "Token"), value: maskedToken)
+                            } else {
+                                infoRow(icon: "envelope.fill", label: String(localized: "Email"), value: me?.email ?? "—")
+                            }
                             Divider().background(theme.backgroundCard)
                             Button {
                                 newBaseURL = authManager.baseURL
@@ -437,11 +446,50 @@ struct SettingsView: View {
                         }
                     }
 
+                    // Pending deletion banner
+                    if let me, let deletionDate = me.deletionRequestedAt {
+                        settingsSection(title: "") {
+                            VStack(spacing: 12) {
+                                HStack(spacing: 10) {
+                                    Image(systemName: "exclamationmark.triangle.fill")
+                                        .foregroundColor(theme.danger)
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text("Account Deletion Pending")
+                                            .font(.system(size: 15, weight: .semibold))
+                                            .foregroundColor(theme.danger)
+                                        Text("Requested \(deletionDate, style: .relative) ago")
+                                            .font(.system(size: 13))
+                                            .foregroundColor(theme.textSecondary)
+                                    }
+                                    Spacer()
+                                }
+
+                                Button {
+                                    showCancelDeletion = true
+                                } label: {
+                                    HStack {
+                                        if isCancellingDeletion {
+                                            ProgressView().tint(.white)
+                                        }
+                                        Text("Cancel Deletion")
+                                            .font(.system(size: 15, weight: .medium))
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 10)
+                                    .background(theme.accentLight)
+                                    .foregroundColor(.white)
+                                    .cornerRadius(10)
+                                }
+                            }
+                            .padding(16)
+                        }
+                    }
+
                     // Account
                     settingsSection(title: "Account") {
                         VStack(spacing: 0) {
-                            // User tier
                             if let me {
+                                // User tier
                                 HStack(spacing: 12) {
                                     Image(systemName: "person.crop.circle.fill")
                                         .foregroundColor(theme.accentLight)
@@ -463,6 +511,20 @@ struct SettingsView: View {
                                 Divider().background(theme.divider)
                             }
 
+                            Button { showDeleteAccount = true } label: {
+                                HStack {
+                                    Image(systemName: "trash.fill")
+                                        .foregroundColor(theme.danger)
+                                    Text("Delete Account")
+                                        .font(.system(size: 15, weight: .medium))
+                                        .foregroundColor(theme.danger)
+                                    Spacer()
+                                }
+                                .padding(.horizontal, 16).padding(.vertical, 14)
+                            }
+
+                            Divider().background(theme.divider)
+
                             Button { showLogoutConfirm = true } label: {
                                 HStack {
                                     Image(systemName: "rectangle.portrait.and.arrow.right")
@@ -480,6 +542,13 @@ struct SettingsView: View {
                     VStack(spacing: 4) {
                         Text("Sheaf").font(.system(size: 13, weight: .semibold)).foregroundColor(theme.textTertiary)
                         Text("v1.0.0").font(.system(size: 12)).foregroundColor(theme.textTertiary)
+                    }
+                    .onTapGesture {
+                        logoTapCount += 1
+                        if logoTapCount >= 5 {
+                            withAnimation { showDebugToken.toggle() }
+                            logoTapCount = 0
+                        }
                     }
                     .padding(.bottom, 80)
                 }
@@ -528,7 +597,7 @@ struct SettingsView: View {
                 .environmentObject(store)
         }
         .sheet(isPresented: $showDeleteConfirmSheet, onDismiss: { Task { await loadMe() } }) {
-            DeleteConfirmationSheet(currentLevel: deleteConfirmLevel) { newLevel in
+            DeleteConfirmationSheet(currentLevel: deleteConfirmLevel, totpEnabled: me?.totpEnabled == true) { newLevel in
                 deleteConfirmLevel = newLevel
             }
             .environmentObject(authManager)
@@ -545,6 +614,27 @@ struct SettingsView: View {
             }
         } message: {
             Text(exportError ?? "An unknown error occurred.")
+        }
+        .sheet(isPresented: $showDeleteAccount, onDismiss: { Task { await loadMe() } }) {
+            DeleteAccountSheet()
+                .environmentObject(authManager)
+                .environmentObject(store)
+        }
+        .confirmationDialog("Cancel Account Deletion?", isPresented: $showCancelDeletion, titleVisibility: .visible) {
+            Button("Keep My Account") {
+                Task {
+                    guard let api = store.api else { return }
+                    isCancellingDeletion = true
+                    do {
+                        try await api.cancelDeletion()
+                        await loadMe()
+                    } catch {}
+                    isCancellingDeletion = false
+                }
+            }
+            Button("Never Mind", role: .cancel) {}
+        } message: {
+            Text("This will cancel your pending account deletion request.")
         }
         } // NavigationStack
     }
@@ -1065,6 +1155,7 @@ struct DeleteConfirmationSheet: View {
     @Environment(\.dismiss) var dismiss
 
     let currentLevel: DeleteConfirmation
+    let totpEnabled: Bool
     let onUpdate: (DeleteConfirmation) -> Void
 
     @State private var selectedLevel: DeleteConfirmation
@@ -1073,8 +1164,9 @@ struct DeleteConfirmationSheet: View {
     @State private var isSaving = false
     @State private var error = ""
 
-    init(currentLevel: DeleteConfirmation, onUpdate: @escaping (DeleteConfirmation) -> Void) {
+    init(currentLevel: DeleteConfirmation, totpEnabled: Bool, onUpdate: @escaping (DeleteConfirmation) -> Void) {
         self.currentLevel = currentLevel
+        self.totpEnabled = totpEnabled
         self.onUpdate = onUpdate
         _selectedLevel = State(initialValue: currentLevel)
     }
@@ -1096,10 +1188,12 @@ struct DeleteConfirmationSheet: View {
                             confirmOption(.none, title: "None", desc: "No confirmation required")
                             Divider().background(theme.divider)
                             confirmOption(.password, title: "Password", desc: "Require password to delete")
-                            Divider().background(theme.divider)
-                            confirmOption(.totp, title: "2FA Code", desc: "Require authenticator code")
-                            Divider().background(theme.divider)
-                            confirmOption(.both, title: "Password + 2FA", desc: "Require both to delete")
+                            if totpEnabled {
+                                Divider().background(theme.divider)
+                                confirmOption(.totp, title: "2FA Code", desc: "Require authenticator code")
+                                Divider().background(theme.divider)
+                                confirmOption(.both, title: "Password + 2FA", desc: "Require both to delete")
+                            }
                         }
                         .background(theme.backgroundCard)
                         .cornerRadius(14)
@@ -1121,18 +1215,20 @@ struct DeleteConfirmationSheet: View {
                                     .foregroundColor(theme.textPrimary)
                             }
 
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("2FA Code (if enabled)")
-                                    .font(.system(size: 13, weight: .semibold))
-                                    .foregroundColor(theme.textSecondary)
-                                TextField("6-digit code", text: $totpCode)
-                                    .keyboardType(.numberPad)
-                                    .padding(14)
-                                    .background(theme.inputBackground)
-                                    .cornerRadius(12)
-                                    .overlay(RoundedRectangle(cornerRadius: 12)
-                                        .stroke(theme.inputBorder, lineWidth: 1.5))
-                                    .foregroundColor(theme.textPrimary)
+                            if totpEnabled {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("2FA Code")
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .foregroundColor(theme.textSecondary)
+                                    TextField("6-digit code", text: $totpCode)
+                                        .keyboardType(.numberPad)
+                                        .padding(14)
+                                        .background(theme.inputBackground)
+                                        .cornerRadius(12)
+                                        .overlay(RoundedRectangle(cornerRadius: 12)
+                                            .stroke(theme.inputBorder, lineWidth: 1.5))
+                                        .foregroundColor(theme.textPrimary)
+                                }
                             }
                         }
 
@@ -2257,6 +2353,145 @@ struct SessionsView: View {
                 }
             }
         } catch { /* silently fail */ }
+    }
+}
+
+// MARK: - Delete Account Sheet
+struct DeleteAccountSheet: View {
+    @Environment(\.theme) var theme
+    @Environment(\.dismiss) var dismiss
+    @EnvironmentObject var authManager: AuthManager
+    @EnvironmentObject var store: SystemStore
+    @State private var password = ""
+    @State private var totpCode = ""
+    @State private var isDeleting = false
+    @State private var errorMessage: String?
+    @State private var showFinalConfirm = false
+    @State private var me: UserRead?
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                theme.backgroundPrimary.ignoresSafeArea()
+
+                ScrollView {
+                    VStack(spacing: 20) {
+                        // Warning banner
+                        VStack(spacing: 12) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .font(.system(size: 40))
+                                .foregroundColor(theme.danger)
+
+                            Text("Delete Your Account")
+                                .font(.system(size: 20, weight: .bold))
+                                .foregroundColor(theme.textPrimary)
+
+                            Text("This will schedule your account for deletion. All your data — members, fronting history, groups, and files — will be permanently removed.")
+                                .font(.system(size: 14))
+                                .foregroundColor(theme.textSecondary)
+                                .multilineTextAlignment(.center)
+                        }
+                        .padding(.top, 20)
+                        .padding(.horizontal, 24)
+
+                        VStack(spacing: 16) {
+                            // Password field
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("Password")
+                                    .font(.system(size: 13, weight: .medium))
+                                    .foregroundColor(theme.textSecondary)
+                                SecureField("Enter your password", text: $password)
+                                    .textContentType(.password)
+                                    .padding(12)
+                                    .background(theme.backgroundCard)
+                                    .cornerRadius(10)
+                                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(theme.divider, lineWidth: 1))
+                            }
+
+                            // TOTP field (only if TOTP is enabled)
+                            if me?.totpEnabled == true {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text("Two-Factor Code")
+                                        .font(.system(size: 13, weight: .medium))
+                                        .foregroundColor(theme.textSecondary)
+                                    TextField("6-digit code", text: $totpCode)
+                                        .keyboardType(.numberPad)
+                                        .textContentType(.oneTimeCode)
+                                        .padding(12)
+                                        .background(theme.backgroundCard)
+                                        .cornerRadius(10)
+                                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(theme.divider, lineWidth: 1))
+                                }
+                            }
+
+                            if let errorMessage {
+                                Text(errorMessage)
+                                    .font(.system(size: 13))
+                                    .foregroundColor(theme.danger)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                        }
+                        .padding(.horizontal, 24)
+
+                        // Delete button
+                        Button {
+                            showFinalConfirm = true
+                        } label: {
+                            HStack {
+                                Image(systemName: "trash.fill")
+                                Text("Delete My Account")
+                                    .font(.system(size: 16, weight: .semibold))
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(password.isEmpty ? theme.danger.opacity(0.4) : theme.danger)
+                            .foregroundColor(.white)
+                            .cornerRadius(12)
+                        }
+                        .disabled(password.isEmpty || isDeleting)
+                        .padding(.horizontal, 24)
+                        .padding(.top, 8)
+                    }
+                }
+            }
+            .navigationTitle("Delete Account")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+            }
+            .task {
+                guard let api = store.api else { return }
+                me = try? await api.getMe()
+            }
+            .confirmationDialog("Are you absolutely sure?", isPresented: $showFinalConfirm, titleVisibility: .visible) {
+                Button("Delete My Account", role: .destructive) {
+                    Task { await performDeletion() }
+                }
+                Button("Go Back", role: .cancel) {}
+            } message: {
+                Text("This action cannot be easily undone. Your account and all associated data will be scheduled for permanent deletion.")
+            }
+        }
+    }
+
+    private func performDeletion() async {
+        guard let api = store.api else { return }
+        isDeleting = true
+        errorMessage = nil
+        do {
+            try await api.deleteAccount(
+                password: password,
+                totpCode: totpCode.isEmpty ? nil : totpCode
+            )
+            // Don't dismiss() — logout changes the view hierarchy,
+            // which removes this sheet automatically.
+            await MainActor.run { authManager.logout() }
+        } catch {
+            errorMessage = error.localizedDescription
+            isDeleting = false
+        }
     }
 }
 

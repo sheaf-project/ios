@@ -392,28 +392,41 @@ struct UserRead: Codable {
     let emailVerified: Bool
     let createdAt: Date
     let lastLoginAt: Date?
+    let deletionRequestedAt: Date?
 
     enum CodingKeys: String, CodingKey {
         case id, email, tier
-        case totpEnabled   = "totp_enabled"
-        case isAdmin       = "is_admin"
-        case accountStatus = "account_status"
-        case emailVerified = "email_verified"
-        case createdAt     = "created_at"
-        case lastLoginAt   = "last_login_at"
+        case totpEnabled          = "totp_enabled"
+        case isAdmin              = "is_admin"
+        case accountStatus        = "account_status"
+        case emailVerified        = "email_verified"
+        case createdAt            = "created_at"
+        case lastLoginAt          = "last_login_at"
+        case deletionRequestedAt  = "deletion_requested_at"
     }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        id            = try c.decode(String.self, forKey: .id)
-        email         = try c.decode(String.self, forKey: .email)
-        totpEnabled   = try c.decode(Bool.self, forKey: .totpEnabled)
-        isAdmin       = try c.decode(Bool.self, forKey: .isAdmin)
-        tier          = try c.decode(String.self, forKey: .tier)
-        accountStatus = try c.decodeIfPresent(AccountStatus.self, forKey: .accountStatus) ?? .active
-        emailVerified = try c.decodeIfPresent(Bool.self, forKey: .emailVerified) ?? true
-        createdAt     = try c.decode(Date.self, forKey: .createdAt)
-        lastLoginAt   = try c.decodeIfPresent(Date.self, forKey: .lastLoginAt)
+        id                  = try c.decode(String.self, forKey: .id)
+        email               = try c.decode(String.self, forKey: .email)
+        totpEnabled         = try c.decode(Bool.self, forKey: .totpEnabled)
+        isAdmin             = try c.decode(Bool.self, forKey: .isAdmin)
+        tier                = try c.decode(String.self, forKey: .tier)
+        accountStatus       = try c.decodeIfPresent(AccountStatus.self, forKey: .accountStatus) ?? .active
+        emailVerified       = try c.decodeIfPresent(Bool.self, forKey: .emailVerified) ?? true
+        createdAt           = try c.decode(Date.self, forKey: .createdAt)
+        lastLoginAt         = try c.decodeIfPresent(Date.self, forKey: .lastLoginAt)
+        deletionRequestedAt = try c.decodeIfPresent(Date.self, forKey: .deletionRequestedAt)
+    }
+}
+
+struct DeleteAccountRequest: Codable {
+    let password: String
+    let totpCode: String?
+
+    enum CodingKeys: String, CodingKey {
+        case password
+        case totpCode = "totp_code"
     }
 }
 

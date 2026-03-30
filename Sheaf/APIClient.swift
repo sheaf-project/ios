@@ -159,7 +159,15 @@ class APIClient {
         if status != 401 { return data }
 
         // 401 — try to refresh once, then retry
-        let fresh = try await refreshOnce()
+        let fresh: TokenResponse
+        do {
+            fresh = try await refreshOnce()
+        } catch {
+            // Refresh failed — force logout
+            await MainActor.run { auth.logout() }
+            throw NSError(domain: "APIError", code: 401,
+                          userInfo: [NSLocalizedDescriptionKey: "Session expired. Please log in again."])
+        }
         await MainActor.run { auth.save(baseURL: auth.baseURL, tokens: fresh) }
 
         let (retryData, retryStatus) = try await perform(path, method: method, body: body)
@@ -360,6 +368,18 @@ class APIClient {
 
     func resendVerification() async throws {
         _ = try await request("/v1/auth/resend-verification", method: "POST")
+    }
+
+    // MARK: - Account Deletion
+
+    func deleteAccount(password: String, totpCode: String? = nil) async throws {
+        let req = DeleteAccountRequest(password: password, totpCode: totpCode)
+        let body = try JSONEncoder.iso.encode(req)
+        _ = try await request("/v1/auth/delete-account", method: "POST", body: body)
+    }
+
+    func cancelDeletion() async throws {
+        _ = try await request("/v1/auth/cancel-deletion", method: "POST")
     }
 
     // MARK: - Admin Approvals
@@ -725,6 +745,10 @@ class APIClient {
             return json
         }
         return [:]
+    }
+
+    func adminCancelDeletion(userID: String) async throws {
+        _ = try await request("/v1/admin/users/\(userID)/cancel-deletion", method: "POST")
     }
 
     // MARK: - Export

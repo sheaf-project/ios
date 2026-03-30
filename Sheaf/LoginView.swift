@@ -659,7 +659,16 @@ struct EmailVerificationGateView: View {
         let api = APIClient(auth: authManager)
         Task {
             if let me = try? await api.getMe() {
+                // Refresh the access token so subsequent API calls
+                // carry the updated email_verified claim.
+                var freshTokens: TokenResponse?
+                if me.emailVerified, !authManager.emailVerified {
+                    freshTokens = try? await api.refreshTokens()
+                }
                 await MainActor.run {
+                    if let fresh = freshTokens {
+                        authManager.save(baseURL: authManager.baseURL, tokens: fresh)
+                    }
                     authManager.emailVerified = me.emailVerified
                     authManager.accountStatus = me.accountStatus
                     isChecking = false
