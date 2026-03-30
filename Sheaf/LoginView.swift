@@ -531,105 +531,161 @@ struct EmailVerificationGateView: View {
     @EnvironmentObject var authManager: AuthManager
     @Environment(\.theme) var theme
     @State private var isResending = false
-    @State private var isChecking = false
+    @State private var isVerifying = false
+    @State private var verificationToken = ""
     @State private var message = ""
+    @State private var isError = false
 
     var body: some View {
         ZStack {
             theme.loginGradient
                 .ignoresSafeArea()
 
-            VStack(spacing: 0) {
-                Spacer()
+            ScrollView {
+                VStack(spacing: 0) {
+                    Spacer().frame(height: 80)
 
-                ZStack {
-                    Circle()
-                        .fill(LinearGradient(
-                            colors: [theme.accentLight, theme.accent],
-                            startPoint: .topLeading, endPoint: .bottomTrailing))
-                        .frame(width: 72, height: 72)
-                    Image(systemName: "envelope.badge.fill")
-                        .font(.system(size: 30))
-                        .foregroundColor(.white)
-                }
-                .shadow(color: theme.accentLight.opacity(0.5), radius: 20)
-
-                Spacer().frame(height: 24)
-
-                Text("Check Your Email")
-                    .font(.system(size: 26, weight: .bold, design: .rounded))
-                    .foregroundColor(theme.textPrimary)
-
-                Spacer().frame(height: 8)
-
-                Text("We sent a verification link to your email. Please check your inbox and click the link to continue.")
-                    .font(.system(size: 14))
-                    .foregroundColor(theme.textSecondary)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 48)
-
-                Spacer().frame(height: 32)
-
-                if !message.isEmpty {
-                    Text(message)
-                        .font(.system(size: 13))
-                        .foregroundColor(theme.success)
-                        .padding(.bottom, 16)
-                }
-
-                // Resend button
-                Button {
-                    resendVerification()
-                } label: {
-                    HStack {
-                        if isResending { ProgressView().tint(.white) }
-                        else {
-                            Text("Resend Verification Email")
-                                .font(.system(size: 16, weight: .semibold))
-                            Image(systemName: "envelope.arrow.triangle.branch")
-                        }
+                    ZStack {
+                        Circle()
+                            .fill(LinearGradient(
+                                colors: [theme.accentLight, theme.accent],
+                                startPoint: .topLeading, endPoint: .bottomTrailing))
+                            .frame(width: 72, height: 72)
+                        Image(systemName: "envelope.badge.fill")
+                            .font(.system(size: 30))
+                            .foregroundColor(.white)
                     }
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(16)
-                    .background(LinearGradient(colors: [theme.accentLight, theme.accent],
-                                               startPoint: .leading, endPoint: .trailing))
-                    .cornerRadius(14)
-                }
-                .disabled(isResending)
-                .padding(.horizontal, 40)
+                    .shadow(color: theme.accentLight.opacity(0.5), radius: 20)
 
-                Spacer().frame(height: 12)
+                    Spacer().frame(height: 24)
 
-                // Check status button
-                Button {
-                    checkStatus()
-                } label: {
-                    HStack {
-                        if isChecking { ProgressView().tint(theme.accentLight) }
-                        else {
-                            Text("I've Verified — Check Status")
-                                .font(.system(size: 15, weight: .medium))
-                        }
-                    }
-                    .foregroundColor(theme.accentLight)
-                    .frame(maxWidth: .infinity)
-                    .padding(14)
-                    .background(theme.accentSoft)
-                    .cornerRadius(14)
-                }
-                .disabled(isChecking)
-                .padding(.horizontal, 40)
+                    Text("Verify Your Email")
+                        .font(.system(size: 26, weight: .bold, design: .rounded))
+                        .foregroundColor(theme.textPrimary)
 
-                Spacer().frame(height: 24)
+                    Spacer().frame(height: 8)
 
-                Button { authManager.logout() } label: {
-                    Text("Log Out")
+                    Text("We sent a verification link to your email. Paste the token from the email below, or click the link in your browser.")
                         .font(.system(size: 14))
-                        .foregroundColor(theme.textTertiary)
-                }
+                        .foregroundColor(theme.textSecondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 48)
 
-                Spacer()
+                    Spacer().frame(height: 28)
+
+                    // Token input
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Verification Token")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(theme.textSecondary)
+                        TextField("Paste token from email", text: $verificationToken)
+                            .autocapitalization(.none)
+                            .autocorrectionDisabled()
+                            .padding(14)
+                            .background(theme.inputBackground)
+                            .cornerRadius(12)
+                            .overlay(RoundedRectangle(cornerRadius: 12)
+                                .stroke(theme.inputBorder, lineWidth: 1.5))
+                            .foregroundColor(theme.textPrimary)
+                    }
+                    .padding(.horizontal, 40)
+
+                    Spacer().frame(height: 16)
+
+                    if !message.isEmpty {
+                        Text(message)
+                            .font(.system(size: 13))
+                            .foregroundColor(isError ? theme.danger : theme.success)
+                            .padding(.horizontal, 40)
+                            .padding(.bottom, 12)
+                    }
+
+                    // Verify button
+                    Button {
+                        verifyWithToken()
+                    } label: {
+                        HStack {
+                            if isVerifying { ProgressView().tint(.white) }
+                            else {
+                                Text("Verify")
+                                    .font(.system(size: 16, weight: .semibold))
+                            }
+                        }
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(16)
+                        .background(LinearGradient(
+                            colors: verificationToken.isEmpty
+                                ? [theme.accentLight.opacity(0.4), theme.accent.opacity(0.4)]
+                                : [theme.accentLight, theme.accent],
+                            startPoint: .leading, endPoint: .trailing))
+                        .cornerRadius(14)
+                    }
+                    .disabled(verificationToken.isEmpty || isVerifying)
+                    .padding(.horizontal, 40)
+
+                    Spacer().frame(height: 12)
+
+                    // Resend button
+                    Button {
+                        resendVerification()
+                    } label: {
+                        HStack {
+                            if isResending { ProgressView().tint(theme.accentLight) }
+                            else {
+                                Text("Resend Verification Email")
+                                    .font(.system(size: 15, weight: .medium))
+                            }
+                        }
+                        .foregroundColor(theme.accentLight)
+                        .frame(maxWidth: .infinity)
+                        .padding(14)
+                        .background(theme.accentSoft)
+                        .cornerRadius(14)
+                    }
+                    .disabled(isResending)
+                    .padding(.horizontal, 40)
+
+                    Spacer().frame(height: 24)
+
+                    Button { authManager.logout() } label: {
+                        Text("Log Out")
+                            .font(.system(size: 14))
+                            .foregroundColor(theme.textTertiary)
+                    }
+
+                    Spacer().frame(height: 40)
+                }
+            }
+        }
+    }
+
+    private func verifyWithToken() {
+        isVerifying = true
+        message = ""
+        isError = false
+        let api = APIClient(auth: authManager)
+        let token = verificationToken.trimmingCharacters(in: .whitespacesAndNewlines)
+        Task {
+            do {
+                try await api.verifyEmail(token: token)
+                // Refresh the access token so subsequent API calls
+                // carry the updated email_verified claim.
+                var freshTokens: TokenResponse?
+                freshTokens = try? await api.refreshTokens()
+                await MainActor.run {
+                    if let fresh = freshTokens {
+                        authManager.save(baseURL: authManager.baseURL, tokens: fresh)
+                    }
+                    authManager.emailVerified = true
+                    isVerifying = false
+                }
+            } catch {
+                await MainActor.run {
+                    message = "Verification failed. Please check your token and try again."
+                    isError = true
+                    isVerifying = false
+                }
             }
         }
     }
@@ -637,6 +693,7 @@ struct EmailVerificationGateView: View {
     private func resendVerification() {
         isResending = true
         message = ""
+        isError = false
         let api = APIClient(auth: authManager)
         Task {
             do {
@@ -648,33 +705,9 @@ struct EmailVerificationGateView: View {
             } catch {
                 await MainActor.run {
                     message = error.localizedDescription
+                    isError = true
                     isResending = false
                 }
-            }
-        }
-    }
-
-    private func checkStatus() {
-        isChecking = true
-        let api = APIClient(auth: authManager)
-        Task {
-            if let me = try? await api.getMe() {
-                // Refresh the access token so subsequent API calls
-                // carry the updated email_verified claim.
-                var freshTokens: TokenResponse?
-                if me.emailVerified, !authManager.emailVerified {
-                    freshTokens = try? await api.refreshTokens()
-                }
-                await MainActor.run {
-                    if let fresh = freshTokens {
-                        authManager.save(baseURL: authManager.baseURL, tokens: fresh)
-                    }
-                    authManager.emailVerified = me.emailVerified
-                    authManager.accountStatus = me.accountStatus
-                    isChecking = false
-                }
-            } else {
-                await MainActor.run { isChecking = false }
             }
         }
     }
