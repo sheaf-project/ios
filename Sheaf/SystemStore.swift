@@ -130,6 +130,7 @@ class SystemStore: ObservableObject {
     @Published var pendingOperationCount = 0
 
     var api: APIClient?
+    weak var themeManager: ThemeManager?
     private let cache = CacheManager.shared
 
     /// Sets errorMessage unless the error is a 403 (handled by gate views).
@@ -141,8 +142,9 @@ class SystemStore: ObservableObject {
     private var offlineQueue: [OfflineOperation] = []
     private var connectivityObserver: Any?
 
-    func configure(auth: AuthManager) {
+    func configure(auth: AuthManager, themeManager: ThemeManager? = nil) {
         api = APIClient(auth: auth)
+        self.themeManager = themeManager
 
         // Start network monitoring
         let monitor = NetworkMonitor.shared
@@ -258,6 +260,33 @@ class SystemStore: ObservableObject {
             } catch {
                 showError(error)
             }
+
+            // Sync client settings after main data (non-fatal on failure)
+            await fetchClientSettings()
+        }
+    }
+
+    // MARK: - Client Settings Sync
+
+    func fetchClientSettings() async {
+        guard let api else { return }
+        do {
+            let dict = try await api.getClientSettings()
+            guard !dict.isEmpty else { return }
+            let settings = ClientSettings(from: dict)
+            if let newMode = ThemeMode(rawValue: settings.themeMode) {
+                themeManager?.applyFromServer(newMode)
+            }
+        } catch {
+            // Non-fatal — local settings remain in effect
+        }
+    }
+
+    func saveClientSettings() {
+        guard NetworkMonitor.shared.isOnline, let api else { return }
+        let settings = ClientSettings(themeMode: themeManager?.mode.rawValue ?? "system")
+        Task {
+            try? await api.saveClientSettings(settings.toDict())
         }
     }
 
