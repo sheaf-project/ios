@@ -101,24 +101,25 @@ struct MainView: View {
                 MemberEditSheet(member: nil)
                     .environmentObject(systemStore)
             }
-            .onAppear {
+            .task {
                 systemStore.configure(auth: authManager)
-                systemStore.loadAll()
                 // Configure and sync credentials with watch
                 PhoneConnectivityManager.shared.configure(auth: authManager)
                 PhoneConnectivityManager.shared.syncCredentials()
                 SheafShortcuts.updateAppShortcutParameters()
                 donateQuickActions()
-                // Refresh account status
-                Task {
-                    let api = APIClient(auth: authManager)
-                    if let me = try? await api.getMe() {
-                        await MainActor.run {
-                            authManager.accountStatus = me.accountStatus
-                            authManager.emailVerified = me.emailVerified
-                        }
-                    }
+                // Check account status before loading data — if the
+                // server requires email verification or the account is
+                // pending/rejected, updating authManager here will
+                // switch the view before any resource calls fire.
+                let api = APIClient(auth: authManager)
+                if let me = try? await api.getMe() {
+                    authManager.accountStatus = me.accountStatus
+                    authManager.emailVerified = me.emailVerified
+                    guard me.emailVerified,
+                          me.accountStatus == .active else { return }
                 }
+                systemStore.loadAll()
             }
             .onReceive(quickActions.$pendingAction) { action in
                 guard let action else { return }
