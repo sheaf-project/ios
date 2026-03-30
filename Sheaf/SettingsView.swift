@@ -77,7 +77,7 @@ struct SettingsView: View {
                     settingsSection(title: String(localized: "Appearance")) {
                         VStack(spacing: 0) {
                             ForEach(ThemeMode.allCases, id: \.self) { mode in
-                                Button { themeManager.mode = mode } label: {
+                                Button { themeManager.mode = mode; store.saveClientSettings() } label: {
                                     HStack(spacing: 12) {
                                         Image(systemName: mode.icon)
                                             .foregroundColor(themeManager.mode == mode ? theme.accentLight : theme.textTertiary)
@@ -3479,6 +3479,14 @@ struct AdminUserEditSheet: View {
     @State private var memberLimitText: String
     @State private var isSaving = false
     @State private var error: String?
+    @State private var recoveryMessage: String?
+    @State private var isRecoveryError = false
+    @State private var showResetPassword = false
+    @State private var newPassword = ""
+    @State private var showChangeEmail = false
+    @State private var newEmail = ""
+    @State private var showDisableTOTP = false
+    @State private var showVerifyEmail = false
 
     init(user: AdminUserRead, onSave: @escaping (AdminUserRead) -> Void) {
         self.user = user
@@ -3586,6 +3594,57 @@ struct AdminUserEditSheet: View {
                             .cornerRadius(14)
                         }
 
+                        // Recovery Tools
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("RECOVERY TOOLS")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundColor(theme.textSecondary)
+                                .textCase(.uppercase)
+                                .kerning(0.8)
+
+                            VStack(spacing: 0) {
+                                recoveryButton(
+                                    icon: "key.fill",
+                                    title: "Reset Password",
+                                    desc: "Set a new password for this user"
+                                ) { showResetPassword = true }
+
+                                Divider().background(theme.divider)
+
+                                recoveryButton(
+                                    icon: "envelope.fill",
+                                    title: "Change Email",
+                                    desc: "Update this user's email address"
+                                ) { showChangeEmail = true }
+
+                                if !user.emailVerified {
+                                    Divider().background(theme.divider)
+
+                                    recoveryButton(
+                                        icon: "checkmark.seal.fill",
+                                        title: "Verify Email",
+                                        desc: "Manually mark email as verified"
+                                    ) { showVerifyEmail = true }
+                                }
+
+                                Divider().background(theme.divider)
+
+                                recoveryButton(
+                                    icon: "lock.open.fill",
+                                    title: "Disable 2FA",
+                                    desc: "Remove two-factor authentication"
+                                ) { showDisableTOTP = true }
+                            }
+                            .background(theme.backgroundCard)
+                            .cornerRadius(14)
+                        }
+
+                        if let recoveryMessage {
+                            Text(recoveryMessage)
+                                .font(.system(size: 13))
+                                .foregroundColor(isRecoveryError ? theme.danger : theme.success)
+                        }
+
                         if let error {
                             Text(error)
                                 .font(.system(size: 13))
@@ -3618,6 +3677,42 @@ struct AdminUserEditSheet: View {
                     }
                     .disabled(isSaving)
                 }
+            }
+            .alert("Reset Password", isPresented: $showResetPassword) {
+                SecureField("New password (optional)", text: $newPassword)
+                Button("Reset", role: .destructive) {
+                    Task { await adminResetPassword() }
+                }
+                Button("Cancel", role: .cancel) { newPassword = "" }
+            } message: {
+                Text("Enter a new password, or leave blank to send a password reset email to the user.")
+            }
+            .alert("Change Email", isPresented: $showChangeEmail) {
+                TextField("New email address", text: $newEmail)
+                    .keyboardType(.emailAddress)
+                    .autocapitalization(.none)
+                Button("Change", role: .destructive) {
+                    Task { await adminChangeEmail() }
+                }
+                Button("Cancel", role: .cancel) { newEmail = "" }
+            } message: {
+                Text("Enter the new email address for this user.")
+            }
+            .confirmationDialog("Disable 2FA?", isPresented: $showDisableTOTP, titleVisibility: .visible) {
+                Button("Disable 2FA", role: .destructive) {
+                    Task { await adminDisableTOTP() }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This will remove two-factor authentication from this user's account. They can set it up again later.")
+            }
+            .confirmationDialog("Verify Email?", isPresented: $showVerifyEmail, titleVisibility: .visible) {
+                Button("Mark as Verified") {
+                    Task { await adminVerifyEmail() }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This will manually mark this user's email as verified.")
             }
         }
     }
@@ -3666,6 +3761,80 @@ struct AdminUserEditSheet: View {
             self.error = error.localizedDescription
         }
         isSaving = false
+    }
+
+    private func recoveryButton(icon: String, title: String, desc: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                Image(systemName: icon)
+                    .font(.system(size: 16))
+                    .foregroundColor(theme.danger)
+                    .frame(width: 20)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundColor(theme.textPrimary)
+                    Text(desc)
+                        .font(.system(size: 12))
+                        .foregroundColor(theme.textTertiary)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(theme.textTertiary)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+        }
+    }
+
+    private func setRecoveryMessage(_ msg: String, isError: Bool = false) {
+        recoveryMessage = msg
+        isRecoveryError = isError
+    }
+
+    private func adminResetPassword() async {
+        guard let api = store.api else { return }
+        do {
+            try await api.adminResetPassword(userID: user.id, newPassword: newPassword.isEmpty ? nil : newPassword)
+            setRecoveryMessage(newPassword.isEmpty ? "Password reset email sent." : "Password has been reset.")
+            newPassword = ""
+        } catch {
+            setRecoveryMessage(error.localizedDescription, isError: true)
+        }
+    }
+
+    private func adminChangeEmail() async {
+        guard let api = store.api else { return }
+        let email = newEmail.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !email.isEmpty else { return }
+        do {
+            try await api.adminChangeEmail(userID: user.id, newEmail: email)
+            setRecoveryMessage("Email changed to \(email).")
+            newEmail = ""
+        } catch {
+            setRecoveryMessage(error.localizedDescription, isError: true)
+        }
+    }
+
+    private func adminDisableTOTP() async {
+        guard let api = store.api else { return }
+        do {
+            try await api.adminDisableTOTP(userID: user.id)
+            setRecoveryMessage("Two-factor authentication has been disabled.")
+        } catch {
+            setRecoveryMessage(error.localizedDescription, isError: true)
+        }
+    }
+
+    private func adminVerifyEmail() async {
+        guard let api = store.api else { return }
+        do {
+            try await api.adminVerifyEmail(userID: user.id)
+            setRecoveryMessage("Email has been marked as verified.")
+        } catch {
+            setRecoveryMessage(error.localizedDescription, isError: true)
+        }
     }
 }
 

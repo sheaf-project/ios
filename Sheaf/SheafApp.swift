@@ -49,9 +49,9 @@ struct RootView: View {
                 TOTPView()
             } else if !authManager.emailVerified {
                 EmailVerificationGateView()
-            } else if authManager.accountStatus == .pending {
+            } else if authManager.accountStatus == .pendingApproval {
                 AccountPendingGateView()
-            } else if authManager.accountStatus == .rejected {
+            } else if authManager.accountStatus == .banned || authManager.accountStatus == .suspended {
                 AccountRejectedGateView()
             } else {
                 MainView(selectedTab: $selectedTab)
@@ -85,6 +85,7 @@ struct RootView: View {
 struct MainView: View {
     @EnvironmentObject var authManager:  AuthManager
     @EnvironmentObject var systemStore:  SystemStore
+    @EnvironmentObject var themeManager: ThemeManager
     @EnvironmentObject var quickActions: QuickActionHandler
     @Binding var selectedTab: Int
 
@@ -102,7 +103,7 @@ struct MainView: View {
                     .environmentObject(systemStore)
             }
             .task {
-                systemStore.configure(auth: authManager)
+                systemStore.configure(auth: authManager, themeManager: themeManager)
                 // Configure and sync credentials with watch
                 PhoneConnectivityManager.shared.configure(auth: authManager)
                 PhoneConnectivityManager.shared.syncCredentials()

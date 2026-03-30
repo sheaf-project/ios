@@ -751,6 +751,26 @@ class APIClient {
         _ = try await request("/v1/admin/users/\(userID)/cancel-deletion", method: "POST")
     }
 
+    func adminDisableTOTP(userID: String) async throws {
+        _ = try await request("/v1/admin/users/\(userID)/disable-totp", method: "POST")
+    }
+
+    func adminResetPassword(userID: String, newPassword: String?) async throws {
+        let req = AdminResetPasswordRequest(newPassword: newPassword)
+        let body = try JSONEncoder.iso.encode(req)
+        _ = try await request("/v1/admin/users/\(userID)/reset-password", method: "POST", body: body)
+    }
+
+    func adminChangeEmail(userID: String, newEmail: String) async throws {
+        let req = AdminChangeEmailRequest(newEmail: newEmail)
+        let body = try JSONEncoder.iso.encode(req)
+        _ = try await request("/v1/admin/users/\(userID)/change-email", method: "POST", body: body)
+    }
+
+    func adminVerifyEmail(userID: String) async throws {
+        _ = try await request("/v1/admin/users/\(userID)/verify-email", method: "POST")
+    }
+
     // MARK: - Export
 
     func exportData() async throws -> Data {

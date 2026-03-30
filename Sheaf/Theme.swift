@@ -24,6 +24,23 @@ enum ThemeMode: String, CaseIterable {
     }
 }
 
+// MARK: - Client Settings (synced to server)
+struct ClientSettings: Codable, Equatable {
+    var themeMode: String
+
+    static let empty = ClientSettings(themeMode: ThemeMode.system.rawValue)
+
+    init(themeMode: String) { self.themeMode = themeMode }
+
+    init(from dict: [String: Any]) {
+        self.themeMode = dict["theme_mode"] as? String ?? ThemeMode.system.rawValue
+    }
+
+    func toDict() -> [String: Any] {
+        ["theme_mode": themeMode]
+    }
+}
+
 // MARK: - ThemeManager
 final class ThemeManager: ObservableObject {
     @Published var mode: ThemeMode {
@@ -42,6 +59,12 @@ final class ThemeManager: ObservableObject {
         case .light:  return .light
         case .dark:   return .dark
         }
+    }
+
+    /// Apply a mode received from the server without triggering a server save.
+    func applyFromServer(_ newMode: ThemeMode) {
+        guard newMode != mode else { return }
+        mode = newMode
     }
 }
 

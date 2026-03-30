@@ -4,8 +4,16 @@ import SwiftUI
 // MARK: - Account Status
 enum AccountStatus: String, Codable {
     case active = "active"
-    case pending = "pending"
-    case rejected = "rejected"
+    case pendingApproval = "pending_approval"
+    case suspended = "suspended"
+    case banned = "banned"
+    case pendingDeletion = "pending_deletion"
+    case unknown
+
+    init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = AccountStatus(rawValue: raw) ?? .unknown
+    }
 }
 
 // MARK: - Privacy Level
@@ -631,6 +639,7 @@ struct AdminUserRead: Codable, Identifiable {
     let isAdmin: Bool
     let accountStatus: AccountStatus
     let emailVerified: Bool
+    let totpEnabled: Bool
     let signupIp: String?
     let memberLimit: Int?
     let storageUsedBytes: Int
@@ -643,6 +652,7 @@ struct AdminUserRead: Codable, Identifiable {
         case isAdmin          = "is_admin"
         case accountStatus    = "account_status"
         case emailVerified    = "email_verified"
+        case totpEnabled      = "totp_enabled"
         case signupIp         = "signup_ip"
         case memberLimit      = "member_limit"
         case storageUsedBytes = "storage_used_bytes"
@@ -696,6 +706,22 @@ struct PasswordReset: Codable {
     enum CodingKeys: String, CodingKey {
         case token
         case newPassword = "new_password"
+    }
+}
+
+struct AdminResetPasswordRequest: Codable {
+    let newPassword: String?
+
+    enum CodingKeys: String, CodingKey {
+        case newPassword = "new_password"
+    }
+}
+
+struct AdminChangeEmailRequest: Codable {
+    let newEmail: String
+
+    enum CodingKeys: String, CodingKey {
+        case newEmail = "new_email"
     }
 }
 
