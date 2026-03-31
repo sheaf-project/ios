@@ -163,10 +163,15 @@ class APIClient {
         do {
             fresh = try await refreshOnce()
         } catch {
-            // Refresh failed — force logout
-            await MainActor.run { auth.logout() }
-            throw NSError(domain: "APIError", code: 401,
-                          userInfo: [NSLocalizedDescriptionKey: "Session expired. Please log in again."])
+            let code = (error as NSError).code
+            if code == 401 || code == 403 {
+                // Genuine auth rejection — session is dead
+                await MainActor.run { auth.logout() }
+                throw NSError(domain: "APIError", code: 401,
+                              userInfo: [NSLocalizedDescriptionKey: "Session expired. Please log in again."])
+            }
+            // Transient error (network, server 5xx, etc.) — don't log out
+            throw error
         }
         await MainActor.run { auth.save(baseURL: auth.baseURL, tokens: fresh) }
 
@@ -220,9 +225,12 @@ class APIClient {
             req.setValue("application/json", forHTTPHeaderField: "Accept")
             req.httpBody = body
             let (data, response) = try await URLSession.shared.data(for: req)
-            guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
-                throw NSError(domain: "APIError", code: 401,
-                              userInfo: [NSLocalizedDescriptionKey: "Token refresh failed."])
+            guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
+            guard (200...299).contains(http.statusCode) else {
+                // Preserve the real status code so the caller can distinguish
+                // auth rejection (401/403) from transient server errors (5xx)
+                throw NSError(domain: "APIError", code: http.statusCode,
+                              userInfo: [NSLocalizedDescriptionKey: "Token refresh failed (HTTP \(http.statusCode))."])
             }
             return try JSONDecoder.iso.decode(TokenResponse.self, from: data)
         }
