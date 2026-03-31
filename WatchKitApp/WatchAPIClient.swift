@@ -29,7 +29,9 @@ class WatchAPIClient {
                 }
                 return try await request(path, method: method, body: body)
             }
+            // Refresh failed — log out and ask iPhone for fresh credentials
             await MainActor.run { auth.logout() }
+            WatchConnectivityManager.shared.requestCredentials()
             throw URLError(.userAuthenticationRequired)
         }
         guard (200...299).contains(http.statusCode) else {

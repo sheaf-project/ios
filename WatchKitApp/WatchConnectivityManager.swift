@@ -45,35 +45,39 @@ final class WatchConnectivityManager: NSObject, WCSessionDelegate, ObservableObj
     }
 
     /// Actively request credentials from the iPhone (pull-based).
-    /// Only works when the iPhone app is reachable (foreground/recently active).
+    /// Prefers sendMessage (live, fresh) over receivedApplicationContext (may be stale).
     func requestCredentials() {
         guard WCSession.default.activationState == .activated else {
             NSLog("⌚️ WatchConnectivityManager: Cannot request credentials - session not activated")
             return
         }
-        
-        // First, always check the application context — this survives reboots
-        // and doesn't require the iPhone app to be in the foreground.
-        let existing = WCSession.default.receivedApplicationContext
-        if !existing.isEmpty, existing["accessToken"] as? String != nil {
-            NSLog("⌚️ WatchConnectivityManager: Found credentials in receivedApplicationContext")
-            applyContext(existing)
-            return
-        }
-        
-        // Fall back to sendMessage if iPhone is reachable (requires iPhone app foreground)
-        guard WCSession.default.isReachable else {
-            NSLog("⌚️ WatchConnectivityManager: iPhone not reachable, will retry when reachable")
+
+        // Prefer sendMessage — it gets live credentials from the iPhone,
+        // rather than potentially stale receivedApplicationContext.
+        if WCSession.default.isReachable {
+            NSLog("⌚️ WatchConnectivityManager: Requesting credentials from iPhone via sendMessage...")
+            WCSession.default.sendMessage(["request": "credentials"], replyHandler: { [weak self] reply in
+                NSLog("⌚️ WatchConnectivityManager: Received credential reply from iPhone")
+                self?.applyContext(reply)
+            }, errorHandler: { [weak self] error in
+                NSLog("⌚️ WatchConnectivityManager: sendMessage failed: \(error.localizedDescription), falling back to application context")
+                // Fall back to application context if sendMessage fails
+                let existing = WCSession.default.receivedApplicationContext
+                if !existing.isEmpty, existing["accessToken"] as? String != nil {
+                    self?.applyContext(existing)
+                }
+            })
             return
         }
 
-        NSLog("⌚️ WatchConnectivityManager: Requesting credentials from iPhone via sendMessage...")
-        WCSession.default.sendMessage(["request": "credentials"], replyHandler: { [weak self] reply in
-            NSLog("⌚️ WatchConnectivityManager: Received credential reply from iPhone")
-            self?.applyContext(reply)
-        }, errorHandler: { error in
-            NSLog("⌚️ WatchConnectivityManager: Credential request failed: \(error.localizedDescription)")
-        })
+        // iPhone not reachable — try application context as a last resort
+        let existing = WCSession.default.receivedApplicationContext
+        if !existing.isEmpty, existing["accessToken"] as? String != nil {
+            NSLog("⌚️ WatchConnectivityManager: iPhone not reachable, applying receivedApplicationContext")
+            applyContext(existing)
+        } else {
+            NSLog("⌚️ WatchConnectivityManager: iPhone not reachable, no cached context, will retry when reachable")
+        }
     }
 
     // MARK: - Receive from iPhone
