@@ -3419,7 +3419,6 @@ struct AdminPanelView: View {
             if !reset { currentPage += 1 }
         } catch {
             if handleStepUpExpiry(error) { return }
-            if reset { users = [] }
         }
         isLoadingUsers = false
     }
