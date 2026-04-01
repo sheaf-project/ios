@@ -13,8 +13,6 @@
 xcuserdata/
 *.xcuserstate
 
-#
-
 # Build
 build/
 DerivedData/
