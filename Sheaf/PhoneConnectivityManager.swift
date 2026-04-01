@@ -34,11 +34,16 @@ final class PhoneConnectivityManager: NSObject, WCSessionDelegate, ObservableObj
             return
         }
 
-        let context: [String: Any] = [
+        var context: [String: Any] = [
             "baseURL":      auth.baseURL,
             "accessToken":  auth.accessToken,
             "refreshToken": auth.refreshToken,
         ]
+        if let cfId = UserDefaults.standard.string(forKey: "sheaf_cf_client_id"), !cfId.isEmpty,
+           let cfSecret = UserDefaults.standard.string(forKey: "sheaf_cf_client_secret"), !cfSecret.isEmpty {
+            context["cfClientId"] = cfId
+            context["cfClientSecret"] = cfSecret
+        }
 
         guard WCSession.default.activationState == .activated else {
             NSLog("📱 PhoneConnectivityManager: Session not activated, can't sync")
@@ -81,11 +86,16 @@ final class PhoneConnectivityManager: NSObject, WCSessionDelegate, ObservableObj
                 replyHandler(["error": "not_authenticated"])
                 return
             }
-            let credentials: [String: Any] = [
+            var credentials: [String: Any] = [
                 "baseURL":      auth.baseURL,
                 "accessToken":  auth.accessToken,
                 "refreshToken": auth.refreshToken,
             ]
+            if let cfId = UserDefaults.standard.string(forKey: "sheaf_cf_client_id"), !cfId.isEmpty,
+               let cfSecret = UserDefaults.standard.string(forKey: "sheaf_cf_client_secret"), !cfSecret.isEmpty {
+                credentials["cfClientId"] = cfId
+                credentials["cfClientSecret"] = cfSecret
+            }
             NSLog("📱 PhoneConnectivityManager: Sending credentials to Watch via reply")
             replyHandler(credentials)
             return

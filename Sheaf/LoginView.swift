@@ -5,6 +5,8 @@ struct LoginView: View {
     @EnvironmentObject var authManager: AuthManager
     @Environment(\.theme) var theme
     @State private var isRegistering = false
+    @State private var logoTapCount = 0
+    @State private var showCFSheet = false
 
     var body: some View {
         ZStack {
@@ -28,6 +30,13 @@ struct LoginView: View {
                                 .foregroundColor(.white)
                         }
                         .shadow(color: theme.accentLight.opacity(0.6), radius: 20)
+                        .onTapGesture {
+                            logoTapCount += 1
+                            if logoTapCount >= 10 {
+                                logoTapCount = 0
+                                showCFSheet = true
+                            }
+                        }
 
                         Text("Sheaf")
                             .font(.system(size: 34, weight: .bold, design: .rounded))
@@ -49,6 +58,62 @@ struct LoginView: View {
                     }
 
                     Spacer().frame(height: 60)
+                }
+            }
+        }
+        .sheet(isPresented: $showCFSheet) {
+            CFAccessSheet()
+        }
+    }
+}
+
+// MARK: - Cloudflare Access Sheet
+struct CFAccessSheet: View {
+    @Environment(\.theme) var theme
+    @Environment(\.dismiss) var dismiss
+    @State private var clientId: String = UserDefaults.standard.string(forKey: "sheaf_cf_client_id") ?? ""
+    @State private var clientSecret: String = UserDefaults.standard.string(forKey: "sheaf_cf_client_secret") ?? ""
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextField("Client ID", text: $clientId)
+                        .autocorrectionDisabled()
+                        .autocapitalization(.none)
+                    SecureField("Client Secret", text: $clientSecret)
+                        .autocorrectionDisabled()
+                        .autocapitalization(.none)
+                } header: {
+                    Text("Cloudflare Access Service Token")
+                } footer: {
+                    Text("If your Sheaf instance is behind Cloudflare Access, enter your service token credentials here. They will be sent as CF-Access-Client-Id and CF-Access-Client-Secret headers with every request.")
+                }
+
+                Section {
+                    Button("Clear Tokens", role: .destructive) {
+                        clientId = ""
+                        clientSecret = ""
+                        APIClient.clearCFTokens()
+                        dismiss()
+                    }
+                    .disabled(!APIClient.cfAccessEnabled)
+                }
+            }
+            .navigationTitle("Cloudflare Access")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        APIClient.saveCFTokens(
+                            clientId: clientId.trimmingCharacters(in: .whitespacesAndNewlines),
+                            clientSecret: clientSecret.trimmingCharacters(in: .whitespacesAndNewlines)
+                        )
+                        dismiss()
+                    }
                 }
             }
         }

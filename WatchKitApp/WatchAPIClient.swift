@@ -7,12 +7,22 @@ class WatchAPIClient {
 
     init(auth: WatchAuthManager) { self.auth = auth }
 
+    /// Applies Cloudflare Access service token headers if configured.
+    private func applyCFHeaders(to req: inout URLRequest) {
+        if let id = UserDefaults.standard.string(forKey: "sheaf_cf_client_id"), !id.isEmpty,
+           let secret = UserDefaults.standard.string(forKey: "sheaf_cf_client_secret"), !secret.isEmpty {
+            req.setValue(id, forHTTPHeaderField: "CF-Access-Client-Id")
+            req.setValue(secret, forHTTPHeaderField: "CF-Access-Client-Secret")
+        }
+    }
+
     private func request(_ path: String, method: String = "GET", body: Data? = nil) async throws -> Data {
         guard let url = URL(string: auth.baseURL + path) else { throw URLError(.badURL) }
         var req = URLRequest(url: url)
         req.httpMethod = method
         req.setValue("Bearer \(auth.accessToken)", forHTTPHeaderField: "Authorization")
         req.setValue("application/json", forHTTPHeaderField: "Accept")
+        applyCFHeaders(to: &req)
         if let body {
             req.setValue("application/json", forHTTPHeaderField: "Content-Type")
             req.httpBody = body
@@ -47,6 +57,7 @@ class WatchAPIClient {
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        applyCFHeaders(to: &req)
         req.httpBody = try JSONEncoder.iso.encode(TokenRefresh(refreshToken: auth.refreshToken))
         let (data, _) = try await URLSession.shared.data(for: req)
         return try JSONDecoder.iso.decode(TokenResponse.self, from: data)
