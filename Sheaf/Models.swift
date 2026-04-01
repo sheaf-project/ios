@@ -676,6 +676,12 @@ struct AdminUserUpdate: Codable {
     }
 }
 
+struct AdminAuthStatus {
+    let level: String    // "none", "password", "totp"
+    let verified: Bool
+    let totpEnabled: Bool
+}
+
 struct AdminStepUpVerify: Codable {
     var password: String?
     var totpCode: String?

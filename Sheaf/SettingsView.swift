@@ -2508,6 +2508,16 @@ struct AdminPanelView: View {
     @State private var totpCode = ""
     @State private var authError: String?
     @State private var isAuthenticating = false
+    @State private var authLevel = "none"    // "none", "password", "totp"
+    @State private var totpEnabled = false
+
+    private var canAuthenticate: Bool {
+        switch authLevel {
+        case "password": return !password.isEmpty
+        case "totp": return totpCode.count == 6
+        default: return false
+        }
+    }
 
     // Stats
     @State private var stats: [String: Int]?
@@ -2608,7 +2618,9 @@ struct AdminPanelView: View {
                         .font(.system(size: 22, weight: .bold, design: .rounded))
                         .foregroundColor(theme.textPrimary)
 
-                    Text("Enter your password to access the admin panel.")
+                    Text(authLevel == "totp"
+                         ? "Enter your TOTP code to access the admin panel."
+                         : "Enter your password to access the admin panel.")
                         .font(.system(size: 14))
                         .foregroundColor(theme.textSecondary)
                         .multilineTextAlignment(.center)
@@ -2617,29 +2629,33 @@ struct AdminPanelView: View {
                 .padding(.top, 40)
 
                 VStack(spacing: 16) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Password")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundColor(theme.textSecondary)
-                        SecureField("Enter your password", text: $password)
-                            .autocapitalization(.none)
-                            .autocorrectionDisabled()
-                            .padding(14)
-                            .background(theme.backgroundCard)
-                            .cornerRadius(12)
-                            .foregroundColor(theme.textPrimary)
+                    if authLevel == "password" {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Password")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundColor(theme.textSecondary)
+                            SecureField("Enter your password", text: $password)
+                                .autocapitalization(.none)
+                                .autocorrectionDisabled()
+                                .padding(14)
+                                .background(theme.backgroundCard)
+                                .cornerRadius(12)
+                                .foregroundColor(theme.textPrimary)
+                        }
                     }
 
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("TOTP Code (if enabled)")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundColor(theme.textSecondary)
-                        TextField("6-digit code", text: $totpCode)
-                            .keyboardType(.numberPad)
-                            .padding(14)
-                            .background(theme.backgroundCard)
-                            .cornerRadius(12)
-                            .foregroundColor(theme.textPrimary)
+                    if authLevel == "totp" {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("TOTP Code")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundColor(theme.textSecondary)
+                            TextField("6-digit code", text: $totpCode)
+                                .keyboardType(.numberPad)
+                                .padding(14)
+                                .background(theme.backgroundCard)
+                                .cornerRadius(12)
+                                .foregroundColor(theme.textPrimary)
+                        }
                     }
                 }
                 .padding(.horizontal, 24)
@@ -2652,6 +2668,7 @@ struct AdminPanelView: View {
                 }
 
                 Button {
+                    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
                     Task { await authenticate() }
                 } label: {
                     HStack {
@@ -2663,11 +2680,11 @@ struct AdminPanelView: View {
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
-                    .background(password.isEmpty ? theme.accentLight.opacity(0.4) : theme.accentLight)
+                    .background(canAuthenticate ? theme.accentLight : theme.accentLight.opacity(0.4))
                     .foregroundColor(.white)
                     .cornerRadius(12)
                 }
-                .disabled(password.isEmpty || isAuthenticating)
+                .disabled(!canAuthenticate || isAuthenticating)
                 .padding(.horizontal, 24)
             }
         }
@@ -3322,7 +3339,10 @@ struct AdminPanelView: View {
         guard let api = store.api else { return }
         isCheckingAuth = true
         do {
-            isAdminAuthed = try await api.getAdminAuthStatus()
+            let status = try await api.getAdminAuthStatus()
+            authLevel = status.level
+            totpEnabled = status.totpEnabled
+            isAdminAuthed = status.verified || status.level == "none"
         } catch {
             // If the check itself fails (e.g. 403), assume step-up is needed
             isAdminAuthed = false
@@ -3356,10 +3376,26 @@ struct AdminPanelView: View {
         isAuthenticating = false
     }
 
+    /// Returns true (and resets to auth screen) if the error is a step-up expiry.
+    private func handleStepUpExpiry(_ error: Error) -> Bool {
+        let nsError = error as NSError
+        if nsError.code == 403,
+           nsError.localizedDescription.contains("admin_step_up_required") {
+            isAdminAuthed = false
+            authError = "Session expired. Please re-authenticate."
+            return true
+        }
+        return false
+    }
+
     private func loadStats() async {
         guard let api = store.api else { return }
         isLoadingStats = true
-        stats = try? await api.getAdminStats()
+        do {
+            stats = try await api.getAdminStats()
+        } catch {
+            if handleStepUpExpiry(error) { return }
+        }
         isLoadingStats = false
     }
 
@@ -3382,6 +3418,7 @@ struct AdminPanelView: View {
             hasMoreUsers = fetched.count == limit
             if !reset { currentPage += 1 }
         } catch {
+            if handleStepUpExpiry(error) { return }
             if reset { users = [] }
         }
         isLoadingUsers = false
@@ -3408,6 +3445,7 @@ struct AdminPanelView: View {
                 maintenanceResult = summary.isEmpty ? "No storage stats available." : summary
             }
         } catch {
+            if handleStepUpExpiry(error) { return }
             maintenanceResult = "Error: \(error.localizedDescription)"
         }
         isRunningMaintenance = false
@@ -3426,6 +3464,7 @@ struct AdminPanelView: View {
                 ? "\(count) orphaned file(s) found. Use 'Clean Up Orphaned Files' to remove them."
                 : "No orphaned files found."
         } catch {
+            if handleStepUpExpiry(error) { return }
             fileCleanupResult = "Error: \(error.localizedDescription)"
         }
         isRunningMaintenance = false
@@ -3440,6 +3479,7 @@ struct AdminPanelView: View {
             let count = result["files_removed"] as? Int ?? result["count"] as? Int ?? 0
             fileCleanupResult = "Cleaned up \(count) file(s)."
         } catch {
+            if handleStepUpExpiry(error) { return }
             fileCleanupResult = "Error: \(error.localizedDescription)"
         }
         isRunningMaintenance = false
