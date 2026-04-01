@@ -757,17 +757,17 @@ class APIClient {
 
     // MARK: - Admin
 
-    /// Returns whether step-up auth has been completed.
-    /// The response schema is loosely defined — if `is_authenticated` is missing,
-    /// we assume step-up is not required and return true.
-    func getAdminAuthStatus() async throws -> Bool {
+    /// Returns the admin step-up auth status from the server.
+    func getAdminAuthStatus() async throws -> AdminAuthStatus {
         let data = try await request("/v1/admin/auth")
-        if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-           let isAuthed = json["is_authenticated"] as? Bool {
-            return isAuthed
+        if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            return AdminAuthStatus(
+                level: json["level"] as? String ?? "none",
+                verified: json["verified"] as? Bool ?? true,
+                totpEnabled: json["totp_enabled"] as? Bool ?? false
+            )
         }
-        // Field missing or not a bool — assume step-up not required
-        return true
+        return AdminAuthStatus(level: "none", verified: true, totpEnabled: false)
     }
 
     func adminStepUp(_ verify: AdminStepUpVerify) async throws {
