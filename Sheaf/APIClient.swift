@@ -147,6 +147,65 @@ class APIClient {
         return "Sheaf iOS/\(version)"
     }
 
+    private static let cfClientIdKey = "sheaf_cf_client_id"
+    private static let cfClientSecretKey = "sheaf_cf_client_secret"
+
+    static var cfAccessEnabled: Bool {
+        let id = UserDefaults.standard.string(forKey: cfClientIdKey) ?? ""
+        let secret = UserDefaults.standard.string(forKey: cfClientSecretKey) ?? ""
+        return !id.isEmpty && !secret.isEmpty
+    }
+
+    static func saveCFTokens(clientId: String, clientSecret: String) {
+        UserDefaults.standard.set(clientId, forKey: cfClientIdKey)
+        UserDefaults.standard.set(clientSecret, forKey: cfClientSecretKey)
+    }
+
+    static func clearCFTokens() {
+        UserDefaults.standard.removeObject(forKey: cfClientIdKey)
+        UserDefaults.standard.removeObject(forKey: cfClientSecretKey)
+    }
+
+    /// Applies Cloudflare Access service token headers if configured.
+    private func applyCFHeaders(to req: inout URLRequest) {
+        if let id = UserDefaults.standard.string(forKey: Self.cfClientIdKey), !id.isEmpty,
+           let secret = UserDefaults.standard.string(forKey: Self.cfClientSecretKey), !secret.isEmpty {
+            req.setValue(id, forHTTPHeaderField: "CF-Access-Client-Id")
+            req.setValue(secret, forHTTPHeaderField: "CF-Access-Client-Secret")
+        }
+    }
+
+    /// Cached CF-aware session. Recreated when tokens change.
+    private static var _cfSession: URLSession?
+    private static var _cfSessionTokenHash: String?
+
+    private static func makeCFSession() -> URLSession {
+        let id = UserDefaults.standard.string(forKey: cfClientIdKey) ?? ""
+        let secret = UserDefaults.standard.string(forKey: cfClientSecretKey) ?? ""
+        let hash = "\(id):\(secret)"
+        if let existing = _cfSession, _cfSessionTokenHash == hash {
+            return existing
+        }
+        let config = URLSessionConfiguration.default
+        // Inject CF headers at the session level for maximum reliability
+        if !id.isEmpty, !secret.isEmpty {
+            config.httpAdditionalHeaders = [
+                "CF-Access-Client-Id": id,
+                "CF-Access-Client-Secret": secret
+            ]
+        }
+        let delegate = CFHeaderPreservingDelegate()
+        let session = URLSession(configuration: config, delegate: delegate, delegateQueue: nil)
+        _cfSession = session
+        _cfSessionTokenHash = hash
+        return session
+    }
+
+    /// Returns the appropriate URLSession — uses a CF-aware session when tokens are configured.
+    private var urlSession: URLSession {
+        Self.cfAccessEnabled ? Self.makeCFSession() : URLSession.shared
+    }
+
     init(auth: AuthManager) {
         self.auth = auth
     }
@@ -193,12 +252,21 @@ class APIClient {
         req.setValue("Bearer \(auth.accessToken)", forHTTPHeaderField: "Authorization")
         req.setValue("application/json", forHTTPHeaderField: "Accept")
         req.setValue(clientIdentifier, forHTTPHeaderField: "X-Sheaf-Client")
+        applyCFHeaders(to: &req)
         if let body {
             req.setValue("application/json", forHTTPHeaderField: "Content-Type")
             req.httpBody = body
         }
-        let (data, response) = try await URLSession.shared.data(for: req)
+        let (data, response) = try await urlSession.data(for: req)
         guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
+        // Detect Cloudflare Access interception (returns 200 with HTML)
+        if let prefix = String(data: data.prefix(100), encoding: .utf8),
+           prefix.contains("<!DOCTYPE") || prefix.contains("<html") {
+            if prefix.contains("Cloudflare") {
+                throw NSError(domain: "APIError", code: 403,
+                              userInfo: [NSLocalizedDescriptionKey: "This server is behind Cloudflare Access. Tap the Sheaf logo 10 times on the login screen to configure your service token."])
+            }
+        }
         // Throw for all errors except 401 (which we handle via retry) and 204 (no content)
         if http.statusCode != 401 && !(200...299).contains(http.statusCode) {
             let body = String(data: data, encoding: .utf8) ?? "(no body)"
@@ -223,8 +291,9 @@ class APIClient {
             req.httpMethod = "POST"
             req.setValue("application/json", forHTTPHeaderField: "Content-Type")
             req.setValue("application/json", forHTTPHeaderField: "Accept")
+            applyCFHeaders(to: &req)
             req.httpBody = body
-            let (data, response) = try await URLSession.shared.data(for: req)
+            let (data, response) = try await urlSession.data(for: req)
             guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
             guard (200...299).contains(http.statusCode) else {
                 // Preserve the real status code so the caller can distinguish
@@ -252,8 +321,9 @@ class APIClient {
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.setValue("application/json", forHTTPHeaderField: "Accept")
         req.setValue(clientIdentifier, forHTTPHeaderField: "X-Sheaf-Client")
+        applyCFHeaders(to: &req)
         req.httpBody = body
-        let (data, response) = try await URLSession.shared.data(for: req)
+        let (data, response) = try await urlSession.data(for: req)
         guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
         // Check for 2FA requirement via X-Sheaf-2FA header
         if http.statusCode == 401,
@@ -265,7 +335,7 @@ class APIClient {
             throw NSError(domain: "APIError", code: http.statusCode,
                          userInfo: [NSLocalizedDescriptionKey: message])
         }
-        return try JSONDecoder.iso.decode(TokenResponse.self, from: data)
+        return try Self.decodeJSON(TokenResponse.self, from: data)
     }
 
     func register(email: String, password: String, inviteCode: String? = nil) async throws -> TokenResponse {
@@ -305,7 +375,8 @@ class APIClient {
         var req = URLRequest(url: url)
         req.httpMethod = "GET"
         req.setValue("application/json", forHTTPHeaderField: "Accept")
-        let (data, response) = try await URLSession.shared.data(for: req)
+        applyCFHeaders(to: &req)
+        let (data, response) = try await urlSession.data(for: req)
         guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
             throw URLError(.badServerResponse)
         }
@@ -856,6 +927,7 @@ class APIClient {
         req.setValue("Bearer \(auth.accessToken)", forHTTPHeaderField: "Authorization")
         req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
         req.setValue(clientIdentifier, forHTTPHeaderField: "X-Sheaf-Client")
+        applyCFHeaders(to: &req)
         var body = Data()
         body.append("--\(boundary)\r\n".data(using: .utf8)!)
         body.append("Content-Disposition: form-data; name=\"file\"; filename=\"\(filename)\"\r\n".data(using: .utf8)!)
@@ -863,7 +935,7 @@ class APIClient {
         body.append(fileData)
         body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
         req.httpBody = body
-        let (data, response) = try await URLSession.shared.data(for: req)
+        let (data, response) = try await urlSession.data(for: req)
         guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
         guard (200...299).contains(http.statusCode) else {
             let msg = String(data: data, encoding: .utf8) ?? "(no body)"
@@ -883,6 +955,7 @@ class APIClient {
         req.setValue("Bearer \(auth.accessToken)", forHTTPHeaderField: "Authorization")
         req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
         req.setValue(clientIdentifier, forHTTPHeaderField: "X-Sheaf-Client")
+        applyCFHeaders(to: &req)
 
         var body = Data()
         body.append("--\(boundary)\r\n".data(using: .utf8)!)
@@ -892,7 +965,7 @@ class APIClient {
         body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
         req.httpBody = body
 
-        let (data, response) = try await URLSession.shared.data(for: req)
+        let (data, response) = try await urlSession.data(for: req)
         guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
             let msg = String(data: data, encoding: .utf8) ?? "(no body)"
             throw NSError(domain: "APIError", code: (response as? HTTPURLResponse)?.statusCode ?? 0,
@@ -908,6 +981,43 @@ class APIClient {
             }
         }
         return ""
+    }
+
+    /// Decodes JSON, detecting Cloudflare Access interception and giving a clear error.
+    static func decodeJSON<T: Decodable>(_ type: T.Type, from data: Data) throws -> T {
+        // Detect HTML responses (e.g. Cloudflare Access login page served as 200)
+        if let prefix = String(data: data.prefix(100), encoding: .utf8),
+           prefix.contains("<!DOCTYPE") || prefix.contains("<html") {
+            if prefix.contains("Cloudflare") {
+                throw NSError(domain: "APIError", code: 403,
+                              userInfo: [NSLocalizedDescriptionKey: "This server is behind Cloudflare Access. Tap the Sheaf logo 10 times on the login screen to configure your service token."])
+            }
+            throw NSError(domain: "APIError", code: 0,
+                          userInfo: [NSLocalizedDescriptionKey: "Server returned an HTML page instead of JSON. Check your API URL."])
+        }
+        return try JSONDecoder.iso.decode(type, from: data)
+    }
+}
+
+// MARK: - CF Header Preserving Delegate
+/// URLSession strips custom headers on redirects. This delegate re-applies CF-Access
+/// headers so Cloudflare Access doesn't block the redirected request.
+private class CFHeaderPreservingDelegate: NSObject, URLSessionTaskDelegate {
+    func urlSession(_ session: URLSession, task: URLSessionTask,
+                    willPerformHTTPRedirection response: HTTPURLResponse,
+                    newRequest request: URLRequest,
+                    completionHandler: @escaping (URLRequest?) -> Void) {
+        var newReq = request
+        // Preserve CF-Access headers from the original request
+        if let original = task.originalRequest {
+            if let cfId = original.value(forHTTPHeaderField: "CF-Access-Client-Id") {
+                newReq.setValue(cfId, forHTTPHeaderField: "CF-Access-Client-Id")
+            }
+            if let cfSecret = original.value(forHTTPHeaderField: "CF-Access-Client-Secret") {
+                newReq.setValue(cfSecret, forHTTPHeaderField: "CF-Access-Client-Secret")
+            }
+        }
+        completionHandler(newReq)
     }
 }
 

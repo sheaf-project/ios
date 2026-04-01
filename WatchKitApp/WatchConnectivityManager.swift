@@ -132,6 +132,14 @@ final class WatchConnectivityManager: NSObject, WCSessionDelegate, ObservableObj
             return
         }
 
+        // Sync Cloudflare Access tokens if present
+        if let cfId = context["cfClientId"] as? String,
+           let cfSecret = context["cfClientSecret"] as? String,
+           !cfId.isEmpty, !cfSecret.isEmpty {
+            UserDefaults.standard.set(cfId, forKey: "sheaf_cf_client_id")
+            UserDefaults.standard.set(cfSecret, forKey: "sheaf_cf_client_secret")
+        }
+
         NSLog("✅ WatchConnectivityManager: Saving credentials...")
         DispatchQueue.main.async {
             authManager.save(
