@@ -608,12 +608,25 @@ struct MemberEditSheet: View {
                 .keyboardType(.decimalPad)
                 .padding(12).background(theme.backgroundCard).cornerRadius(12).foregroundColor(theme.textPrimary)
             case .date:
-                TextField("YYYY-MM-DD", text: Binding(
-                    get: { fieldValues[field.id] ?? "" },
-                    set: { fieldValues[field.id] = $0 }
-                ))
-                .keyboardType(.numbersAndPunctuation)
-                .padding(12).background(theme.backgroundCard).cornerRadius(12).foregroundColor(theme.textPrimary)
+                DatePicker(
+                    "",
+                    selection: Binding(
+                        get: {
+                            let fmt = DateFormatter()
+                            fmt.dateFormat = "yyyy-MM-dd"
+                            return fmt.date(from: fieldValues[field.id] ?? "") ?? Date()
+                        },
+                        set: {
+                            let fmt = DateFormatter()
+                            fmt.dateFormat = "yyyy-MM-dd"
+                            fieldValues[field.id] = fmt.string(from: $0)
+                        }
+                    ),
+                    displayedComponents: .date
+                )
+                .datePickerStyle(.compact)
+                .tint(theme.accentLight)
+                .labelsHidden()
             default:
                 TextField(field.name, text: Binding(
                     get: { fieldValues[field.id] ?? "" },
