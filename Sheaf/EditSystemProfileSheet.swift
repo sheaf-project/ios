@@ -119,6 +119,7 @@ struct EditSystemProfileSheet: View {
         description = profile.description ?? ""
         tag         = profile.tag ?? ""
         avatarURL   = profile.avatarURL ?? ""
+        if avatarURL.hasPrefix("/") { avatarMode = .upload }
         colorHex    = profile.color ?? "#8B5CF6"
         privacy     = profile.privacy
     }

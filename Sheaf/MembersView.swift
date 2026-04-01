@@ -520,6 +520,7 @@ struct MemberEditSheet: View {
         pronouns    = m.pronouns ?? ""
         description = m.description ?? ""
         avatarURL   = m.avatarURL ?? ""
+        if avatarURL.hasPrefix("/") { avatarMode = .upload }
         colorHex    = m.color ?? "#A78BFA"
         privacy     = m.privacy
         // Load existing field values
@@ -721,7 +722,11 @@ struct AvatarInputSection: View {
                 }
             case .url:
                 HStack(spacing: 8) {
-                    TextField("https://...", text: $avatarURL)
+                    let displayBinding = Binding<String>(
+                        get: { avatarURL.hasPrefix("/") ? "" : avatarURL },
+                        set: { avatarURL = $0 }
+                    )
+                    TextField("https://...", text: displayBinding)
                         .autocorrectionDisabled()
                         .autocapitalization(.none)
                         .keyboardType(.URL)
