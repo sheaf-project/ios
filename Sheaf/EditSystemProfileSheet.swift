@@ -55,18 +55,14 @@ struct EditSystemProfileSheet: View {
                         .labelsHidden()
                     }
 
-                    HStack {
-                        Text("Privacy")
-                            .foregroundColor(theme.textPrimary)
-                        Spacer()
-                        Picker("Privacy", selection: $privacy) {
-                            ForEach(PrivacyLevel.allCases, id: \.self) { level in
-                                Text(level.rawValue.capitalized).tag(level)
-                            }
+                    Picker("Privacy", selection: $privacy) {
+                        ForEach(PrivacyLevel.allCases, id: \.self) { level in
+                            Text(level.rawValue.capitalized).tag(level)
                         }
-                        .pickerStyle(.menu)
-                        .tint(theme.accentLight)
                     }
+                    .pickerStyle(.menu)
+                    .tint(theme.accentLight)
+                    .foregroundColor(theme.textPrimary)
                 }
 
                 if let error {
