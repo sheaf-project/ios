@@ -2107,6 +2107,252 @@ struct CreateApiKeySheet: View {
     }
 }
 
+// MARK: - Announcement Edit Sheet
+
+struct AnnouncementEditSheet: View {
+    @Environment(\.theme) var theme
+    @EnvironmentObject var authManager: AuthManager
+    @EnvironmentObject var store: SystemStore
+    @Environment(\.dismiss) var dismiss
+
+    let announcement: AnnouncementRead?
+    let onSave: () -> Void
+
+    @State private var title = ""
+    @State private var bodyText = ""
+    @State private var severity: AnnouncementSeverity = .info
+    @State private var dismissible = true
+    @State private var active = true
+    @State private var hasStartDate = false
+    @State private var startsAt = Date()
+    @State private var hasExpireDate = false
+    @State private var expiresAt = Calendar.current.date(byAdding: .day, value: 7, to: Date()) ?? Date()
+    @State private var isSaving = false
+    @State private var error: String?
+
+    var isNew: Bool { announcement == nil }
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                theme.backgroundPrimary.ignoresSafeArea()
+
+                ScrollView {
+                    VStack(spacing: 16) {
+                        // Title
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Title")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundColor(theme.textSecondary)
+                            TextField("Announcement title", text: $title)
+                                .autocorrectionDisabled()
+                                .padding(12)
+                                .background(theme.backgroundCard)
+                                .cornerRadius(12)
+                                .foregroundColor(theme.textPrimary)
+                        }
+
+                        // Body
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Body")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundColor(theme.textSecondary)
+                            TextField("Announcement body", text: $bodyText, axis: .vertical)
+                                .lineLimit(3...8)
+                                .padding(12)
+                                .background(theme.backgroundCard)
+                                .cornerRadius(12)
+                                .foregroundColor(theme.textPrimary)
+                        }
+
+                        // Severity
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Severity")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundColor(theme.textSecondary)
+                            Picker("Severity", selection: $severity) {
+                                Text("Info").tag(AnnouncementSeverity.info)
+                                Text("Warning").tag(AnnouncementSeverity.warning)
+                                Text("Critical").tag(AnnouncementSeverity.critical)
+                            }
+                            .pickerStyle(.segmented)
+                        }
+
+                        // Toggles
+                        VStack(spacing: 0) {
+                            Toggle(isOn: $active) {
+                                Text("Active")
+                                    .font(.system(size: 15))
+                                    .foregroundColor(theme.textPrimary)
+                            }
+                            .tint(theme.accentLight)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 10)
+
+                            Divider().background(theme.divider).padding(.leading, 12)
+
+                            Toggle(isOn: $dismissible) {
+                                Text("Dismissible")
+                                    .font(.system(size: 15))
+                                    .foregroundColor(theme.textPrimary)
+                            }
+                            .tint(theme.accentLight)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 10)
+                        }
+                        .background(theme.backgroundCard)
+                        .cornerRadius(12)
+
+                        // Start date
+                        VStack(alignment: .leading, spacing: 6) {
+                            Toggle(isOn: $hasStartDate) {
+                                Text("Starts at")
+                                    .font(.system(size: 15))
+                                    .foregroundColor(theme.textPrimary)
+                            }
+                            .tint(theme.accentLight)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 10)
+                            .background(theme.backgroundCard)
+                            .cornerRadius(12)
+
+                            if hasStartDate {
+                                DatePicker("Start Date", selection: $startsAt, displayedComponents: [.date, .hourAndMinute])
+                                    .datePickerStyle(.compact)
+                                    .tint(theme.accentLight)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 10)
+                                    .background(theme.backgroundCard)
+                                    .cornerRadius(12)
+                                    .foregroundColor(theme.textPrimary)
+                            }
+                        }
+
+                        // Expire date
+                        VStack(alignment: .leading, spacing: 6) {
+                            Toggle(isOn: $hasExpireDate) {
+                                Text("Expires at")
+                                    .font(.system(size: 15))
+                                    .foregroundColor(theme.textPrimary)
+                            }
+                            .tint(theme.accentLight)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 10)
+                            .background(theme.backgroundCard)
+                            .cornerRadius(12)
+
+                            if hasExpireDate {
+                                DatePicker("Expiry Date", selection: $expiresAt, displayedComponents: [.date, .hourAndMinute])
+                                    .datePickerStyle(.compact)
+                                    .tint(theme.accentLight)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 10)
+                                    .background(theme.backgroundCard)
+                                    .cornerRadius(12)
+                                    .foregroundColor(theme.textPrimary)
+                            }
+                        }
+
+                        if let error {
+                            Text(error)
+                                .font(.system(size: 13))
+                                .foregroundColor(theme.danger)
+                        }
+                    }
+                    .padding(.horizontal, 24)
+                    .padding(.top, 16)
+                    .padding(.bottom, 40)
+                }
+            }
+            .navigationTitle(isNew ? "New Announcement" : "Edit Announcement")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                        .foregroundColor(theme.textSecondary)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button {
+                        Task { await save() }
+                    } label: {
+                        if isSaving {
+                            ProgressView().tint(theme.accentLight).scaleEffect(0.8)
+                        } else {
+                            Text("Save")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(theme.accentLight)
+                        }
+                    }
+                    .disabled(title.isEmpty || bodyText.isEmpty || isSaving)
+                }
+            }
+        }
+        .presentationDetents([.large])
+        .onAppear { populate() }
+    }
+
+    private func populate() {
+        guard let a = announcement else { return }
+        title = a.title
+        bodyText = a.body
+        severity = a.severity
+        dismissible = a.dismissible
+        active = a.active
+        if let start = a.startsAt {
+            hasStartDate = true
+            startsAt = start
+        }
+        if let expire = a.expiresAt {
+            hasExpireDate = true
+            expiresAt = expire
+        }
+    }
+
+    private func save() async {
+        guard let api = store.api else { return }
+        isSaving = true
+        error = nil
+
+        do {
+            if let existing = announcement {
+                let update = AnnouncementUpdate(
+                    title: title,
+                    body: bodyText,
+                    severity: severity,
+                    dismissible: dismissible,
+                    active: active,
+                    startsAt: hasStartDate ? startsAt : nil,
+                    expiresAt: hasExpireDate ? expiresAt : nil,
+                    clearStartsAt: !hasStartDate && existing.startsAt != nil ? true : nil,
+                    clearExpiresAt: !hasExpireDate && existing.expiresAt != nil ? true : nil
+                )
+                _ = try await api.updateAnnouncement(id: existing.id, update: update)
+            } else {
+                let create = AnnouncementCreate(
+                    title: title,
+                    body: bodyText,
+                    severity: severity,
+                    dismissible: dismissible,
+                    active: active,
+                    startsAt: hasStartDate ? startsAt : nil,
+                    expiresAt: hasExpireDate ? expiresAt : nil
+                )
+                _ = try await api.createAnnouncement(create)
+            }
+            await MainActor.run {
+                isSaving = false
+                onSave()
+                dismiss()
+            }
+        } catch {
+            await MainActor.run {
+                self.error = error.localizedDescription
+                isSaving = false
+            }
+        }
+    }
+}
+
 // MARK: - Edit Connection Sheet
 struct EditConnectionSheet: View {
     @Environment(\.theme) var theme
@@ -2701,6 +2947,9 @@ struct AdminPanelView: View {
                 // Invite Codes
                 invitesSection
 
+                // Announcements
+                announcementsSection
+
                 // Stats
                 statsSection
 
@@ -2714,9 +2963,7 @@ struct AdminPanelView: View {
             .padding(.bottom, 40)
         }
         .refreshable {
-            await loadStats()
-            await loadUsers(reset: true)
-            await loadInvites()
+            await loadAdminData()
         }
     }
 
@@ -2829,7 +3076,6 @@ struct AdminPanelView: View {
                 .padding(.horizontal, 24)
             }
         }
-        .task { await loadApprovals() }
         .confirmationDialog("Approve this user?", isPresented: .init(
             get: { approvalToApprove != nil },
             set: { if !$0 { approvalToApprove = nil } }
@@ -2941,7 +3187,6 @@ struct AdminPanelView: View {
                 .padding(.horizontal, 24)
             }
         }
-        .task { await loadInvites() }
         .sheet(isPresented: $showCreateInvite) {
             CreateInviteSheet { _ in
                 Task { await loadInvites() }
@@ -3066,6 +3311,183 @@ struct AdminPanelView: View {
             withAnimation { invites.removeAll { $0.id == id } }
         } catch {
             await loadInvites()
+        }
+    }
+
+    // MARK: - Announcements Section
+
+    @State private var adminAnnouncements: [AnnouncementRead] = []
+    @State private var isLoadingAnnouncements = false
+    @State private var showCreateAnnouncement = false
+    @State private var announcementToEdit: AnnouncementRead?
+    @State private var announcementToDelete: AnnouncementRead?
+
+    private var announcementsSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("ANNOUNCEMENTS")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(theme.textSecondary)
+                    .textCase(.uppercase)
+                    .kerning(0.8)
+                Spacer()
+                Button {
+                    showCreateAnnouncement = true
+                } label: {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.system(size: 20))
+                        .foregroundColor(theme.accentLight)
+                }
+            }
+            .padding(.horizontal, 24)
+
+            if isLoadingAnnouncements {
+                HStack { Spacer(); ProgressView().tint(theme.accentLight); Spacer() }
+                    .padding(.vertical, 20)
+            } else if adminAnnouncements.isEmpty {
+                HStack {
+                    Spacer()
+                    VStack(spacing: 8) {
+                        Image(systemName: "megaphone")
+                            .font(.system(size: 28))
+                            .foregroundColor(theme.textTertiary)
+                        Text("No announcements")
+                            .font(.system(size: 14))
+                            .foregroundColor(theme.textSecondary)
+                    }
+                    .padding(.vertical, 20)
+                    Spacer()
+                }
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(adminAnnouncements) { announcement in
+                        Button {
+                            announcementToEdit = announcement
+                        } label: {
+                            announcementRow(announcement)
+                        }
+                        .buttonStyle(.plain)
+                        .contextMenu {
+                            Button {
+                                announcementToEdit = announcement
+                            } label: {
+                                Label("Edit", systemImage: "pencil")
+                            }
+                            Button(role: .destructive) {
+                                announcementToDelete = announcement
+                            } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
+                        }
+
+                        if announcement.id != adminAnnouncements.last?.id {
+                            Divider().background(theme.divider).padding(.leading, 16)
+                        }
+                    }
+                }
+                .background(theme.backgroundCard)
+                .cornerRadius(14)
+                .padding(.horizontal, 24)
+            }
+        }
+        .sheet(isPresented: $showCreateAnnouncement) {
+            AnnouncementEditSheet(announcement: nil) {
+                Task { await loadAnnouncements() }
+            }
+            .environmentObject(authManager)
+            .environmentObject(store)
+        }
+        .sheet(item: $announcementToEdit) { announcement in
+            AnnouncementEditSheet(announcement: announcement) {
+                Task { await loadAnnouncements() }
+            }
+            .environmentObject(authManager)
+            .environmentObject(store)
+        }
+        .confirmationDialog("Delete this announcement?", isPresented: .init(
+            get: { announcementToDelete != nil },
+            set: { if !$0 { announcementToDelete = nil } }
+        ), titleVisibility: .visible) {
+            Button("Delete", role: .destructive) {
+                if let announcement = announcementToDelete {
+                    Task { await deleteAnnouncement(id: announcement.id) }
+                }
+            }
+            Button("Cancel", role: .cancel) { announcementToDelete = nil }
+        } message: {
+            Text("This announcement will be permanently deleted.")
+        }
+    }
+
+    private func announcementRow(_ announcement: AnnouncementRead) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(announcement.title)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundColor(theme.textPrimary)
+                    .lineLimit(1)
+                Spacer()
+                severityBadge(announcement.severity)
+            }
+            HStack(spacing: 8) {
+                if !announcement.active {
+                    Text("Inactive")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(theme.textTertiary)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(theme.textTertiary.opacity(0.12))
+                        .cornerRadius(4)
+                }
+                if !announcement.dismissible {
+                    Text("Persistent")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(theme.warning)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(theme.warning.opacity(0.12))
+                        .cornerRadius(4)
+                }
+                Text(announcement.createdAt, style: .date)
+                    .font(.system(size: 12))
+                    .foregroundColor(theme.textTertiary)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+    }
+
+    private func severityBadge(_ severity: AnnouncementSeverity) -> some View {
+        let (text, color): (String, Color) = {
+            switch severity {
+            case .info:     return ("Info", theme.accentLight)
+            case .warning:  return ("Warning", theme.warning)
+            case .critical: return ("Critical", theme.danger)
+            }
+        }()
+        return Text(text)
+            .font(.system(size: 10, weight: .semibold))
+            .foregroundColor(color)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(color.opacity(0.12))
+            .cornerRadius(6)
+    }
+
+    private func loadAnnouncements() async {
+        guard let api = store.api else { return }
+        isLoadingAnnouncements = true
+        adminAnnouncements = (try? await api.getAdminAnnouncements()) ?? []
+        isLoadingAnnouncements = false
+    }
+
+    private func deleteAnnouncement(id: String) async {
+        guard let api = store.api else { return }
+        do {
+            try await api.deleteAnnouncement(id: id)
+            withAnimation { adminAnnouncements.removeAll { $0.id == id } }
+        } catch {
+            await loadAnnouncements()
         }
     }
 
@@ -3350,9 +3772,16 @@ struct AdminPanelView: View {
         isCheckingAuth = false
 
         if isAdminAuthed {
-            await loadStats()
-            await loadUsers(reset: true)
+            await loadAdminData()
         }
+    }
+
+    private func loadAdminData() async {
+        await loadStats()
+        await loadUsers(reset: true)
+        await loadApprovals()
+        await loadInvites()
+        await loadAnnouncements()
     }
 
     private func authenticate() async {
@@ -3368,8 +3797,7 @@ struct AdminPanelView: View {
             isAdminAuthed = true
             password = ""
             totpCode = ""
-            await loadStats()
-            await loadUsers(reset: true)
+            await loadAdminData()
         } catch {
             authError = error.localizedDescription
         }

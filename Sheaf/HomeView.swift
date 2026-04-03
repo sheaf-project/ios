@@ -32,6 +32,16 @@ struct HomeView: View {
                     .padding(.horizontal, 24)
                     .padding(.top, 16)
 
+                    // Announcements
+                    ForEach(store.visibleAnnouncements) { announcement in
+                        AnnouncementBanner(announcement: announcement) {
+                            withAnimation {
+                                store.dismissAnnouncement(announcement.id)
+                            }
+                        }
+                        .padding(.horizontal, 24)
+                    }
+
                     // Fronting card(s)
                     if store.isLoading && store.currentFronts.isEmpty {
                         FrontingSkeletonView()
@@ -260,6 +270,65 @@ struct QuickSwitchChip: View {
             }
         }
         .buttonStyle(ScaleButtonStyle())
+    }
+}
+
+// MARK: - Announcement Banner
+
+struct AnnouncementBanner: View {
+    @Environment(\.theme) var theme
+    let announcement: Announcement
+    var onDismiss: (() -> Void)?
+
+    private var severityIcon: String {
+        switch announcement.severity {
+        case .info:     return "info.circle.fill"
+        case .warning:  return "exclamationmark.triangle.fill"
+        case .critical: return "exclamationmark.octagon.fill"
+        }
+    }
+
+    private var severityColor: Color {
+        switch announcement.severity {
+        case .info:     return theme.accentLight
+        case .warning:  return theme.warning
+        case .critical: return theme.danger
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Image(systemName: severityIcon)
+                    .foregroundColor(severityColor)
+                    .font(.system(size: 16))
+
+                Text(announcement.title)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(theme.textPrimary)
+
+                Spacer()
+
+                if announcement.dismissible, let onDismiss {
+                    Button(action: onDismiss) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(theme.textTertiary)
+                    }
+                }
+            }
+
+            Text(announcement.body)
+                .font(.system(size: 13))
+                .foregroundColor(theme.textSecondary)
+        }
+        .padding(14)
+        .background(severityColor.opacity(0.12))
+        .cornerRadius(14)
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(severityColor.opacity(0.3), lineWidth: 1)
+        )
     }
 }
 
