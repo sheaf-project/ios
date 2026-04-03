@@ -269,6 +269,11 @@ class APIClient {
         }
         // Throw for all errors except 401 (which we handle via retry) and 204 (no content)
         if http.statusCode != 401 && !(200...299).contains(http.statusCode) {
+            // Server errors (5xx / Cloudflare 52x) — show a friendly message
+            if (500...599).contains(http.statusCode) {
+                throw NSError(domain: "APIError", code: http.statusCode,
+                              userInfo: [NSLocalizedDescriptionKey: "The server is having issues, please try again later."])
+            }
             let body = String(data: data, encoding: .utf8) ?? "(no body)"
             throw NSError(domain: "APIError", code: http.statusCode,
                           userInfo: [NSLocalizedDescriptionKey: "HTTP \(http.statusCode): \(body)"])
@@ -296,6 +301,11 @@ class APIClient {
             let (data, response) = try await urlSession.data(for: req)
             guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
             guard (200...299).contains(http.statusCode) else {
+                // Server errors (5xx / Cloudflare 52x) — show a friendly message
+                if (500...599).contains(http.statusCode) {
+                    throw NSError(domain: "APIError", code: http.statusCode,
+                                  userInfo: [NSLocalizedDescriptionKey: "The server is having issues, please try again later."])
+                }
                 // Preserve the real status code so the caller can distinguish
                 // auth rejection (401/403) from transient server errors (5xx)
                 throw NSError(domain: "APIError", code: http.statusCode,
