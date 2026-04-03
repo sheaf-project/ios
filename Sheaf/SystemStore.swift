@@ -128,6 +128,24 @@ class SystemStore: ObservableObject {
     @Published var isOnline = true
     @Published var isSyncing = false
     @Published var pendingOperationCount = 0
+    @Published var announcements: [Announcement] = []
+
+    var visibleAnnouncements: [Announcement] {
+        let dismissed = dismissedAnnouncementIDs
+        return announcements.filter { !$0.dismissible || !dismissed.contains($0.id) }
+    }
+
+    private let dismissedAnnouncementsKey = "sheaf_dismissed_announcements"
+
+    private var dismissedAnnouncementIDs: Set<String> {
+        get { Set(UserDefaults.standard.stringArray(forKey: dismissedAnnouncementsKey) ?? []) }
+        set { UserDefaults.standard.set(Array(newValue), forKey: dismissedAnnouncementsKey) }
+    }
+
+    func dismissAnnouncement(_ id: String) {
+        dismissedAnnouncementIDs.insert(id)
+        objectWillChange.send()
+    }
 
     var api: APIClient?
     weak var themeManager: ThemeManager?
@@ -259,6 +277,17 @@ class SystemStore: ObservableObject {
                 updateWatchComplication()
             } catch {
                 showError(error)
+            }
+
+            // Announcements: non-fatal, server may not support this endpoint yet
+            if let api {
+                announcements = (try? await api.getAnnouncements()) ?? []
+                // Prune dismissed IDs for announcements that no longer exist
+                let activeIDs = Set(announcements.map { $0.id })
+                let pruned = dismissedAnnouncementIDs.intersection(activeIDs)
+                if pruned.count != dismissedAnnouncementIDs.count {
+                    dismissedAnnouncementIDs = pruned
+                }
             }
 
             // Sync client settings after main data (non-fatal on failure)

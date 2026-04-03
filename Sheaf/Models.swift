@@ -880,3 +880,88 @@ struct SPImportResult: Codable {
         case notesSkipped         = "notes_skipped"
     }
 }
+
+// MARK: - Announcements
+
+enum AnnouncementSeverity: String, Codable {
+    case info     = "info"
+    case warning  = "warning"
+    case critical = "critical"
+}
+
+struct Announcement: Identifiable, Codable {
+    let id: String
+    let title: String
+    let body: String
+    let severity: AnnouncementSeverity
+    let dismissible: Bool
+    let startsAt: Date?
+    let expiresAt: Date?
+    let createdAt: Date
+
+    enum CodingKeys: String, CodingKey {
+        case id, title, body, severity, dismissible
+        case startsAt  = "starts_at"
+        case expiresAt = "expires_at"
+        case createdAt = "created_at"
+    }
+}
+
+struct AnnouncementRead: Identifiable, Codable {
+    let id: String
+    let title: String
+    let body: String
+    let severity: AnnouncementSeverity
+    let dismissible: Bool
+    let active: Bool
+    let startsAt: Date?
+    let expiresAt: Date?
+    let createdAt: Date
+    let createdBy: String?
+    let updatedAt: Date
+
+    enum CodingKeys: String, CodingKey {
+        case id, title, body, severity, dismissible, active
+        case startsAt   = "starts_at"
+        case expiresAt  = "expires_at"
+        case createdAt  = "created_at"
+        case createdBy  = "created_by"
+        case updatedAt  = "updated_at"
+    }
+}
+
+struct AnnouncementCreate: Codable {
+    var title: String
+    var body: String
+    var severity: AnnouncementSeverity = .info
+    var dismissible: Bool = true
+    var active: Bool = true
+    var startsAt: Date?
+    var expiresAt: Date?
+
+    enum CodingKeys: String, CodingKey {
+        case title, body, severity, dismissible, active
+        case startsAt  = "starts_at"
+        case expiresAt = "expires_at"
+    }
+}
+
+struct AnnouncementUpdate: Codable {
+    var title: String?
+    var body: String?
+    var severity: AnnouncementSeverity?
+    var dismissible: Bool?
+    var active: Bool?
+    var startsAt: Date?
+    var expiresAt: Date?
+    var clearStartsAt: Bool?
+    var clearExpiresAt: Bool?
+
+    enum CodingKeys: String, CodingKey {
+        case title, body, severity, dismissible, active
+        case startsAt      = "starts_at"
+        case expiresAt     = "expires_at"
+        case clearStartsAt = "clear_starts_at"
+        case clearExpiresAt = "clear_expires_at"
+    }
+}

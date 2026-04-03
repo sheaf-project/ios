@@ -850,6 +850,36 @@ class APIClient {
         _ = try await request("/v1/admin/users/\(userID)/verify-email", method: "POST")
     }
 
+    // MARK: - Announcements
+
+    func getAnnouncements() async throws -> [Announcement] {
+        let data = try await request("/v1/announcements")
+        return try JSONDecoder.iso.decode([Announcement].self, from: data)
+    }
+
+    // MARK: - Admin Announcements
+
+    func getAdminAnnouncements() async throws -> [AnnouncementRead] {
+        let data = try await request("/v1/admin/announcements")
+        return try JSONDecoder.iso.decode([AnnouncementRead].self, from: data)
+    }
+
+    func createAnnouncement(_ create: AnnouncementCreate) async throws -> AnnouncementRead {
+        let body = try JSONEncoder.iso.encode(create)
+        let data = try await request("/v1/admin/announcements", method: "POST", body: body)
+        return try JSONDecoder.iso.decode(AnnouncementRead.self, from: data)
+    }
+
+    func updateAnnouncement(id: String, update: AnnouncementUpdate) async throws -> AnnouncementRead {
+        let body = try JSONEncoder.iso.encode(update)
+        let data = try await request("/v1/admin/announcements/\(id)", method: "PATCH", body: body)
+        return try JSONDecoder.iso.decode(AnnouncementRead.self, from: data)
+    }
+
+    func deleteAnnouncement(id: String) async throws {
+        _ = try await request("/v1/admin/announcements/\(id)", method: "DELETE")
+    }
+
     // MARK: - Export
 
     func exportData() async throws -> Data {
