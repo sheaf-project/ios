@@ -1,14 +1,42 @@
 import SwiftUI
 
 // MARK: - HistoryView
+enum GraphTimeRange: String, CaseIterable {
+    case week = "7D"
+    case twoWeeks = "14D"
+    case month = "30D"
+    case threeMonths = "90D"
+
+    var days: Int {
+        switch self {
+        case .week: return 7
+        case .twoWeeks: return 14
+        case .month: return 30
+        case .threeMonths: return 90
+        }
+    }
+
+    var label: String {
+        switch self {
+        case .week: return "Last 7 Days"
+        case .twoWeeks: return "Last 14 Days"
+        case .month: return "Last 30 Days"
+        case .threeMonths: return "Last 90 Days"
+        }
+    }
+}
+
 struct HistoryView: View {
     @EnvironmentObject var store: SystemStore
     @Environment(\.theme) var theme
     @State private var isLoading = false
+    @State private var isLoadingMore = false
     @State private var selectedEntry: FrontEntry?
     @State private var showAddEntry = false
     @State private var entryToDelete: FrontEntry?
     @State private var showDeleteConfirm = false
+    @State private var graphTimeRange: GraphTimeRange = .week
+    @State private var showGraph = true
 
     var body: some View {
         ZStack {
@@ -59,12 +87,36 @@ struct HistoryView: View {
                     Spacer()
                 } else {
                     List {
-                        // Time graph as a non-swipeable header row
+                        // Collapsible time graph
                         Section {
-                            FrontTimelineGraph(entries: store.frontHistory, members: store.members)
-                                .padding(.vertical, 8)
-                                .listRowBackground(Color.clear)
-                                .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
+                            Button {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    showGraph.toggle()
+                                }
+                            } label: {
+                                HStack {
+                                    Image(systemName: "chart.bar.fill")
+                                        .font(.system(size: 13))
+                                        .foregroundColor(theme.accentLight)
+                                    Text("Timeline")
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundColor(theme.textSecondary)
+                                    Spacer()
+                                    Image(systemName: showGraph ? "chevron.up" : "chevron.down")
+                                        .font(.system(size: 12, weight: .medium))
+                                        .foregroundColor(theme.textTertiary)
+                                }
+                            }
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
+                            .listRowInsets(EdgeInsets(top: 4, leading: 24, bottom: 0, trailing: 24))
+
+                            if showGraph {
+                                FrontTimelineGraph(entries: store.frontHistory, members: store.members, timeRange: $graphTimeRange)
+                                    .padding(.vertical, 4)
+                                    .listRowBackground(Color.clear)
+                                    .listRowInsets(EdgeInsets(top: 0, leading: 24, bottom: 0, trailing: 24))
+                            }
                         }
 
                         // Log entries
@@ -86,6 +138,30 @@ struct HistoryView: View {
                                 .listRowSeparator(.hidden)
                                 .listRowInsets(EdgeInsets(top: 5, leading: 24, bottom: 5, trailing: 24))
                                 .id(entry.id)
+                                .onAppear {
+                                    if entry.id == store.frontHistory.last?.id {
+                                        Task { await loadMore() }
+                                    }
+                                }
+                            }
+
+                            if store.hasMoreHistory {
+                                HStack {
+                                    Spacer()
+                                    if isLoadingMore {
+                                        ProgressView().tint(theme.accentLight)
+                                    } else {
+                                        Button("Load More") {
+                                            Task { await loadMore() }
+                                        }
+                                        .font(.system(size: 14, weight: .medium))
+                                        .foregroundColor(theme.accentLight)
+                                    }
+                                    Spacer()
+                                }
+                                .listRowBackground(Color.clear)
+                                .listRowSeparator(.hidden)
+                                .padding(.vertical, 8)
                             }
                         }
                     }
@@ -124,6 +200,13 @@ struct HistoryView: View {
         isLoading = false
     }
 
+    func loadMore() async {
+        guard !isLoadingMore else { return }
+        isLoadingMore = true
+        await store.loadMoreFrontHistory()
+        isLoadingMore = false
+    }
+
     func membersFor(_ entry: FrontEntry) -> [Member] {
         entry.memberIDs.compactMap { id in store.members.first { $0.id == id } }
     }
@@ -134,52 +217,95 @@ struct FrontTimelineGraph: View {
     @Environment(\.theme) var theme
     let entries: [FrontEntry]
     let members: [Member]
+    @Binding var timeRange: GraphTimeRange
 
-    // Show last 7 days
     private var windowStart: Date {
-        Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date()
+        Calendar.current.date(byAdding: .day, value: -timeRange.days, to: Date()) ?? Date()
     }
     private var windowEnd: Date { Date() }
     private var windowDuration: TimeInterval { windowEnd.timeIntervalSince(windowStart) }
 
     // Unique members who appear in this window
     private var activeMembers: [Member] {
-        let ids = Set(entries.flatMap { $0.memberIDs })
+        let windowEntries = entries.filter { entry in
+            let end = entry.endedAt ?? Date()
+            return end > windowStart && entry.startedAt < windowEnd
+        }
+        let ids = Set(windowEntries.flatMap { $0.memberIDs })
         return members.filter { ids.contains($0.id) }
+    }
+
+    // Day labels to show — adapt count based on range
+    private var dayLabelCount: Int {
+        min(timeRange.days, 7)
+    }
+
+    private var dayLabelIndices: [Int] {
+        let total = timeRange.days
+        if total <= 7 {
+            return Array(0..<total)
+        }
+        let step = total / dayLabelCount
+        return (0..<dayLabelCount).map { $0 * step }
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            // Title + legend
+            // Title + range picker
             HStack {
-                Text("Last 7 Days")
+                Text(timeRange.label)
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundColor(theme.textSecondary)
                 Spacer()
-                // Mini legend
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 10) {
-                        ForEach(activeMembers.prefix(6)) { member in
-                            HStack(spacing: 5) {
-                                Circle()
-                                    .fill(member.displayColor)
-                                    .frame(width: 7, height: 7)
-                                Text(member.displayName ?? member.name)
-                                    .font(.system(size: 10))
-                                    .foregroundColor(theme.textSecondary)
+                HStack(spacing: 0) {
+                    ForEach(GraphTimeRange.allCases, id: \.self) { range in
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                timeRange = range
                             }
+                        } label: {
+                            Text(range.rawValue)
+                                .font(.system(size: 11, weight: timeRange == range ? .bold : .medium))
+                                .foregroundColor(timeRange == range ? theme.accentLight : theme.textTertiary)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(
+                                    timeRange == range
+                                        ? theme.accentLight.opacity(0.15)
+                                        : Color.clear
+                                )
+                                .cornerRadius(6)
                         }
                     }
                 }
+            }
+
+            // Legend
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    ForEach(activeMembers.prefix(6)) { member in
+                        HStack(spacing: 5) {
+                            Circle()
+                                .fill(member.displayColor)
+                                .frame(width: 7, height: 7)
+                            Text(member.displayName ?? member.name)
+                                .font(.system(size: 10))
+                                .foregroundColor(theme.textSecondary)
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity)
             }
 
             // Graph
             VStack(spacing: 6) {
                 // Day labels
                 HStack(spacing: 0) {
-                    ForEach(0..<7, id: \.self) { i in
-                        let day = Calendar.current.date(byAdding: .day, value: i - 6, to: Date()) ?? Date()
-                        Text(day.formatted(.dateTime.weekday(.abbreviated)))
+                    ForEach(dayLabelIndices, id: \.self) { i in
+                        let day = Calendar.current.date(byAdding: .day, value: i - (timeRange.days - 1), to: Date()) ?? Date()
+                        Text(timeRange.days <= 14
+                             ? day.formatted(.dateTime.weekday(.abbreviated))
+                             : day.formatted(.dateTime.month(.abbreviated).day()))
                             .font(.system(size: 9, weight: .medium))
                             .foregroundColor(theme.textTertiary)
                             .frame(maxWidth: .infinity)
@@ -197,17 +323,6 @@ struct FrontTimelineGraph: View {
                         )
                     }
                 }
-
-                // Hour ticks at bottom
-                HStack(spacing: 0) {
-                    ForEach([0, 6, 12, 18, 24], id: \.self) { h in
-                        Text(h == 0 ? "12am" : h == 24 ? "now" : "\(h < 12 ? h : h - 12)\(h < 12 ? "am" : "pm")")
-                            .font(.system(size: 8))
-                            .foregroundColor(theme.textTertiary)
-                            .frame(maxWidth: .infinity, alignment: h == 0 ? .leading : h == 24 ? .trailing : .center)
-                    }
-                }
-                .padding(.top, 2)
             }
             .padding(16)
             .background(theme.backgroundCard)

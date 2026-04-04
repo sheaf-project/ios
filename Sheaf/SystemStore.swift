@@ -122,6 +122,9 @@ class SystemStore: ObservableObject {
     @Published var fields: [CustomField] = []
     @Published var currentFronts: [FrontEntry] = []
     @Published var frontHistory: [FrontEntry] = []
+    @Published var hasMoreHistory = true
+    private var historyOffset = 0
+    private let historyPageSize = 50
     @Published var systemProfile: SystemProfile?
     @Published var isLoading = false
     @Published var errorMessage: String?
@@ -513,13 +516,29 @@ class SystemStore: ObservableObject {
     func loadFrontHistory() async {
         if NetworkMonitor.shared.isOnline, let api {
             do {
-                frontHistory = try await api.listFronts()
+                historyOffset = 0
+                let entries = try await api.listFronts(limit: historyPageSize, offset: 0)
+                frontHistory = entries
+                hasMoreHistory = entries.count >= historyPageSize
                 await cache.save(frontHistory, key: "frontHistory")
             } catch {
                 showError(error)
             }
         }
         // If offline, frontHistory is already loaded from cache
+    }
+
+    func loadMoreFrontHistory() async {
+        guard hasMoreHistory, NetworkMonitor.shared.isOnline, let api else { return }
+        do {
+            let nextOffset = frontHistory.count
+            let entries = try await api.listFronts(limit: historyPageSize, offset: nextOffset)
+            frontHistory.append(contentsOf: entries)
+            hasMoreHistory = entries.count >= historyPageSize
+            await cache.save(frontHistory, key: "frontHistory")
+        } catch {
+            showError(error)
+        }
     }
 
     // MARK: - Fronts (consolidated for views)
