@@ -2766,7 +2766,7 @@ struct AdminPanelView: View {
     }
 
     // Stats
-    @State private var stats: [String: Int]?
+    @State private var stats: AdminStats?
     @State private var isLoadingStats = false
 
     // Users
@@ -2941,6 +2941,9 @@ struct AdminPanelView: View {
     private var adminContent: some View {
         ScrollView {
             VStack(spacing: 24) {
+                // Stats
+                statsSection
+
                 // Pending Approvals
                 approvalsSection
 
@@ -2949,9 +2952,6 @@ struct AdminPanelView: View {
 
                 // Announcements
                 announcementsSection
-
-                // Stats
-                statsSection
 
                 // User Management
                 userManagementSection
@@ -3504,14 +3504,32 @@ struct AdminPanelView: View {
 
             if let stats {
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                    adminStatCard(title: "Users", value: "\(stats["total_users"] ?? 0)", icon: "person.2.fill")
-                    adminStatCard(title: "Members", value: "\(stats["total_members"] ?? 0)", icon: "person.fill")
-                    adminStatCard(title: "Fronts", value: "\(stats["total_fronts"] ?? 0)", icon: "arrow.triangle.swap")
-                    adminStatCard(title: "Groups", value: "\(stats["total_groups"] ?? 0)", icon: "folder.fill")
-                    adminStatCard(title: "Fields", value: "\(stats["total_fields"] ?? 0)", icon: "list.bullet.rectangle")
-                    adminStatCard(title: "Storage", value: formatBytes(stats["total_storage_bytes"] ?? 0), icon: "externaldrive.fill")
+                    adminStatCard(title: "Users", value: "\(stats.totalUsers)", icon: "person.2.fill")
+                    adminStatCard(title: "Members", value: "\(stats.totalMembers)", icon: "person.fill")
+                    adminStatCard(title: "Storage", value: formatBytes(stats.totalStorageBytes), icon: "externaldrive.fill")
                 }
                 .padding(.horizontal, 24)
+
+                if !stats.usersByTier.isEmpty {
+                    VStack(spacing: 8) {
+                        ForEach(stats.usersByTier.sorted(by: { $0.value > $1.value }), id: \.key) { tier, count in
+                            HStack {
+                                Text(formatTierLabel(tier))
+                                    .font(.system(size: 14, weight: .medium))
+                                    .foregroundColor(theme.textPrimary)
+                                Spacer()
+                                Text("\(count)")
+                                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                                    .foregroundColor(theme.textSecondary)
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
+                            .background(theme.backgroundCard)
+                            .cornerRadius(10)
+                        }
+                    }
+                    .padding(.horizontal, 24)
+                }
             } else if isLoadingStats {
                 HStack { Spacer(); ProgressView().tint(theme.accentLight); Spacer() }
                     .padding(.vertical, 20)
@@ -3914,6 +3932,15 @@ struct AdminPanelView: View {
     }
 
     // MARK: - Helpers
+
+    private func formatTierLabel(_ tier: String) -> String {
+        switch tier {
+        case "free": return "Free"
+        case "plus": return "Plus"
+        case "self_hosted": return "Self-Hosted"
+        default: return tier.capitalized
+        }
+    }
 
     private func formatBytes(_ bytes: Int) -> String {
         let formatter = ByteCountFormatter()

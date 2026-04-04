@@ -682,6 +682,13 @@ struct AdminAuthStatus {
     let totpEnabled: Bool
 }
 
+struct AdminStats {
+    var totalUsers: Int
+    var totalMembers: Int
+    var totalStorageBytes: Int
+    var usersByTier: [String: Int]
+}
+
 struct AdminStepUpVerify: Codable {
     var password: String?
     var totpCode: String?

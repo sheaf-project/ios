@@ -785,19 +785,21 @@ class APIClient {
         _ = try await request("/v1/admin/auth", method: "POST", body: body)
     }
 
-    /// Stats response schema is loosely defined in the spec — decode what we can.
-    func getAdminStats() async throws -> [String: Int] {
+    func getAdminStats() async throws -> AdminStats {
         let data = try await request("/v1/admin/stats")
-        if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-            var result: [String: Int] = [:]
-            for (key, value) in json {
-                if let intVal = value as? Int {
-                    result[key] = intVal
-                }
+        let json = (try? JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
+        var usersByTier: [String: Int] = [:]
+        if let tierDict = json["users_by_tier"] as? [String: Any] {
+            for (key, value) in tierDict {
+                if let intVal = value as? Int { usersByTier[key] = intVal }
             }
-            return result
         }
-        return [:]
+        return AdminStats(
+            totalUsers: json["total_users"] as? Int ?? 0,
+            totalMembers: json["total_members"] as? Int ?? 0,
+            totalStorageBytes: json["total_storage_bytes"] as? Int ?? 0,
+            usersByTier: usersByTier
+        )
     }
 
     func getAdminUsers(search: String? = nil, page: Int = 1, limit: Int = 50) async throws -> [AdminUserRead] {
