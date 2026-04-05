@@ -132,10 +132,10 @@ struct SwitchFrontIntent: AppIntent {
         // Siri resolves member names via EntityStringQuery automatically.
         // requestValueDialog on the @Parameter handles the case where no
         // name was spoken — Siri will ask without showing a dropdown.
-        let store = ShortcutsDataStore.shared
+        let store = await ShortcutsDataStore.shared
         let ids = members.map { $0.id }
         try await store.switchFronting(to: ids)
-        let names = formatNameList(members.map { $0.displayName ?? $0.name })
+        let names = await formatNameList(members.map { $0.displayName ?? $0.name })
         let verb = members.count == 1 ? "is" : "are"
         return .result(dialog: "\(names) \(verb) now fronting.")
     }
@@ -157,7 +157,7 @@ struct AddToFrontIntent: AppIntent {
     var member: MemberEntity
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
-        let store = ShortcutsDataStore.shared
+        let store = await ShortcutsDataStore.shared
         let currentIDs = await store.currentFrontingIDs
         let newIDs = Array(Set(currentIDs + [member.id]))
         try await store.switchFronting(to: newIDs)
@@ -172,10 +172,10 @@ struct GetCurrentFrontIntent: AppIntent {
     static var description = IntentDescription("Get the names of everyone currently fronting.")
 
     func perform() async throws -> some IntentResult & ProvidesDialog & ReturnsValue<String> {
-        let store = ShortcutsDataStore.shared
+        let store = await ShortcutsDataStore.shared
         let names = await store.frontingMemberNames
 
-        let nameList = formatNameList(names)
+        let nameList = await formatNameList(names)
         if names.isEmpty {
             return .result(value: "No one", dialog: "No one is currently fronting.")
         }
@@ -200,7 +200,7 @@ struct RemoveFromFrontIntent: AppIntent {
     var member: MemberEntity
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
-        let store = ShortcutsDataStore.shared
+        let store = await ShortcutsDataStore.shared
         let currentIDs = await store.currentFrontingIDs
 
         guard currentIDs.contains(member.id) else {
@@ -225,7 +225,7 @@ struct PurgeFrontIntent: AppIntent {
     static var description = IntentDescription("End the current front entirely, removing everyone.")
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
-        let store = ShortcutsDataStore.shared
+        let store = await ShortcutsDataStore.shared
         let currentIDs = await store.currentFrontingIDs
 
         guard !currentIDs.isEmpty else {
@@ -234,7 +234,7 @@ struct PurgeFrontIntent: AppIntent {
 
         let names = await store.frontingMemberNames
         try await store.switchFronting(to: [])
-        let nameList = formatNameList(names)
+        let nameList = await formatNameList(names)
         let verb = names.count == 1 ? "has" : "have"
         return .result(dialog: "\(nameList) \(verb) been removed from front.")
     }
