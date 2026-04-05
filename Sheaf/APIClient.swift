@@ -782,7 +782,14 @@ class APIClient {
 
     func adminStepUp(_ verify: AdminStepUpVerify) async throws {
         let body = try JSONEncoder.iso.encode(verify)
-        _ = try await request("/v1/admin/auth", method: "POST", body: body)
+        // Use perform() directly so a wrong TOTP code (401) doesn't trigger
+        // the auto-refresh → retry → logout flow in request().
+        let (data, status) = try await perform("/v1/admin/auth", method: "POST", body: body)
+        guard (200...299).contains(status) else {
+            let message = String(data: data, encoding: .utf8) ?? "Authentication failed"
+            throw NSError(domain: "APIError", code: status,
+                          userInfo: [NSLocalizedDescriptionKey: message])
+        }
     }
 
     func getAdminStats() async throws -> AdminStats {

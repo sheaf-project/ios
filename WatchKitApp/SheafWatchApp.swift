@@ -5,6 +5,7 @@ import AppIntents
 struct SheafWatchApp: App {
     @StateObject private var authManager = WatchAuthManager()
     @StateObject private var store       = WatchStore()
+    @Environment(\.scenePhase) private var scenePhase
 
     init() {
         // Don't configure here - do it in onAppear so we have the actual authManager instance
@@ -53,6 +54,11 @@ struct SheafWatchApp: App {
                 WatchConnectivityManager.shared.configure(auth: authManager)
                 // Also try loading from App Group on appear
                 authManager.loadCredentials()
+            }
+            .onChange(of: scenePhase) { _, newPhase in
+                if newPhase == .active && authManager.isAuthenticated {
+                    store.loadAll()
+                }
             }
         }
     }
