@@ -17,9 +17,10 @@ final class NetworkMonitor: ObservableObject {
 
     func start() {
         monitor.pathUpdateHandler = { [weak self] path in
-            Task { @MainActor in
-                let wasOffline = self?.isOnline == false
-                self?.isOnline = (path.status == .satisfied)
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                let wasOffline = self.isOnline == false
+                self.isOnline = (path.status == .satisfied)
                 if wasOffline && path.status == .satisfied {
                     NotificationCenter.default.post(name: .connectivityRestored, object: nil)
                 }
