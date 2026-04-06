@@ -567,7 +567,7 @@ struct MemberEditSheet: View {
         )
         Task {
             await store.saveMember(existing: member, create: create)
-            // Save custom field values if editing existing member
+            // Save custom field values
             if let memberID = member?.id ?? store.members.last?.id,
                !fieldValues.isEmpty {
                 let sets: [CustomFieldValueSet] = store.fields.compactMap { field in
@@ -577,9 +577,8 @@ struct MemberEditSheet: View {
                         value: AnyCodable(val)
                     )
                 }
-                if !sets.isEmpty {
-                    await store.setMemberFieldValues(memberID: memberID, values: sets)
-                }
+                // Always send the PUT even with an empty array to clear removed values
+                await store.setMemberFieldValues(memberID: memberID, values: sets)
             }
             isSaving = false
             dismiss()

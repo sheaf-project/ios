@@ -91,6 +91,8 @@ struct MemberCreate: Codable {
 }
 
 // MARK: - MemberUpdate (all optional for PATCH)
+// Custom encode(to:) ensures nil values are sent as JSON null
+// so the API clears them, rather than omitting the key (which means "don't change").
 struct MemberUpdate: Codable {
     var name: String?
     var displayName: String?
@@ -110,6 +112,18 @@ struct MemberUpdate: Codable {
         case color
         case birthday
         case privacy
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(name, forKey: .name)
+        try c.encode(displayName, forKey: .displayName)
+        try c.encode(description, forKey: .description)
+        try c.encode(pronouns, forKey: .pronouns)
+        try c.encode(avatarURL, forKey: .avatarURL)
+        try c.encode(color, forKey: .color)
+        try c.encode(birthday, forKey: .birthday)
+        try c.encode(privacy, forKey: .privacy)
     }
 }
 
@@ -209,6 +223,12 @@ struct FrontUpdate: Codable {
         case endedAt   = "ended_at"
         case memberIDs = "member_ids"
     }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(endedAt, forKey: .endedAt)
+        try c.encode(memberIDs, forKey: .memberIDs)
+    }
 }
 
 // MARK: - GroupRead
@@ -258,6 +278,14 @@ struct GroupUpdate: Codable {
     enum CodingKeys: String, CodingKey {
         case name, description, color
         case parentID = "parent_id"
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(name, forKey: .name)
+        try c.encode(description, forKey: .description)
+        try c.encode(color, forKey: .color)
+        try c.encode(parentID, forKey: .parentID)
     }
 }
 

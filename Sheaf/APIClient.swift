@@ -1087,6 +1087,18 @@ struct SystemUpdate: Codable {
         case dateFormat           = "date_format"
         case replaceFrontsDefault = "replace_fronts_default"
     }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(name, forKey: .name)
+        try c.encode(description, forKey: .description)
+        try c.encode(tag, forKey: .tag)
+        try c.encode(avatarURL, forKey: .avatarURL)
+        try c.encode(color, forKey: .color)
+        try c.encode(privacy, forKey: .privacy)
+        try c.encode(dateFormat, forKey: .dateFormat)
+        try c.encode(replaceFrontsDefault, forKey: .replaceFrontsDefault)
+    }
 }
 
 // MARK: - JSON Decoder/Encoder with ISO8601 dates
