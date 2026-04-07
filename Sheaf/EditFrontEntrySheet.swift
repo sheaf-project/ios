@@ -11,7 +11,6 @@ struct EditFrontEntrySheet: View {
     @State private var endedAt: Date = Date()
     @State private var isOngoing = false
     @State private var isSaving = false
-    @State private var error: String?
     @State private var showAllMembers = false
 
     var body: some View {
@@ -72,7 +71,7 @@ struct EditFrontEntrySheet: View {
                             .foregroundColor(theme.textPrimary)
                         Spacer()
                         Text(entry.startedAt.formatted(date: .abbreviated, time: .shortened))
-                            .foregroundColor(theme.textTertiary)
+                            .foregroundColor(theme.textSecondary)
                     }
 
                     Toggle("Still ongoing", isOn: $isOngoing)
@@ -86,13 +85,7 @@ struct EditFrontEntrySheet: View {
                     }
                 }
 
-                if let error {
-                    Section {
-                        Text(error)
-                            .foregroundColor(theme.danger)
-                            .font(.system(size: 13))
-                    }
-                }
+
             }
             .scrollContentBackground(.hidden)
             .background(theme.backgroundPrimary)
@@ -130,18 +123,12 @@ struct EditFrontEntrySheet: View {
     private func save() async {
         guard !selectedIDs.isEmpty else { return }
         isSaving = true
-        error = nil
-        do {
-            let update = FrontUpdate(
-                endedAt: isOngoing ? nil : endedAt,
-                memberIDs: Array(selectedIDs)
-            )
-            try await store.updateFront(id: entry.id, update: update)
-            isSaving = false
-            dismiss()
-        } catch {
-            self.error = error.localizedDescription
-            isSaving = false
-        }
+        let update = FrontUpdate(
+            endedAt: isOngoing ? nil : endedAt,
+            memberIDs: Array(selectedIDs)
+        )
+        await store.updateFront(id: entry.id, update: update)
+        isSaving = false
+        dismiss()
     }
 }

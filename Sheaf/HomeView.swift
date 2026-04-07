@@ -178,9 +178,7 @@ struct FrontingMemberCard: View {
                     .fill(theme.success)
                     .frame(width: 10, height: 10)
                     .shadow(color: theme.success.opacity(0.8), radius: 4)
-                Text("front")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(theme.success)
+                    .accessibilityLabel("Currently fronting")
             }
         }
         .padding(20)

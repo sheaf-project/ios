@@ -31,7 +31,7 @@ struct HistoryView: View {
     @Environment(\.theme) var theme
     @State private var isLoading = false
     @State private var isLoadingMore = false
-    @State private var selectedEntry: FrontEntry?
+    @State private var entryToEdit: FrontEntry?
     @State private var showAddEntry = false
     @State private var entryToDelete: FrontEntry?
     @State private var showDeleteConfirm = false
@@ -122,10 +122,15 @@ struct HistoryView: View {
                         // Log entries
                         Section("Log") {
                             ForEach(store.frontHistory) { entry in
-                                FrontHistoryRow(
-                                    entry: entry,
-                                    members: membersFor(entry)
-                                )
+                                Button {
+                                    entryToEdit = entry
+                                } label: {
+                                    FrontHistoryRow(
+                                        entry: entry,
+                                        members: membersFor(entry)
+                                    )
+                                }
+                                .buttonStyle(.plain)
                                 .swipeActions(edge: .trailing) {
                                     Button(role: .destructive) {
                                         entryToDelete = entry
@@ -185,6 +190,10 @@ struct HistoryView: View {
         .task { await reload() }
         .sheet(isPresented: $showAddEntry, onDismiss: { Task { await reload() } }) {
             AddFrontEntrySheet()
+                .environmentObject(store)
+        }
+        .sheet(item: $entryToEdit, onDismiss: { Task { await reload() } }) { entry in
+            EditFrontEntrySheet(entry: entry)
                 .environmentObject(store)
         }
     }
@@ -276,6 +285,7 @@ struct FrontTimelineGraph: View {
                                 )
                                 .cornerRadius(6)
                         }
+                        .buttonStyle(.borderless)
                     }
                 }
             }
@@ -410,7 +420,7 @@ struct FrontHistoryRow: View {
                         .offset(x: CGFloat(i) * 14)
                 }
             }
-            .frame(width: members.isEmpty ? 36 : min(36 + CGFloat(members.count - 1) * 14, 36 + 2 * 14), height: 36)
+            .frame(width: members.isEmpty ? 36 : min(36 + CGFloat(members.count - 1) * 14, 36 + 2 * 14), height: 36, alignment: .leading)
 
             VStack(alignment: .leading, spacing: 3) {
                 // Names
