@@ -139,65 +139,65 @@ jobs:
           echo "ipa_path=$RUNNER_TEMP/$IPA_NAME" >> "$GITHUB_OUTPUT"
           ls -lh "$IPA_NAME"
 
-      - name: Delete existing dev release
-        continue-on-error: true
-        run: gh release delete dev --yes --cleanup-tag
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # - name: Delete existing dev release
+      #   continue-on-error: true
+      #   run: gh release delete dev --yes --cleanup-tag
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Create dev release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: dev
-          name: Development Build (Unsigned)
-          body: |
-            ## Latest Development Build (Unsigned)
-
-            **This IPA is unsigned and must be signed before installation.**
-
-            ### Build Information
-
-            - **Commit**: `${{ github.sha }}`
-            - **Branch**: `${{ github.ref_name }}`
-            - **Workflow Run**: [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
-            - **Signing**: UNSIGNED - Must be signed by user
-
-            ### Quick Installation
-
-            **AltStore (Easiest)**
-            1. Install [AltStore](https://altstore.io/) on your iPhone
-            2. Download the `.ipa` file below
-            3. Open in AltStore - it will sign and install automatically
-
-            **Sideloadly**
-            1. Download [Sideloadly](https://sideloadly.io/)
-            2. Connect your iPhone via USB
-            3. Drag the `.ipa` into Sideloadly and enter your Apple ID
-
-            **SideStore**
-            1. Install [SideStore](https://sidestore.io/)
-            2. Import and install the IPA
-
-            ### Notes
-
-            - Free Apple IDs work (7-day validity, auto-refresh with AltStore)
-            - Paid developer accounts get 1-year validity
-            - After installing, trust the app in Settings > General > VPN & Device Management
-            - Watch app and complications are included but require proper signing to function
-
-            ---
-
-            *Updated on each push to `${{ github.ref_name }}`*
-
-            ```
-            ${{ github.event.head_commit.message }}
-            ```
-          files: |
-            ${{ steps.create_ipa.outputs.ipa_path }}
-          draft: false
-          prerelease: true
-          token: ${{ secrets.GITHUB_TOKEN }}
-          generate_release_notes: false
+      # - name: Create dev release
+      #   uses: softprops/action-gh-release@v2
+      #   with:
+      #     tag_name: dev
+      #     name: Development Build (Unsigned)
+      #     body: |
+      #       ## Latest Development Build (Unsigned)
+      #
+      #       **This IPA is unsigned and must be signed before installation.**
+      #
+      #       ### Build Information
+      #
+      #       - **Commit**: `${{ github.sha }}`
+      #       - **Branch**: `${{ github.ref_name }}`
+      #       - **Workflow Run**: [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+      #       - **Signing**: UNSIGNED - Must be signed by user
+      #
+      #       ### Quick Installation
+      #
+      #       **AltStore (Easiest)**
+      #       1. Install [AltStore](https://altstore.io/) on your iPhone
+      #       2. Download the `.ipa` file below
+      #       3. Open in AltStore - it will sign and install automatically
+      #
+      #       **Sideloadly**
+      #       1. Download [Sideloadly](https://sideloadly.io/)
+      #       2. Connect your iPhone via USB
+      #       3. Drag the `.ipa` into Sideloadly and enter your Apple ID
+      #
+      #       **SideStore**
+      #       1. Install [SideStore](https://sidestore.io/)
+      #       2. Import and install the IPA
+      #
+      #       ### Notes
+      #
+      #       - Free Apple IDs work (7-day validity, auto-refresh with AltStore)
+      #       - Paid developer accounts get 1-year validity
+      #       - After installing, trust the app in Settings > General > VPN & Device Management
+      #       - Watch app and complications are included but require proper signing to function
+      #
+      #       ---
+      #
+      #       *Updated on each push to `${{ github.ref_name }}`*
+      #
+      #       ```
+      #       ${{ github.event.head_commit.message }}
+      #       ```
+      #     files: |
+      #       ${{ steps.create_ipa.outputs.ipa_path }}
+      #     draft: false
+      #     prerelease: true
+      #     token: ${{ secrets.GITHUB_TOKEN }}
+      #     generate_release_notes: false
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v6
