@@ -995,6 +995,32 @@ class APIClient {
     }
 
     func uploadFile(imageData: Data, mimeType: String = "image/jpeg") async throws -> String {
+        let ext: String
+        switch mimeType {
+        case "image/png": ext = "png"
+        case "image/gif": ext = "gif"
+        case "image/webp": ext = "webp"
+        default: ext = "jpg"
+        }
+
+        // First attempt
+        let (data, status) = try await performUpload(imageData: imageData, mimeType: mimeType, ext: ext)
+        if status != 401 { return try parseUploadResponse(data) }
+
+        // 401 — refresh token and retry
+        let fresh = try await refreshOnce()
+        await MainActor.run { auth.save(baseURL: auth.baseURL, tokens: fresh) }
+
+        let (retryData, retryStatus) = try await performUpload(imageData: imageData, mimeType: mimeType, ext: ext)
+        guard retryStatus != 401 else {
+            await MainActor.run { auth.logout() }
+            throw NSError(domain: "APIError", code: 401,
+                          userInfo: [NSLocalizedDescriptionKey: "Session expired. Please log in again."])
+        }
+        return try parseUploadResponse(retryData)
+    }
+
+    private func performUpload(imageData: Data, mimeType: String, ext: String) async throws -> (Data, Int) {
         guard let url = URL(string: auth.baseURL + "/v1/files/upload") else {
             throw URLError(.badURL)
         }
@@ -1008,26 +1034,31 @@ class APIClient {
 
         var body = Data()
         body.append("--\(boundary)\r\n".data(using: .utf8)!)
-        body.append("Content-Disposition: form-data; name=\"file\"; filename=\"upload.jpg\"\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"file\"; filename=\"upload.\(ext)\"\r\n".data(using: .utf8)!)
         body.append("Content-Type: \(mimeType)\r\n\r\n".data(using: .utf8)!)
         body.append(imageData)
         body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
         req.httpBody = body
 
         let (data, response) = try await urlSession.data(for: req)
-        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
-            let msg = String(data: data, encoding: .utf8) ?? "(no body)"
-            throw NSError(domain: "APIError", code: (response as? HTTPURLResponse)?.statusCode ?? 0,
-                          userInfo: [NSLocalizedDescriptionKey: msg])
-        }
-        // API returns {"url": "...", "key": "...", "size": N}
-        // Return the URL (which may be a relative signed path like /v1/files/avatars/...)
-        // so the caller can use it for both storage and immediate preview.
-        // The server will accept this URL as avatar_url and serve signed URLs on reads.
-        if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-            if let urlStr = json["url"] as? String, !urlStr.isEmpty {
-                return urlStr
+        guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
+        if http.statusCode != 401 && !(200...299).contains(http.statusCode) {
+            if http.statusCode == 413 {
+                throw NSError(domain: "APIError", code: 413,
+                              userInfo: [NSLocalizedDescriptionKey: "Your file is too large."])
             }
+            let msg = String(data: data, encoding: .utf8) ?? "(no body)"
+            throw NSError(domain: "APIError", code: http.statusCode,
+                          userInfo: [NSLocalizedDescriptionKey: "HTTP \(http.statusCode): \(msg)"])
+        }
+        return (data, http.statusCode)
+    }
+
+    private func parseUploadResponse(_ data: Data) throws -> String {
+        // API returns {"url": "...", "key": "...", "size": N}
+        if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let urlStr = json["url"] as? String, !urlStr.isEmpty {
+            return urlStr
         }
         return ""
     }

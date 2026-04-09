@@ -652,6 +652,7 @@ struct AvatarInputSection: View {
     @Binding var selectedPhoto: PhotosPickerItem?
     @Binding var isUploading: Bool
     var api: APIClient?
+    @State private var uploadError: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -757,11 +758,18 @@ struct AvatarInputSection: View {
                     }
                 }
             }
+
+            if let uploadError {
+                Text(uploadError)
+                    .font(.system(size: 13))
+                    .foregroundColor(theme.danger)
+            }
         }
     }
 
     private func uploadPhoto(_ item: PhotosPickerItem) async {
         isUploading = true
+        uploadError = nil
         defer { isUploading = false }
 
         guard let data = try? await item.loadTransferable(type: Data.self),
@@ -793,6 +801,7 @@ struct AvatarInputSection: View {
             }
         } catch {
             await MainActor.run {
+                uploadError = error.localizedDescription
                 selectedPhoto = nil
             }
         }

@@ -15,9 +15,9 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "2A2028272F6BB3070084B22F"
-               BuildableName = "SheafWatch Watch App.app"
-               BlueprintName = "SheafWatch Watch App"
+               BlueprintIdentifier = "2A2027962F6B92F10084B22F"
+               BuildableName = "Sheaf.app"
+               BlueprintName = "Sheaf"
                ReferencedContainer = "container:Sheaf.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
@@ -29,9 +29,9 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "2A2027962F6B92F10084B22F"
-               BuildableName = "Sheaf.app"
-               BlueprintName = "Sheaf"
+               BlueprintIdentifier = "2A2028272F6BB3070084B22F"
+               BuildableName = "SheafWatch Watch App.app"
+               BlueprintName = "SheafWatch Watch App"
                ReferencedContainer = "container:Sheaf.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
