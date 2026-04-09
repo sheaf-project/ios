@@ -624,10 +624,19 @@ struct APIBaseURLKey: EnvironmentKey {
     static let defaultValue = ""
 }
 
+struct APIAccessTokenKey: EnvironmentKey {
+    static let defaultValue = ""
+}
+
 extension EnvironmentValues {
     var apiBaseURL: String {
         get { self[APIBaseURLKey.self] }
         set { self[APIBaseURLKey.self] = newValue }
+    }
+
+    var apiAccessToken: String {
+        get { self[APIAccessTokenKey.self] }
+        set { self[APIAccessTokenKey.self] = newValue }
     }
 }
 

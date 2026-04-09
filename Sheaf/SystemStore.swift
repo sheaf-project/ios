@@ -279,6 +279,11 @@ class SystemStore: ObservableObject {
 
                 saveAllToCache()
                 updateWatchComplication()
+                PhoneConnectivityManager.shared.syncAvatars(
+                    members: members,
+                    baseURL: api?.auth.baseURL ?? "",
+                    accessToken: api?.auth.accessToken ?? ""
+                )
             } catch {
                 showError(error)
             }

@@ -2,6 +2,10 @@ import Foundation
 import Combine
 import WatchConnectivity
 
+extension Notification.Name {
+    static let avatarsUpdated = Notification.Name("sheaf.avatarsUpdated")
+}
+
 /// Handles WatchConnectivity on the watchOS side.
 /// Receives credential updates pushed from the iPhone and applies them to WatchAuthManager.
 final class WatchConnectivityManager: NSObject, WCSessionDelegate, ObservableObject {
@@ -107,6 +111,40 @@ final class WatchConnectivityManager: NSObject, WCSessionDelegate, ObservableObj
                  didReceiveUserInfo userInfo: [String: Any] = [:]) {
         NSLog("⌚️ WatchConnectivityManager: Received userInfo transfer")
         applyContext(userInfo)
+    }
+
+    /// Called when the iPhone sends a file via `transferFile`.
+    func session(_ session: WCSession, didReceive file: WCSessionFile) {
+        guard let memberID = file.metadata?["avatarID"] as? String else {
+            NSLog("⌚️ WatchConnectivityManager: Received file without avatarID metadata")
+            return
+        }
+        let cacheDir = Self.avatarCacheDirectory
+        try? FileManager.default.createDirectory(at: cacheDir, withIntermediateDirectories: true)
+        let destURL = cacheDir.appendingPathComponent(memberID + ".jpg")
+        // Remove existing file if any, then move the received file
+        try? FileManager.default.removeItem(at: destURL)
+        do {
+            try FileManager.default.moveItem(at: file.fileURL, to: destURL)
+            NSLog("⌚️ WatchConnectivityManager: Saved avatar file for member \(memberID)")
+        } catch {
+            // moveItem can fail if cross-volume; fall back to copy
+            if let data = try? Data(contentsOf: file.fileURL) {
+                try? data.write(to: destURL)
+                NSLog("⌚️ WatchConnectivityManager: Copied avatar file for member \(memberID)")
+            } else {
+                NSLog("⌚️ WatchConnectivityManager: Failed to save avatar for \(memberID): \(error)")
+            }
+        }
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: .avatarsUpdated, object: nil)
+        }
+    }
+
+    /// Directory for avatar images synced from the iPhone.
+    static var avatarCacheDirectory: URL {
+        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("avatars")
     }
 
     private func applyContext(_ context: [String: Any]) {

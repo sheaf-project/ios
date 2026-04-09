@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import UIKit
 import WatchConnectivity
 
 /// Handles WatchConnectivity on the iOS side.
@@ -72,9 +73,66 @@ final class PhoneConnectivityManager: NSObject, WCSessionDelegate, ObservableObj
         }
     }
 
+    // MARK: - Avatar Sync
+
+    /// Downloads member avatars on iPhone (which can decode WebP), converts to JPEG,
+    /// and sends each to the watch via individual file transfers.
+    func syncAvatars(members: [Member], baseURL: String, accessToken: String) {
+        guard WCSession.default.activationState == .activated,
+              WCSession.default.isWatchAppInstalled else {
+            NSLog("📱 PhoneConnectivityManager: Cannot sync avatars - activated: \(WCSession.default.activationState == .activated), watchInstalled: \(WCSession.default.isWatchAppInstalled)")
+            return
+        }
+
+        Task {
+            let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent("avatarSync")
+            try? FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+
+            var syncedCount = 0
+            for member in members {
+                guard let avatarURL = member.avatarURL, !avatarURL.isEmpty,
+                      let url = resolveAvatarURL(avatarURL, baseURL: baseURL) else { continue }
+
+                var request = URLRequest(url: url)
+                if avatarURL.hasPrefix("/") {
+                    if !accessToken.isEmpty {
+                        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+                    }
+                    if let cfID = UserDefaults.standard.string(forKey: "sheaf_cf_client_id"), !cfID.isEmpty,
+                       let cfSecret = UserDefaults.standard.string(forKey: "sheaf_cf_client_secret"), !cfSecret.isEmpty {
+                        request.setValue(cfID, forHTTPHeaderField: "CF-Access-Client-Id")
+                        request.setValue(cfSecret, forHTTPHeaderField: "CF-Access-Client-Secret")
+                    }
+                }
+
+                guard let (data, response) = try? await URLSession.shared.data(for: request),
+                      let http = response as? HTTPURLResponse,
+                      (200...299).contains(http.statusCode),
+                      let image = UIImage(data: data) else { continue }
+
+                let targetSize = CGSize(width: 128, height: 128)
+                let renderer = UIGraphicsImageRenderer(size: targetSize)
+                let thumbnail = renderer.image { _ in
+                    image.draw(in: CGRect(origin: .zero, size: targetSize))
+                }
+                guard let jpeg = thumbnail.jpegData(compressionQuality: 0.7) else { continue }
+
+                let tempFile = tempDir.appendingPathComponent("\(member.id).jpg")
+                do {
+                    try jpeg.write(to: tempFile)
+                    WCSession.default.transferFile(tempFile, metadata: ["avatarID": member.id])
+                    syncedCount += 1
+                } catch {
+                    NSLog("📱 PhoneConnectivityManager: Failed to write temp avatar for \(member.id): \(error)")
+                }
+            }
+            NSLog("📱 PhoneConnectivityManager: Queued \(syncedCount) avatar file transfers to watch")
+        }
+    }
+
     // MARK: - Receive from Watch
 
-    /// Handle messages from Watch WITH a reply handler (e.g. credential requests).
+    /// Handle messages from Watch WITH a reply handler (e.g. credential requests, avatar requests).
     func session(_ session: WCSession,
                  didReceiveMessage message: [String: Any],
                  replyHandler: @escaping ([String: Any]) -> Void) {
@@ -98,6 +156,49 @@ final class PhoneConnectivityManager: NSObject, WCSessionDelegate, ObservableObj
             }
             NSLog("📱 PhoneConnectivityManager: Sending credentials to Watch via reply")
             replyHandler(credentials)
+            return
+        }
+
+        // On-demand avatar request from Watch
+        if let memberID = message["requestAvatar"] as? String,
+           let avatarURLString = message["avatarURL"] as? String,
+           let baseURLString = message["baseURL"] as? String {
+            NSLog("📱 PhoneConnectivityManager: Watch requested avatar for member \(memberID)")
+            Task {
+                guard let url = resolveAvatarURL(avatarURLString, baseURL: baseURLString) else {
+                    NSLog("📱 PhoneConnectivityManager: Could not resolve avatar URL")
+                    replyHandler([:])
+                    return
+                }
+                var request = URLRequest(url: url)
+                if avatarURLString.hasPrefix("/") {
+                    if let auth = authManager, !auth.accessToken.isEmpty {
+                        request.setValue("Bearer \(auth.accessToken)", forHTTPHeaderField: "Authorization")
+                    }
+                    if let cfID = UserDefaults.standard.string(forKey: "sheaf_cf_client_id"), !cfID.isEmpty,
+                       let cfSecret = UserDefaults.standard.string(forKey: "sheaf_cf_client_secret"), !cfSecret.isEmpty {
+                        request.setValue(cfID, forHTTPHeaderField: "CF-Access-Client-Id")
+                        request.setValue(cfSecret, forHTTPHeaderField: "CF-Access-Client-Secret")
+                    }
+                }
+                guard let (data, response) = try? await URLSession.shared.data(for: request),
+                      let http = response as? HTTPURLResponse,
+                      (200...299).contains(http.statusCode),
+                      let image = UIImage(data: data) else {
+                    NSLog("📱 PhoneConnectivityManager: Failed to download avatar for member \(memberID)")
+                    replyHandler([:])
+                    return
+                }
+                let targetSize = CGSize(width: 128, height: 128)
+                let renderer = UIGraphicsImageRenderer(size: targetSize)
+                let thumbnail = renderer.image { _ in image.draw(in: CGRect(origin: .zero, size: targetSize)) }
+                if let jpeg = thumbnail.jpegData(compressionQuality: 0.7) {
+                    NSLog("📱 PhoneConnectivityManager: Sending \(jpeg.count) bytes avatar for member \(memberID)")
+                    replyHandler(["avatarData": jpeg])
+                } else {
+                    replyHandler([:])
+                }
+            }
             return
         }
 

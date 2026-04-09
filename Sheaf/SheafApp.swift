@@ -59,6 +59,7 @@ struct RootView: View {
         }
         .environment(\.theme, resolvedTheme)
         .environment(\.apiBaseURL, authManager.baseURL)
+        .environment(\.apiAccessToken, authManager.accessToken)
         .onAppear {
             // Configure PhoneConnectivityManager as soon as we have access to authManager
             PhoneConnectivityManager.shared.configure(auth: authManager)
