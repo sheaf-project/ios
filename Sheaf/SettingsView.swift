@@ -25,6 +25,10 @@ struct SettingsView: View {
     @State private var showDeleteConfirmSheet = false
     @State private var isLoadingFileUsage = false
     @State private var fileUsageDisplay = "—"
+    @State private var showFileCleanupConfirm = false
+    @State private var fileCleanupResult: String?
+    @State private var showFileCleanupResult = false
+    @State private var isRunningFileCleanup = false
     @State private var showDeleteAccount = false
     @State private var showCancelDeletion = false
     @State private var isCancellingDeletion = false
@@ -209,6 +213,45 @@ struct SettingsView: View {
                                 }
                             }
                             .padding(.horizontal, 16).padding(.vertical, 14)
+
+                            Divider().background(theme.divider)
+
+                            Button {
+                                Task { await checkOrphanedFiles() }
+                            } label: {
+                                HStack {
+                                    Image(systemName: "magnifyingglass")
+                                        .foregroundColor(theme.accentLight)
+                                        .frame(width: 20)
+                                    Text("Check for Orphaned Files")
+                                        .font(.system(size: 15, weight: .medium))
+                                        .foregroundColor(theme.textPrimary)
+                                    Spacer()
+                                    if isRunningFileCleanup {
+                                        ProgressView().tint(theme.accentLight).scaleEffect(0.7)
+                                    }
+                                }
+                                .padding(.horizontal, 16).padding(.vertical, 14)
+                            }
+                            .disabled(isRunningFileCleanup)
+
+                            Divider().background(theme.divider)
+
+                            Button {
+                                showFileCleanupConfirm = true
+                            } label: {
+                                HStack {
+                                    Image(systemName: "doc.badge.gearshape")
+                                        .foregroundColor(theme.accentLight)
+                                        .frame(width: 20)
+                                    Text("Clean Up Orphaned Files")
+                                        .font(.system(size: 15, weight: .medium))
+                                        .foregroundColor(theme.textPrimary)
+                                    Spacer()
+                                }
+                                .padding(.horizontal, 16).padding(.vertical, 14)
+                            }
+                            .disabled(isRunningFileCleanup)
                         }
                     }
 
@@ -636,6 +679,17 @@ struct SettingsView: View {
         } message: {
             Text("This will cancel your pending account deletion request.")
         }
+        .confirmationDialog("Clean Up Orphaned Files?", isPresented: $showFileCleanupConfirm, titleVisibility: .visible) {
+            Button("Clean Up", role: .destructive) { Task { await cleanUpOrphanedFiles() } }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This will permanently remove orphaned files that are no longer referenced by any member or system profile.")
+        }
+        .alert("File Cleanup", isPresented: $showFileCleanupResult) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(fileCleanupResult ?? "")
+        }
         } // NavigationStack
     }
 
@@ -663,6 +717,37 @@ struct SettingsView: View {
             fileUsageDisplay = "\(formatter.string(fromByteCount: Int64(bytes))) (\(count) files)"
         }
         isLoadingFileUsage = false
+    }
+
+    private func checkOrphanedFiles() async {
+        guard let api = store.api else { return }
+        isRunningFileCleanup = true
+        do {
+            let result = try await api.cleanupFilesDryRun()
+            let count = result["files_to_remove"] as? Int ?? result["count"] as? Int ?? 0
+            fileCleanupResult = count > 0
+                ? "\(count) orphaned file(s) found. Use 'Clean Up Orphaned Files' to remove them."
+                : "No orphaned files found."
+        } catch {
+            fileCleanupResult = "Error: \(error.localizedDescription)"
+        }
+        isRunningFileCleanup = false
+        showFileCleanupResult = true
+    }
+
+    private func cleanUpOrphanedFiles() async {
+        guard let api = store.api else { return }
+        isRunningFileCleanup = true
+        do {
+            let result = try await api.cleanupFiles()
+            let count = result["files_removed"] as? Int ?? result["count"] as? Int ?? 0
+            fileCleanupResult = "Cleaned up \(count) file(s)."
+        } catch {
+            fileCleanupResult = "Error: \(error.localizedDescription)"
+        }
+        isRunningFileCleanup = false
+        showFileCleanupResult = true
+        await loadFileUsage()
     }
 
     private var deleteConfirmLabel: String {
@@ -2517,7 +2602,7 @@ struct SessionsView: View {
                                     .cornerRadius(4)
                             }
                         }
-                        if let ip = session.ipAddress {
+                        if let ip = session.lastActiveIp ?? session.createdIp {
                             Text(ip)
                                 .font(.system(size: 12))
                                 .foregroundColor(theme.textTertiary)
@@ -2526,14 +2611,9 @@ struct SessionsView: View {
 
                     Spacer()
 
-                    VStack(alignment: .trailing, spacing: 2) {
-                        if let lastActive = session.lastActiveAt {
-                            Text(lastActive, style: .relative)
-                                .font(.system(size: 11))
-                                .foregroundColor(theme.textTertiary)
-                        }
-                        Text(session.createdAt, style: .date)
-                            .font(.system(size: 10))
+                    if let lastActive = session.lastActiveAt {
+                        Text(lastActive, format: .dateTime.month(.abbreviated).day().hour().minute())
+                            .font(.system(size: 11))
                             .foregroundColor(theme.textTertiary)
                     }
                 }

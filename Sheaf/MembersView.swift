@@ -299,6 +299,22 @@ struct MemberDetailSheet: View {
 
 
 
+                        // Birthday
+                        if let bday = member.birthday, !bday.isEmpty {
+                            HStack {
+                                Label("Birthday", systemImage: "gift")
+                                    .font(.system(size: 14, weight: .medium))
+                                    .foregroundColor(theme.textSecondary)
+                                Spacer()
+                                Text(bday)
+                                    .font(.system(size: 15))
+                                    .foregroundColor(theme.textPrimary)
+                            }
+                            .padding(16)
+                            .background(theme.backgroundCard)
+                            .cornerRadius(14)
+                        }
+
                         // Custom fields
                         if !fieldValues.isEmpty {
                             VStack(alignment: .leading, spacing: 10) {
@@ -415,6 +431,7 @@ struct MemberEditSheet: View {
     @State private var description = ""
     @State private var avatarURL = ""
     @State private var colorHex = "#A78BFA"
+    @State private var birthday = ""
     @State private var privacy: PrivacyLevel = .private
     @State private var isSaving = false
     @State private var fieldValues: [String: String] = [:]  // fieldID -> string value
@@ -453,6 +470,57 @@ struct MemberEditSheet: View {
                         formField("Display Name", value: $displayName, placeholder: "Shown to others")
                         formField("Pronouns", value: $pronouns, placeholder: "e.g. she/her")
                         formField("Description", value: $description, placeholder: "Brief description", multiline: true)
+
+                        // Birthday
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Birthday")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundColor(theme.textSecondary)
+                            HStack {
+                                DatePicker(
+                                    "",
+                                    selection: Binding(
+                                        get: {
+                                            let fmt = DateFormatter()
+                                            fmt.dateFormat = "yyyy-MM-dd"
+                                            return fmt.date(from: birthday) ?? Date()
+                                        },
+                                        set: {
+                                            let fmt = DateFormatter()
+                                            fmt.dateFormat = "yyyy-MM-dd"
+                                            birthday = fmt.string(from: $0)
+                                        }
+                                    ),
+                                    displayedComponents: .date
+                                )
+                                .datePickerStyle(.compact)
+                                .tint(theme.accentLight)
+                                .labelsHidden()
+                                .disabled(birthday.isEmpty)
+                                .opacity(birthday.isEmpty ? 0.4 : 1)
+
+                                Spacer()
+
+                                if birthday.isEmpty {
+                                    Button("Set") {
+                                        let fmt = DateFormatter()
+                                        fmt.dateFormat = "yyyy-MM-dd"
+                                        birthday = fmt.string(from: Date())
+                                    }
+                                    .font(.system(size: 14, weight: .medium))
+                                    .foregroundColor(theme.accentLight)
+                                } else {
+                                    Button("Clear") {
+                                        birthday = ""
+                                    }
+                                    .font(.system(size: 14, weight: .medium))
+                                    .foregroundColor(theme.textSecondary)
+                                }
+                            }
+                            .padding(12)
+                            .background(theme.backgroundCard)
+                            .cornerRadius(12)
+                        }
 
                         // Avatar section
                         AvatarInputSection(
@@ -522,6 +590,7 @@ struct MemberEditSheet: View {
         avatarURL   = m.avatarURL ?? ""
         if avatarURL.hasPrefix("/") { avatarMode = .upload }
         colorHex    = m.color ?? "#A78BFA"
+        birthday    = m.birthday ?? ""
         privacy     = m.privacy
         // Load existing field values
         Task {
@@ -562,7 +631,7 @@ struct MemberEditSheet: View {
             pronouns: pronouns.isEmpty ? nil : pronouns,
             avatarURL: avatarURL.isEmpty ? nil : avatarURL,
             color: colorHex.isEmpty ? nil : colorHex,
-            birthday: nil,
+            birthday: birthday.isEmpty ? nil : birthday,
             privacy: privacy
         )
         Task {

@@ -545,7 +545,8 @@ struct ApiKeyCreated: Codable {
 // MARK: - Sessions
 struct SessionRead: Identifiable, Codable {
     let id: String
-    let ipAddress: String?
+    let createdIp: String?
+    let lastActiveIp: String?
     let userAgent: String?
     let clientName: String?
     let nickname: String?
@@ -555,11 +556,12 @@ struct SessionRead: Identifiable, Codable {
 
     enum CodingKeys: String, CodingKey {
         case id, nickname
-        case ipAddress   = "ip_address"
-        case userAgent   = "user_agent"
-        case clientName  = "client_name"
-        case isCurrent   = "is_current"
-        case createdAt   = "created_at"
+        case createdIp    = "created_ip"
+        case lastActiveIp = "last_active_ip"
+        case userAgent    = "user_agent"
+        case clientName   = "client_name"
+        case isCurrent    = "is_current"
+        case createdAt    = "created_at"
         case lastActiveAt = "last_active_at"
     }
 }
