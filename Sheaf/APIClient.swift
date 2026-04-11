@@ -30,7 +30,7 @@ final class AuthManager: ObservableObject {
         baseURL      = KeychainHelper.get(key: urlKey) ?? ""
         isAuthenticated = !accessToken.isEmpty && !baseURL.isEmpty
         
-        NSLog("📱 AuthManager: Loaded from Keychain - isAuthenticated: \(isAuthenticated)")
+        debugLog("AuthManager: Loaded from Keychain - isAuthenticated: \(isAuthenticated)")
         
         // Configure connectivity manager immediately
         #if os(iOS)
@@ -82,23 +82,15 @@ final class AuthManager: ObservableObject {
             try KeychainHelper.save(key: urlKey, value: cleanURL)
             try KeychainHelper.save(key: accessKey, value: tokens.accessToken)
             try KeychainHelper.save(key: refreshKey, value: tokens.refreshToken)
-            NSLog("📱 AuthManager: Credentials saved to iCloud Keychain")
         } catch {
-            NSLog("❌ AuthManager: Keychain save failed: \(error)")
+            debugLog("AuthManager: Keychain save failed: \(error)")
         }
         
-        // Also keep in UserDefaults for backwards compatibility
-        UserDefaults.standard.set(cleanURL,            forKey: urlKey)
-        UserDefaults.standard.set(tokens.accessToken,  forKey: accessKey)
-        UserDefaults.standard.set(tokens.refreshToken, forKey: refreshKey)
-        
-        NSLog("📱 AuthManager: Credentials saved locally")
-        NSLog("📱 AuthManager: baseURL: \(cleanURL)")
-        NSLog("📱 AuthManager: accessToken length: \(tokens.accessToken.count)")
+        debugLog("AuthManager: Credentials saved to iCloud Keychain")
         
         // Still try WatchConnectivity as a backup for instant sync
         #if os(iOS)
-        NSLog("📱 AuthManager: Attempting to sync to watch via WatchConnectivity...")
+        debugLog("AuthManager: Attempting to sync to watch via WatchConnectivity...")
         PhoneConnectivityManager.shared.syncCredentials()
         #endif
     }
@@ -121,11 +113,6 @@ final class AuthManager: ObservableObject {
         
         // Delete from Keychain
         KeychainHelper.deleteAll()
-        
-        // Delete from UserDefaults
-        UserDefaults.standard.removeObject(forKey: accessKey)
-        UserDefaults.standard.removeObject(forKey: refreshKey)
-        UserDefaults.standard.removeObject(forKey: urlKey)
         
         #if os(iOS)
         try? WCSession.default.updateApplicationContext(
@@ -151,25 +138,25 @@ class APIClient {
     private static let cfClientSecretKey = "sheaf_cf_client_secret"
 
     static var cfAccessEnabled: Bool {
-        let id = UserDefaults.standard.string(forKey: cfClientIdKey) ?? ""
-        let secret = UserDefaults.standard.string(forKey: cfClientSecretKey) ?? ""
+        let id = KeychainHelper.get(key: cfClientIdKey) ?? ""
+        let secret = KeychainHelper.get(key: cfClientSecretKey) ?? ""
         return !id.isEmpty && !secret.isEmpty
     }
 
     static func saveCFTokens(clientId: String, clientSecret: String) {
-        UserDefaults.standard.set(clientId, forKey: cfClientIdKey)
-        UserDefaults.standard.set(clientSecret, forKey: cfClientSecretKey)
+        try? KeychainHelper.save(key: cfClientIdKey, value: clientId)
+        try? KeychainHelper.save(key: cfClientSecretKey, value: clientSecret)
     }
 
     static func clearCFTokens() {
-        UserDefaults.standard.removeObject(forKey: cfClientIdKey)
-        UserDefaults.standard.removeObject(forKey: cfClientSecretKey)
+        KeychainHelper.delete(key: cfClientIdKey)
+        KeychainHelper.delete(key: cfClientSecretKey)
     }
 
     /// Applies Cloudflare Access service token headers if configured.
     private func applyCFHeaders(to req: inout URLRequest) {
-        if let id = UserDefaults.standard.string(forKey: Self.cfClientIdKey), !id.isEmpty,
-           let secret = UserDefaults.standard.string(forKey: Self.cfClientSecretKey), !secret.isEmpty {
+        if let id = KeychainHelper.get(key: Self.cfClientIdKey), !id.isEmpty,
+           let secret = KeychainHelper.get(key: Self.cfClientSecretKey), !secret.isEmpty {
             req.setValue(id, forHTTPHeaderField: "CF-Access-Client-Id")
             req.setValue(secret, forHTTPHeaderField: "CF-Access-Client-Secret")
         }
@@ -180,8 +167,8 @@ class APIClient {
     private static var _cfSessionTokenHash: String?
 
     private static func makeCFSession() -> URLSession {
-        let id = UserDefaults.standard.string(forKey: cfClientIdKey) ?? ""
-        let secret = UserDefaults.standard.string(forKey: cfClientSecretKey) ?? ""
+        let id = KeychainHelper.get(key: cfClientIdKey) ?? ""
+        let secret = KeychainHelper.get(key: cfClientSecretKey) ?? ""
         let hash = "\(id):\(secret)"
         if let existing = _cfSession, _cfSessionTokenHash == hash {
             return existing

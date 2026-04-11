@@ -66,7 +66,7 @@ struct RootView: View {
             
             // Sync credentials to watch if already authenticated
             if authManager.isAuthenticated {
-                NSLog("📱 RootView: User already authenticated, syncing to watch")
+                debugLog("RootView: User already authenticated, syncing to watch")
                 PhoneConnectivityManager.shared.syncCredentials()
             }
         }

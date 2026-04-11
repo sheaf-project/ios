@@ -710,10 +710,10 @@ class SystemStore: ObservableObject {
         }
     }
 
-    func deleteMember(id: String) async {
+    func deleteMember(id: String, confirmation: MemberDeleteConfirm? = nil) async {
         if NetworkMonitor.shared.isOnline, let api {
             do {
-                try await api.deleteMember(id: id)
+                try await api.deleteMember(id: id, confirmation: confirmation)
                 members.removeAll { $0.id == id }
                 saveAllToCache()
             } catch { showError(error) }

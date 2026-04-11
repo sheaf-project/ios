@@ -25,12 +25,12 @@ final class WatchConnectivityManager: NSObject, WCSessionDelegate, ObservableObj
     }
 
     func configure(auth: WatchAuthManager) {
-        NSLog("⌚️ WatchConnectivityManager: Configuring with auth manager")
+        debugLog("WatchConnectivityManager: Configuring with auth manager")
         self.authManager = auth
         
         // Apply any credentials that arrived before configure() was called
         if let pending = pendingContext {
-            NSLog("⌚️ WatchConnectivityManager: Applying pending context")
+            debugLog("WatchConnectivityManager: Applying pending context")
             pendingContext = nil
             applyContext(pending)
         }
@@ -38,7 +38,7 @@ final class WatchConnectivityManager: NSObject, WCSessionDelegate, ObservableObj
         // Apply any context already waiting from the last iPhone push
         let existingContext = WCSession.default.receivedApplicationContext
         if !existingContext.isEmpty {
-            NSLog("⌚️ WatchConnectivityManager: Found existing application context, applying")
+            debugLog("WatchConnectivityManager: Found existing application context, applying")
             applyContext(existingContext)
         }
         
@@ -52,19 +52,19 @@ final class WatchConnectivityManager: NSObject, WCSessionDelegate, ObservableObj
     /// Prefers sendMessage (live, fresh) over receivedApplicationContext (may be stale).
     func requestCredentials() {
         guard WCSession.default.activationState == .activated else {
-            NSLog("⌚️ WatchConnectivityManager: Cannot request credentials - session not activated")
+            debugLog("WatchConnectivityManager: Cannot request credentials - session not activated")
             return
         }
 
         // Prefer sendMessage — it gets live credentials from the iPhone,
         // rather than potentially stale receivedApplicationContext.
         if WCSession.default.isReachable {
-            NSLog("⌚️ WatchConnectivityManager: Requesting credentials from iPhone via sendMessage...")
+            debugLog("WatchConnectivityManager: Requesting credentials from iPhone via sendMessage...")
             WCSession.default.sendMessage(["request": "credentials"], replyHandler: { [weak self] reply in
-                NSLog("⌚️ WatchConnectivityManager: Received credential reply from iPhone")
+                debugLog("WatchConnectivityManager: Received credential reply from iPhone")
                 self?.applyContext(reply)
             }, errorHandler: { [weak self] error in
-                NSLog("⌚️ WatchConnectivityManager: sendMessage failed: \(error.localizedDescription), falling back to application context")
+                debugLog("WatchConnectivityManager: sendMessage failed: \(error.localizedDescription), falling back to application context")
                 // Fall back to application context if sendMessage fails
                 let existing = WCSession.default.receivedApplicationContext
                 if !existing.isEmpty, existing["accessToken"] as? String != nil {
@@ -77,10 +77,10 @@ final class WatchConnectivityManager: NSObject, WCSessionDelegate, ObservableObj
         // iPhone not reachable — try application context as a last resort
         let existing = WCSession.default.receivedApplicationContext
         if !existing.isEmpty, existing["accessToken"] as? String != nil {
-            NSLog("⌚️ WatchConnectivityManager: iPhone not reachable, applying receivedApplicationContext")
+            debugLog("WatchConnectivityManager: iPhone not reachable, applying receivedApplicationContext")
             applyContext(existing)
         } else {
-            NSLog("⌚️ WatchConnectivityManager: iPhone not reachable, no cached context, will retry when reachable")
+            debugLog("WatchConnectivityManager: iPhone not reachable, no cached context, will retry when reachable")
         }
     }
 
@@ -88,20 +88,20 @@ final class WatchConnectivityManager: NSObject, WCSessionDelegate, ObservableObj
 
     func session(_ session: WCSession,
                  didReceiveApplicationContext applicationContext: [String: Any]) {
-        NSLog("⌚️ WatchConnectivityManager: Received application context")
+        debugLog("WatchConnectivityManager: Received application context")
         applyContext(applicationContext)
     }
 
     func session(_ session: WCSession,
                  didReceiveMessage message: [String: Any]) {
-        NSLog("⌚️ WatchConnectivityManager: Received message (no reply)")
+        debugLog("WatchConnectivityManager: Received message (no reply)")
         applyContext(message)
     }
 
     func session(_ session: WCSession,
                  didReceiveMessage message: [String: Any],
                  replyHandler: @escaping ([String: Any]) -> Void) {
-        NSLog("⌚️ WatchConnectivityManager: Received message (with reply)")
+        debugLog("WatchConnectivityManager: Received message (with reply)")
         applyContext(message)
         replyHandler(["status": "received"])
     }
@@ -109,14 +109,14 @@ final class WatchConnectivityManager: NSObject, WCSessionDelegate, ObservableObj
     /// Called by watchOS when `didReceiveUserInfo` fires (queued transfer from iPhone).
     func session(_ session: WCSession,
                  didReceiveUserInfo userInfo: [String: Any] = [:]) {
-        NSLog("⌚️ WatchConnectivityManager: Received userInfo transfer")
+        debugLog("WatchConnectivityManager: Received userInfo transfer")
         applyContext(userInfo)
     }
 
     /// Called when the iPhone sends a file via `transferFile`.
     func session(_ session: WCSession, didReceive file: WCSessionFile) {
         guard let memberID = file.metadata?["avatarID"] as? String else {
-            NSLog("⌚️ WatchConnectivityManager: Received file without avatarID metadata")
+            debugLog("WatchConnectivityManager: Received file without avatarID metadata")
             return
         }
         let cacheDir = Self.avatarCacheDirectory
@@ -126,14 +126,14 @@ final class WatchConnectivityManager: NSObject, WCSessionDelegate, ObservableObj
         try? FileManager.default.removeItem(at: destURL)
         do {
             try FileManager.default.moveItem(at: file.fileURL, to: destURL)
-            NSLog("⌚️ WatchConnectivityManager: Saved avatar file for member \(memberID)")
+            debugLog("WatchConnectivityManager: Saved avatar file for member \(memberID)")
         } catch {
             // moveItem can fail if cross-volume; fall back to copy
             if let data = try? Data(contentsOf: file.fileURL) {
                 try? data.write(to: destURL)
-                NSLog("⌚️ WatchConnectivityManager: Copied avatar file for member \(memberID)")
+                debugLog("WatchConnectivityManager: Copied avatar file for member \(memberID)")
             } else {
-                NSLog("⌚️ WatchConnectivityManager: Failed to save avatar for \(memberID): \(error)")
+                debugLog("WatchConnectivityManager: Failed to save avatar for \(memberID): \(error)")
             }
         }
         DispatchQueue.main.async {
@@ -165,7 +165,7 @@ final class WatchConnectivityManager: NSObject, WCSessionDelegate, ObservableObj
 
         // If authManager isn't configured yet, stash for later
         guard let authManager = authManager else {
-            NSLog("⌚️ WatchConnectivityManager: Auth manager not configured yet, stashing credentials")
+            debugLog("WatchConnectivityManager: Auth manager not configured yet, stashing credentials")
             pendingContext = context
             return
         }
@@ -174,18 +174,18 @@ final class WatchConnectivityManager: NSObject, WCSessionDelegate, ObservableObj
         if let cfId = context["cfClientId"] as? String,
            let cfSecret = context["cfClientSecret"] as? String,
            !cfId.isEmpty, !cfSecret.isEmpty {
-            UserDefaults.standard.set(cfId, forKey: "sheaf_cf_client_id")
-            UserDefaults.standard.set(cfSecret, forKey: "sheaf_cf_client_secret")
+            try? KeychainHelper.save(key: "sheaf_cf_client_id", value: cfId)
+            try? KeychainHelper.save(key: "sheaf_cf_client_secret", value: cfSecret)
         }
 
-        NSLog("✅ WatchConnectivityManager: Saving credentials...")
+        debugLog("WatchConnectivityManager: Saving credentials...")
         DispatchQueue.main.async {
             authManager.save(
                 baseURL: baseURL,
                 accessToken: accessToken,
                 refreshToken: refreshToken
             )
-            NSLog("✅ WatchConnectivityManager: Credentials saved, isAuthenticated: \(authManager.isAuthenticated)")
+            debugLog("WatchConnectivityManager: Credentials saved, isAuthenticated: \(authManager.isAuthenticated)")
         }
     }
 
@@ -194,9 +194,9 @@ final class WatchConnectivityManager: NSObject, WCSessionDelegate, ObservableObj
     func session(_ session: WCSession,
                  activationDidCompleteWith activationState: WCSessionActivationState,
                  error: Error?) {
-        NSLog("⌚️ WatchConnectivityManager: Session activated with state: \(activationState.rawValue)")
+        debugLog("WatchConnectivityManager: Session activated with state: \(activationState.rawValue)")
         if let error = error {
-            NSLog("⌚️ WatchConnectivityManager: Activation error: \(error)")
+            debugLog("WatchConnectivityManager: Activation error: \(error)")
         }
         if activationState == .activated {
             // Check existing context on activation
@@ -209,7 +209,7 @@ final class WatchConnectivityManager: NSObject, WCSessionDelegate, ObservableObj
     
     /// Called when iPhone reachability changes. This is the reliable moment to request credentials.
     func sessionReachabilityDidChange(_ session: WCSession) {
-        NSLog("⌚️ WatchConnectivityManager: Reachability changed - isReachable: \(session.isReachable)")
+        debugLog("WatchConnectivityManager: Reachability changed - isReachable: \(session.isReachable)")
         if session.isReachable, authManager?.isAuthenticated != true {
             requestCredentials()
         }

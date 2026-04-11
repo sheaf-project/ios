@@ -9,8 +9,8 @@ class WatchAPIClient {
 
     /// Applies Cloudflare Access service token headers if configured.
     private func applyCFHeaders(to req: inout URLRequest) {
-        if let id = UserDefaults.standard.string(forKey: "sheaf_cf_client_id"), !id.isEmpty,
-           let secret = UserDefaults.standard.string(forKey: "sheaf_cf_client_secret"), !secret.isEmpty {
+        if let id = KeychainHelper.get(key: "sheaf_cf_client_id"), !id.isEmpty,
+           let secret = KeychainHelper.get(key: "sheaf_cf_client_secret"), !secret.isEmpty {
             req.setValue(id, forHTTPHeaderField: "CF-Access-Client-Id")
             req.setValue(secret, forHTTPHeaderField: "CF-Access-Client-Secret")
         }

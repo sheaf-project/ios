@@ -9,6 +9,7 @@ struct MembersView: View {
     @State private var selectedMember: Member?
     @State private var memberToDelete: Member?
     @State private var showDeleteConfirm = false
+    @State private var showDeleteAuthSheet = false
 
 
     private func removeMemberFromFront(_ member: Member) async {
@@ -42,6 +43,8 @@ struct MembersView: View {
                         ForEach(filtered) { member in
                             MemberRow(member: member, isFronting: store.frontingMembers.contains(where: { $0.id == member.id })) {
                                 selectedMember = member
+                            } onDelete: {
+                                requestDelete(member)
                             }
                             .swipeActions(edge: .leading, allowsFullSwipe: true) {
                                 let isFronting = store.frontingMembers.contains(where: { $0.id == member.id })
@@ -63,8 +66,7 @@ struct MembersView: View {
                             }
                             .swipeActions(edge: .trailing) {
                                 Button(role: .destructive) {
-                                    memberToDelete = member
-                                    showDeleteConfirm = true
+                                    requestDelete(member)
                                 } label: {
                                     Label("Delete", systemImage: "trash")
                                 }
@@ -116,6 +118,22 @@ struct MembersView: View {
         } message: { member in
             Text("This will permanently delete \(member.displayName ?? member.name) and cannot be undone.")
         }
+        .sheet(isPresented: $showDeleteAuthSheet) {
+            if let member = memberToDelete {
+                MemberDeleteConfirmSheet(member: member)
+                    .environmentObject(store)
+            }
+        }
+    }
+
+    private func requestDelete(_ member: Member) {
+        memberToDelete = member
+        let level = store.systemProfile?.deleteConfirmation ?? .none
+        if level == .none {
+            showDeleteConfirm = true
+        } else {
+            showDeleteAuthSheet = true
+        }
     }
 }
 
@@ -126,8 +144,7 @@ struct MemberRow: View {
     let member: Member
     let isFronting: Bool
     let onTap: () -> Void
-
-    @State private var showDeleteConfirm = false
+    let onDelete: () -> Void
 
     var body: some View {
         Button(action: onTap) {
@@ -166,18 +183,6 @@ struct MemberRow: View {
                 .stroke(isFronting ? member.displayColor.opacity(0.3) : theme.backgroundCard, lineWidth: 1))
         }
         .buttonStyle(ScaleButtonStyle())
-        .confirmationDialog(
-            "Delete \(member.displayName ?? member.name)?",
-            isPresented: $showDeleteConfirm,
-            titleVisibility: .visible
-        ) {
-            Button("Delete", role: .destructive) {
-                Task { await store.deleteMember(id: member.id) }
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("This will permanently delete this member and cannot be undone.")
-        }
         .contextMenu {
             if isFronting {
                 Button {
@@ -207,7 +212,7 @@ struct MemberRow: View {
             Divider()
 
             Button(role: .destructive) {
-                showDeleteConfirm = true
+                onDelete()
             } label: {
                 Label("Delete Member", systemImage: "trash")
             }
@@ -872,6 +877,133 @@ struct AvatarInputSection: View {
             await MainActor.run {
                 uploadError = error.localizedDescription
                 selectedPhoto = nil
+            }
+        }
+    }
+}
+
+// MARK: - Member Delete Confirmation Sheet
+struct MemberDeleteConfirmSheet: View {
+    @Environment(\.theme) var theme
+    @EnvironmentObject var store: SystemStore
+    @Environment(\.dismiss) var dismiss
+    let member: Member
+
+    @State private var password = ""
+    @State private var totpCode = ""
+    @State private var isDeleting = false
+    @State private var errorMessage: String?
+
+    private var level: DeleteConfirmation {
+        store.systemProfile?.deleteConfirmation ?? .none
+    }
+
+    private var needsPassword: Bool {
+        level == .password || level == .both
+    }
+
+    private var needsTOTP: Bool {
+        level == .totp || level == .both
+    }
+
+    private var canSubmit: Bool {
+        (!needsPassword || !password.isEmpty) && (!needsTOTP || totpCode.count == 6)
+    }
+
+    var body: some View {
+        ZStack {
+            theme.backgroundPrimary.ignoresSafeArea()
+            VStack(spacing: 0) {
+                Capsule().fill(theme.inputBorder).frame(width: 40, height: 4).padding(.top, 12)
+
+                HStack {
+                    Button("Cancel") { dismiss() }.foregroundColor(theme.textSecondary)
+                    Spacer()
+                    Text("Confirm Deletion").font(.system(size: 17, weight: .semibold)).foregroundColor(theme.textPrimary)
+                    Spacer()
+                    // Spacer to balance the Cancel button
+                    Text("Cancel").foregroundColor(.clear)
+                }
+                .padding(.horizontal, 24).padding(.top, 16)
+
+                VStack(spacing: 16) {
+                    Text("Deleting \(member.displayName ?? member.name)")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundColor(theme.textPrimary)
+
+                    Text("Deletion protection is enabled. Please verify your identity to continue.")
+                        .font(.system(size: 14))
+                        .foregroundColor(theme.textSecondary)
+                        .multilineTextAlignment(.center)
+
+                    if needsPassword {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Password").font(.system(size: 13, weight: .semibold)).foregroundColor(theme.textSecondary)
+                            SecureField("Enter your password", text: $password)
+                                .autocorrectionDisabled().textContentType(.password)
+                                .padding(14).background(theme.backgroundCard).cornerRadius(12).foregroundColor(theme.textPrimary)
+                        }
+                    }
+
+                    if needsTOTP {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("TOTP Code").font(.system(size: 13, weight: .semibold)).foregroundColor(theme.textSecondary)
+                            TextField("6-digit code", text: $totpCode)
+                                .keyboardType(.numberPad).textContentType(.oneTimeCode)
+                                .padding(14).background(theme.backgroundCard).cornerRadius(12).foregroundColor(theme.textPrimary)
+                                .onChange(of: totpCode) { _, newValue in
+                                    totpCode = String(newValue.prefix(6)).filter(\.isNumber)
+                                }
+                        }
+                    }
+
+                    if let errorMessage {
+                        Text(errorMessage)
+                            .font(.system(size: 13))
+                            .foregroundColor(theme.danger)
+                    }
+
+                    Button {
+                        performDelete()
+                    } label: {
+                        HStack {
+                            if isDeleting {
+                                ProgressView().tint(.white).scaleEffect(0.8)
+                            }
+                            Text("Delete Member")
+                                .font(.system(size: 16, weight: .semibold))
+                        }
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(16)
+                        .background(canSubmit && !isDeleting ? theme.danger : theme.danger.opacity(0.4))
+                        .cornerRadius(14)
+                    }
+                    .disabled(!canSubmit || isDeleting)
+                }
+                .padding(.horizontal, 24).padding(.top, 24)
+                Spacer()
+            }
+        }
+    }
+
+    private func performDelete() {
+        isDeleting = true
+        errorMessage = nil
+        let confirmation = MemberDeleteConfirm(
+            password: needsPassword ? password : nil,
+            totpCode: needsTOTP ? totpCode : nil
+        )
+        Task {
+            await store.deleteMember(id: member.id, confirmation: confirmation)
+            await MainActor.run {
+                isDeleting = false
+                // If the member was removed, the delete succeeded
+                if !store.members.contains(where: { $0.id == member.id }) {
+                    dismiss()
+                } else {
+                    errorMessage = "Deletion failed. Please check your credentials and try again."
+                }
             }
         }
     }

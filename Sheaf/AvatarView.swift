@@ -170,8 +170,8 @@ struct AvatarView: View {
             if !accessToken.isEmpty {
                 request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
             }
-            if let cfID = UserDefaults.standard.string(forKey: "sheaf_cf_client_id"), !cfID.isEmpty,
-               let cfSecret = UserDefaults.standard.string(forKey: "sheaf_cf_client_secret"), !cfSecret.isEmpty {
+            if let cfID = KeychainHelper.get(key: "sheaf_cf_client_id"), !cfID.isEmpty,
+               let cfSecret = KeychainHelper.get(key: "sheaf_cf_client_secret"), !cfSecret.isEmpty {
                 request.setValue(cfID, forHTTPHeaderField: "CF-Access-Client-Id")
                 request.setValue(cfSecret, forHTTPHeaderField: "CF-Access-Client-Secret")
             }

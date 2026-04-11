@@ -71,8 +71,8 @@ struct LoginView: View {
 struct CFAccessSheet: View {
     @Environment(\.theme) var theme
     @Environment(\.dismiss) var dismiss
-    @State private var clientId: String = UserDefaults.standard.string(forKey: "sheaf_cf_client_id") ?? ""
-    @State private var clientSecret: String = UserDefaults.standard.string(forKey: "sheaf_cf_client_secret") ?? ""
+    @State private var clientId: String = KeychainHelper.get(key: "sheaf_cf_client_id") ?? ""
+    @State private var clientSecret: String = KeychainHelper.get(key: "sheaf_cf_client_secret") ?? ""
 
     var body: some View {
         NavigationStack {
@@ -201,10 +201,10 @@ struct SignInForm: View {
         let api = APIClient(auth: tempAuth)
         Task {
             do {
-                NSLog("📱 Login: Starting login request... (TOTP: \(totpCode.isEmpty ? "no" : "yes"))")
+                debugLog("Login: Starting login request... (TOTP: \(totpCode.isEmpty ? "no" : "yes"))")
                 // Pass TOTP code if available
                 let tokens = try await api.login(email: email, password: password, totpCode: totpCode.isEmpty ? nil : totpCode)
-                NSLog("📱 Login: Login successful, got tokens")
+                debugLog("Login: Login successful, got tokens")
                 
                 // Login succeeded, save credentials
                 await MainActor.run {
@@ -221,7 +221,7 @@ struct SignInForm: View {
                 await MainActor.run { isLoading = false }
             } catch is APIClient.TOTPRequiredError {
                 // Server returned X-Sheaf-2FA: required — show the TOTP field
-                NSLog("📱 Login: TOTP required, showing 2FA field")
+                debugLog("Login: TOTP required, showing 2FA field")
                 await MainActor.run {
                     withAnimation { needsTOTP = true }
                     error = "Please enter your 6-digit authenticator code"
@@ -229,7 +229,7 @@ struct SignInForm: View {
                     isLoading = false
                 }
             } catch {
-                NSLog("📱 Login: Login failed: \(error.localizedDescription)")
+                debugLog("Login: Login failed: \(error.localizedDescription)")
                 await MainActor.run {
                     self.error = error.localizedDescription
                     isLoading = false

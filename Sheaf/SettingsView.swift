@@ -12,11 +12,8 @@ struct SettingsView: View {
     @State private var showEditSystem = false
     @State private var showImport = false
     @State private var showSheafImport = false
-    @State private var showEditConnection = false
     @State private var showTOTPSetup = false
     @State private var showTOTPManage = false
-    @State private var newBaseURL = ""
-    @State private var newToken = ""
     @State private var me: UserRead?
     @State private var isExporting = false
     @State private var exportError: String?
@@ -32,8 +29,6 @@ struct SettingsView: View {
     @State private var showDeleteAccount = false
     @State private var showCancelDeletion = false
     @State private var isCancellingDeletion = false
-    @State private var logoTapCount = 0
-    @State private var showDebugToken = false
 
     var body: some View {
         NavigationStack {
@@ -54,26 +49,7 @@ struct SettingsView: View {
                         VStack(spacing: 0) {
                             infoRow(icon: "link", label: String(localized: "API URL"), value: authManager.baseURL)
                             Divider().background(theme.backgroundCard)
-                            if showDebugToken {
-                                infoRow(icon: "key.fill", label: String(localized: "Token"), value: maskedToken)
-                            } else {
-                                infoRow(icon: "envelope.fill", label: String(localized: "Email"), value: me?.email ?? "—")
-                            }
-                            Divider().background(theme.backgroundCard)
-                            Button {
-                                newBaseURL = authManager.baseURL
-                                newToken   = authManager.accessToken
-                                showEditConnection = true
-                            } label: {
-                                HStack {
-                                    Image(systemName: "pencil").foregroundColor(theme.accentLight)
-                                    Text("Edit Connection")
-                                        .font(.system(size: 15, weight: .medium))
-                                        .foregroundColor(theme.accentLight)
-                                    Spacer()
-                                }
-                                .padding(.horizontal, 16).padding(.vertical, 14)
-                            }
+                            infoRow(icon: "envelope.fill", label: String(localized: "Email"), value: me?.email ?? "—")
                         }
                     }
 
@@ -586,13 +562,6 @@ struct SettingsView: View {
                         Text("Sheaf").font(.system(size: 13, weight: .semibold)).foregroundColor(theme.textTertiary)
                         Text("v1.0.0").font(.system(size: 12)).foregroundColor(theme.textTertiary)
                     }
-                    .onTapGesture {
-                        logoTapCount += 1
-                        if logoTapCount >= 5 {
-                            withAnimation { showDebugToken.toggle() }
-                            logoTapCount = 0
-                        }
-                    }
                     .padding(.bottom, 80)
                 }
             }
@@ -620,15 +589,6 @@ struct SettingsView: View {
         .sheet(isPresented: $showSheafImport) {
             SheafImportSheet()
                 .environmentObject(store)
-        }
-        .sheet(isPresented: $showEditConnection) {
-            EditConnectionSheet(baseURL: $newBaseURL, token: $newToken) {
-                authManager.save(baseURL: newBaseURL,
-                                 tokens: TokenResponse(accessToken: newToken,
-                                                       refreshToken: authManager.refreshToken,
-                                                       tokenType: "bearer"))
-                store.loadAll()
-            }
         }
         .sheet(isPresented: $showTOTPSetup, onDismiss: { Task { await loadMe() } }) {
             TOTPSetupSheet()
@@ -826,11 +786,6 @@ struct SettingsView: View {
         }
     }
 
-    var maskedToken: String {
-        let t = authManager.accessToken
-        guard t.count > 8 else { return "••••••••" }
-        return String(t.prefix(6)) + "••••••••" + String(t.suffix(4))
-    }
 
 
     func settingsSection<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
@@ -2433,52 +2388,6 @@ struct AnnouncementEditSheet: View {
             await MainActor.run {
                 self.error = error.localizedDescription
                 isSaving = false
-            }
-        }
-    }
-}
-
-// MARK: - Edit Connection Sheet
-struct EditConnectionSheet: View {
-    @Environment(\.theme) var theme
-    @Binding var baseURL: String
-    @Binding var token: String
-    let onSave: () -> Void
-    @Environment(\.dismiss) var dismiss
-
-    var body: some View {
-        ZStack {
-            theme.backgroundPrimary.ignoresSafeArea()
-            VStack(spacing: 0) {
-                Capsule().fill(theme.inputBorder).frame(width: 40, height: 4).padding(.top, 12)
-                HStack {
-                    Button("Cancel") { dismiss() }.foregroundColor(theme.textSecondary)
-                    Spacer()
-                    Text("Edit Connection").font(.system(size: 17, weight: .semibold)).foregroundColor(theme.textPrimary)
-                    Spacer()
-                    Button("Save") { onSave(); dismiss() }
-                        .foregroundColor(theme.accentLight)
-                        .font(.system(size: 16, weight: .semibold))
-                        .disabled(baseURL.isEmpty || token.isEmpty)
-                }
-                .padding(.horizontal, 24).padding(.top, 16)
-
-                VStack(spacing: 16) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("API Base URL").font(.system(size: 13, weight: .semibold)).foregroundColor(theme.textSecondary)
-                        TextField("https://...", text: $baseURL)
-                            .keyboardType(.URL).autocapitalization(.none).autocorrectionDisabled()
-                            .padding(14).background(theme.backgroundCard).cornerRadius(12).foregroundColor(theme.textPrimary)
-                    }
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Bearer Token").font(.system(size: 13, weight: .semibold)).foregroundColor(theme.textSecondary)
-                        SecureField("eyJ...", text: $token)
-                            .autocapitalization(.none).autocorrectionDisabled()
-                            .padding(14).background(theme.backgroundCard).cornerRadius(12).foregroundColor(theme.textPrimary)
-                    }
-                }
-                .padding(.horizontal, 24).padding(.top, 24)
-                Spacer()
             }
         }
     }

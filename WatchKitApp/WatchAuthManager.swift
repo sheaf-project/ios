@@ -2,7 +2,7 @@ import Foundation
 import Combine
 
 /// Lightweight auth manager for watchOS.
-/// Credentials are received from the iPhone via WatchConnectivity and stored in UserDefaults.
+/// Credentials are synced from the iPhone via iCloud Keychain and WatchConnectivity.
 final class WatchAuthManager: ObservableObject {
     @Published var isAuthenticated: Bool = false
     @Published var accessToken: String  = ""
@@ -17,17 +17,17 @@ final class WatchAuthManager: ObservableObject {
         loadCredentials()
     }
 
-    /// Load credentials from UserDefaults (populated by WatchConnectivity).
+    /// Load credentials from iCloud Keychain.
     func loadCredentials() {
-        NSLog("⌚️ WatchAuthManager: loadCredentials() called")
+        debugLog("WatchAuthManager: loadCredentials() called")
 
-        accessToken  = UserDefaults.standard.string(forKey: accessKey)  ?? ""
-        refreshToken = UserDefaults.standard.string(forKey: refreshKey) ?? ""
-        baseURL      = UserDefaults.standard.string(forKey: urlKey)     ?? ""
+        accessToken  = KeychainHelper.get(key: accessKey)  ?? ""
+        refreshToken = KeychainHelper.get(key: refreshKey) ?? ""
+        baseURL      = KeychainHelper.get(key: urlKey)     ?? ""
 
         isAuthenticated = !accessToken.isEmpty && !baseURL.isEmpty
 
-        NSLog("⌚️ WatchAuthManager: Loaded - baseURL: '\(baseURL.isEmpty ? "(empty)" : baseURL)', isAuthenticated: \(isAuthenticated)")
+        debugLog("WatchAuthManager: Loaded - isAuthenticated: \(isAuthenticated)")
     }
 
     func save(baseURL: String, accessToken: String, refreshToken: String) {
@@ -36,17 +36,15 @@ final class WatchAuthManager: ObservableObject {
         self.accessToken  = accessToken
         self.refreshToken = refreshToken
         self.isAuthenticated = true
-        UserDefaults.standard.set(clean,        forKey: urlKey)
-        UserDefaults.standard.set(accessToken,  forKey: accessKey)
-        UserDefaults.standard.set(refreshToken, forKey: refreshKey)
-        NSLog("⌚️ WatchAuthManager: Credentials saved to UserDefaults")
+        try? KeychainHelper.save(key: urlKey, value: clean)
+        try? KeychainHelper.save(key: accessKey, value: accessToken)
+        try? KeychainHelper.save(key: refreshKey, value: refreshToken)
+        debugLog("WatchAuthManager: Credentials saved to Keychain")
     }
 
     func logout() {
         accessToken = ""; refreshToken = ""; baseURL = ""
         isAuthenticated = false
-        UserDefaults.standard.removeObject(forKey: accessKey)
-        UserDefaults.standard.removeObject(forKey: refreshKey)
-        UserDefaults.standard.removeObject(forKey: urlKey)
+        KeychainHelper.deleteAll()
     }
 }

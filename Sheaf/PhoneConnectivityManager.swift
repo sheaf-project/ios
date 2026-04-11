@@ -15,14 +15,14 @@ final class PhoneConnectivityManager: NSObject, WCSessionDelegate, ObservableObj
     private override init() {
         super.init()
         if WCSession.isSupported() {
-            NSLog("📱 PhoneConnectivityManager: Setting up WCSession")
+            debugLog("PhoneConnectivityManager: Setting up WCSession")
             WCSession.default.delegate = self
             WCSession.default.activate()
         }
     }
 
     func configure(auth: AuthManager) {
-        NSLog("📱 PhoneConnectivityManager: configure(auth:) called, isAuthenticated: \(auth.isAuthenticated)")
+        debugLog("PhoneConnectivityManager: configure(auth:) called, isAuthenticated: \(auth.isAuthenticated)")
         self.authManager = auth
     }
 
@@ -31,7 +31,7 @@ final class PhoneConnectivityManager: NSObject, WCSessionDelegate, ObservableObj
     /// Call this after login, token refresh, or any credential change.
     func syncCredentials() {
         guard let auth = authManager, !auth.accessToken.isEmpty else {
-            NSLog("📱 PhoneConnectivityManager: No credentials to sync (authManager: \(authManager != nil))")
+            debugLog("PhoneConnectivityManager: No credentials to sync (authManager: \(authManager != nil))")
             return
         }
 
@@ -40,35 +40,35 @@ final class PhoneConnectivityManager: NSObject, WCSessionDelegate, ObservableObj
             "accessToken":  auth.accessToken,
             "refreshToken": auth.refreshToken,
         ]
-        if let cfId = UserDefaults.standard.string(forKey: "sheaf_cf_client_id"), !cfId.isEmpty,
-           let cfSecret = UserDefaults.standard.string(forKey: "sheaf_cf_client_secret"), !cfSecret.isEmpty {
+        if let cfId = KeychainHelper.get(key: "sheaf_cf_client_id"), !cfId.isEmpty,
+           let cfSecret = KeychainHelper.get(key: "sheaf_cf_client_secret"), !cfSecret.isEmpty {
             context["cfClientId"] = cfId
             context["cfClientSecret"] = cfSecret
         }
 
         guard WCSession.default.activationState == .activated else {
-            NSLog("📱 PhoneConnectivityManager: Session not activated, can't sync")
+            debugLog("PhoneConnectivityManager: Session not activated, can't sync")
             return
         }
 
         // 1. updateApplicationContext — persists until Watch reads it (survives reboots).
         do {
             try WCSession.default.updateApplicationContext(context)
-            NSLog("📱 PhoneConnectivityManager: Sent via updateApplicationContext")
+            debugLog("PhoneConnectivityManager: Sent via updateApplicationContext")
         } catch {
-            NSLog("📱 PhoneConnectivityManager: updateApplicationContext failed: \(error.localizedDescription)")
+            debugLog("PhoneConnectivityManager: updateApplicationContext failed: \(error.localizedDescription)")
         }
 
         // 2. transferUserInfo — queued delivery, guaranteed even when Watch app isn't running.
         WCSession.default.transferUserInfo(context)
-        NSLog("📱 PhoneConnectivityManager: Queued via transferUserInfo")
+        debugLog("PhoneConnectivityManager: Queued via transferUserInfo")
 
         // 3. sendMessage — immediate delivery if Watch is reachable right now.
         if WCSession.default.isReachable {
             WCSession.default.sendMessage(context, replyHandler: { reply in
-                NSLog("📱 PhoneConnectivityManager: Watch confirmed receipt: \(reply)")
+                debugLog("PhoneConnectivityManager: Watch confirmed receipt: \(reply)")
             }, errorHandler: { error in
-                NSLog("📱 PhoneConnectivityManager: sendMessage failed: \(error.localizedDescription)")
+                debugLog("PhoneConnectivityManager: sendMessage failed: \(error.localizedDescription)")
             })
         }
     }
@@ -80,7 +80,7 @@ final class PhoneConnectivityManager: NSObject, WCSessionDelegate, ObservableObj
     func syncAvatars(members: [Member], baseURL: String, accessToken: String) {
         guard WCSession.default.activationState == .activated,
               WCSession.default.isWatchAppInstalled else {
-            NSLog("📱 PhoneConnectivityManager: Cannot sync avatars - activated: \(WCSession.default.activationState == .activated), watchInstalled: \(WCSession.default.isWatchAppInstalled)")
+            debugLog("PhoneConnectivityManager: Cannot sync avatars - activated: \(WCSession.default.activationState == .activated), watchInstalled: \(WCSession.default.isWatchAppInstalled)")
             return
         }
 
@@ -98,8 +98,8 @@ final class PhoneConnectivityManager: NSObject, WCSessionDelegate, ObservableObj
                     if !accessToken.isEmpty {
                         request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
                     }
-                    if let cfID = UserDefaults.standard.string(forKey: "sheaf_cf_client_id"), !cfID.isEmpty,
-                       let cfSecret = UserDefaults.standard.string(forKey: "sheaf_cf_client_secret"), !cfSecret.isEmpty {
+                    if let cfID = KeychainHelper.get(key: "sheaf_cf_client_id"), !cfID.isEmpty,
+                       let cfSecret = KeychainHelper.get(key: "sheaf_cf_client_secret"), !cfSecret.isEmpty {
                         request.setValue(cfID, forHTTPHeaderField: "CF-Access-Client-Id")
                         request.setValue(cfSecret, forHTTPHeaderField: "CF-Access-Client-Secret")
                     }
@@ -123,10 +123,10 @@ final class PhoneConnectivityManager: NSObject, WCSessionDelegate, ObservableObj
                     WCSession.default.transferFile(tempFile, metadata: ["avatarID": member.id])
                     syncedCount += 1
                 } catch {
-                    NSLog("📱 PhoneConnectivityManager: Failed to write temp avatar for \(member.id): \(error)")
+                    debugLog("PhoneConnectivityManager: Failed to write temp avatar for \(member.id): \(error)")
                 }
             }
-            NSLog("📱 PhoneConnectivityManager: Queued \(syncedCount) avatar file transfers to watch")
+            debugLog("PhoneConnectivityManager: Queued \(syncedCount) avatar file transfers to watch")
         }
     }
 
@@ -136,11 +136,11 @@ final class PhoneConnectivityManager: NSObject, WCSessionDelegate, ObservableObj
     func session(_ session: WCSession,
                  didReceiveMessage message: [String: Any],
                  replyHandler: @escaping ([String: Any]) -> Void) {
-        NSLog("📱 PhoneConnectivityManager: Received message from Watch: \(Array(message.keys))")
+        debugLog("PhoneConnectivityManager: Received message from Watch: \(Array(message.keys))")
 
         if message["request"] as? String == "credentials" {
             guard let auth = authManager, !auth.accessToken.isEmpty else {
-                NSLog("📱 PhoneConnectivityManager: Watch requested credentials but none available (authManager: \(authManager != nil))")
+                debugLog("PhoneConnectivityManager: Watch requested credentials but none available (authManager: \(authManager != nil))")
                 replyHandler(["error": "not_authenticated"])
                 return
             }
@@ -149,12 +149,12 @@ final class PhoneConnectivityManager: NSObject, WCSessionDelegate, ObservableObj
                 "accessToken":  auth.accessToken,
                 "refreshToken": auth.refreshToken,
             ]
-            if let cfId = UserDefaults.standard.string(forKey: "sheaf_cf_client_id"), !cfId.isEmpty,
-               let cfSecret = UserDefaults.standard.string(forKey: "sheaf_cf_client_secret"), !cfSecret.isEmpty {
+            if let cfId = KeychainHelper.get(key: "sheaf_cf_client_id"), !cfId.isEmpty,
+               let cfSecret = KeychainHelper.get(key: "sheaf_cf_client_secret"), !cfSecret.isEmpty {
                 credentials["cfClientId"] = cfId
                 credentials["cfClientSecret"] = cfSecret
             }
-            NSLog("📱 PhoneConnectivityManager: Sending credentials to Watch via reply")
+            debugLog("PhoneConnectivityManager: Sending credentials to Watch via reply")
             replyHandler(credentials)
             return
         }
@@ -163,10 +163,10 @@ final class PhoneConnectivityManager: NSObject, WCSessionDelegate, ObservableObj
         if let memberID = message["requestAvatar"] as? String,
            let avatarURLString = message["avatarURL"] as? String,
            let baseURLString = message["baseURL"] as? String {
-            NSLog("📱 PhoneConnectivityManager: Watch requested avatar for member \(memberID)")
+            debugLog("PhoneConnectivityManager: Watch requested avatar for member \(memberID)")
             Task {
                 guard let url = resolveAvatarURL(avatarURLString, baseURL: baseURLString) else {
-                    NSLog("📱 PhoneConnectivityManager: Could not resolve avatar URL")
+                    debugLog("PhoneConnectivityManager: Could not resolve avatar URL")
                     replyHandler([:])
                     return
                 }
@@ -175,8 +175,8 @@ final class PhoneConnectivityManager: NSObject, WCSessionDelegate, ObservableObj
                     if let auth = authManager, !auth.accessToken.isEmpty {
                         request.setValue("Bearer \(auth.accessToken)", forHTTPHeaderField: "Authorization")
                     }
-                    if let cfID = UserDefaults.standard.string(forKey: "sheaf_cf_client_id"), !cfID.isEmpty,
-                       let cfSecret = UserDefaults.standard.string(forKey: "sheaf_cf_client_secret"), !cfSecret.isEmpty {
+                    if let cfID = KeychainHelper.get(key: "sheaf_cf_client_id"), !cfID.isEmpty,
+                       let cfSecret = KeychainHelper.get(key: "sheaf_cf_client_secret"), !cfSecret.isEmpty {
                         request.setValue(cfID, forHTTPHeaderField: "CF-Access-Client-Id")
                         request.setValue(cfSecret, forHTTPHeaderField: "CF-Access-Client-Secret")
                     }
@@ -185,7 +185,7 @@ final class PhoneConnectivityManager: NSObject, WCSessionDelegate, ObservableObj
                       let http = response as? HTTPURLResponse,
                       (200...299).contains(http.statusCode),
                       let image = UIImage(data: data) else {
-                    NSLog("📱 PhoneConnectivityManager: Failed to download avatar for member \(memberID)")
+                    debugLog("PhoneConnectivityManager: Failed to download avatar for member \(memberID)")
                     replyHandler([:])
                     return
                 }
@@ -193,7 +193,7 @@ final class PhoneConnectivityManager: NSObject, WCSessionDelegate, ObservableObj
                 let renderer = UIGraphicsImageRenderer(size: targetSize)
                 let thumbnail = renderer.image { _ in image.draw(in: CGRect(origin: .zero, size: targetSize)) }
                 if let jpeg = thumbnail.jpegData(compressionQuality: 0.7) {
-                    NSLog("📱 PhoneConnectivityManager: Sending \(jpeg.count) bytes avatar for member \(memberID)")
+                    debugLog("PhoneConnectivityManager: Sending \(jpeg.count) bytes avatar for member \(memberID)")
                     replyHandler(["avatarData": jpeg])
                 } else {
                     replyHandler([:])
@@ -208,7 +208,7 @@ final class PhoneConnectivityManager: NSObject, WCSessionDelegate, ObservableObj
     /// Handle messages from Watch WITHOUT a reply handler.
     func session(_ session: WCSession,
                  didReceiveMessage message: [String: Any]) {
-        NSLog("📱 PhoneConnectivityManager: Received message (no reply) from Watch: \(Array(message.keys))")
+        debugLog("PhoneConnectivityManager: Received message (no reply) from Watch: \(Array(message.keys))")
     }
 
     // MARK: - WCSessionDelegate
@@ -216,9 +216,9 @@ final class PhoneConnectivityManager: NSObject, WCSessionDelegate, ObservableObj
     func session(_ session: WCSession,
                  activationDidCompleteWith activationState: WCSessionActivationState,
                  error: Error?) {
-        NSLog("📱 PhoneConnectivityManager: Session activated with state: \(activationState.rawValue), watchAppInstalled: \(session.isWatchAppInstalled)")
+        debugLog("PhoneConnectivityManager: Session activated with state: \(activationState.rawValue), watchAppInstalled: \(session.isWatchAppInstalled)")
         if let error = error {
-            NSLog("📱 PhoneConnectivityManager: Activation error: \(error)")
+            debugLog("PhoneConnectivityManager: Activation error: \(error)")
         }
         if activationState == .activated {
             syncCredentials()
@@ -227,7 +227,7 @@ final class PhoneConnectivityManager: NSObject, WCSessionDelegate, ObservableObj
     
     /// Called when the Watch app is installed, uninstalled, or the watch is paired/unpaired.
     func sessionWatchStateDidChange(_ session: WCSession) {
-        NSLog("📱 PhoneConnectivityManager: Watch state changed - installed: \(session.isWatchAppInstalled), paired: \(session.isPaired)")
+        debugLog("PhoneConnectivityManager: Watch state changed - installed: \(session.isWatchAppInstalled), paired: \(session.isPaired)")
         if session.isWatchAppInstalled {
             syncCredentials()
         }

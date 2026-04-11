@@ -1,6 +1,13 @@
 import Foundation
 import Security
 
+/// Logs a message only in DEBUG builds.
+func debugLog(_ message: String) {
+    #if DEBUG
+    NSLog(message)
+    #endif
+}
+
 /// Simple keychain wrapper for securely storing credentials with iCloud sync
 class KeychainHelper {
     
@@ -48,7 +55,7 @@ class KeychainHelper {
             throw KeychainError.unhandledError(status: addStatus)
         }
         
-        NSLog("🔐 Keychain: Saved '\(key)' (length: \(value.count))")
+        debugLog("Keychain: Saved '\(key)' (length: \(value.count))")
     }
     
     /// Retrieve a string value from keychain
@@ -69,12 +76,12 @@ class KeychainHelper {
               let data = result as? Data,
               let value = String(data: data, encoding: .utf8) else {
             if status != errSecItemNotFound {
-                NSLog("🔐 Keychain: Failed to read '\(key)' (status: \(status))")
+                debugLog("Keychain: Failed to read '\(key)' (status: \(status))")
             }
             return nil
         }
         
-        NSLog("🔐 Keychain: Read '\(key)' (length: \(value.count))")
+        debugLog("Keychain: Read '\(key)' (length: \(value.count))")
         return value
     }
     
@@ -89,7 +96,7 @@ class KeychainHelper {
         
         let status = SecItemDelete(query as CFDictionary)
         if status == errSecSuccess {
-            NSLog("🔐 Keychain: Deleted '\(key)'")
+            debugLog("Keychain: Deleted '\(key)'")
         }
     }
     
