@@ -146,7 +146,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: dev
-          name: Development Build
+          name: Development Build (Unsigned)
           prerelease: true
           make_latest: false
           body: |
