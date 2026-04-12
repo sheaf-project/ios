@@ -118,6 +118,7 @@ struct HistoryView: View {
                                     .listRowInsets(EdgeInsets(top: 0, leading: 24, bottom: 0, trailing: 24))
                             }
                         }
+                        .listSectionSeparator(.hidden)
 
                         // Log entries
                         Section("Log") {
@@ -353,42 +354,43 @@ struct SwimLane: View {
     var windowDuration: TimeInterval { windowEnd.timeIntervalSince(windowStart) }
 
     var body: some View {
-        GeometryReader { geo in
-            ZStack(alignment: .leading) {
-                // Track background
-                RoundedRectangle(cornerRadius: 4)
-                    .fill(member.displayColor.opacity(0.08))
-                    .frame(height: 18)
+        HStack(spacing: 4) {
+            // Member initial label
+            Text(member.initials)
+                .font(.system(size: 8, weight: .bold))
+                .foregroundColor(member.displayColor)
+                .frame(width: 20, alignment: .center)
 
-                // Blocks for each front entry
-                ForEach(entries) { entry in
-                    let start = max(entry.startedAt, windowStart)
-                    let end   = min(entry.endedAt ?? windowEnd, windowEnd)
-                    let startRatio = start.timeIntervalSince(windowStart) / windowDuration
-                    let endRatio   = end.timeIntervalSince(windowStart)   / windowDuration
+            // Track
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    // Track background
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(member.displayColor.opacity(0.08))
+                        .frame(height: 18)
 
-                    if endRatio > startRatio {
-                        let x = geo.size.width * CGFloat(max(0, startRatio))
-                        let w = geo.size.width * CGFloat(min(1, endRatio) - max(0, startRatio))
+                    // Blocks for each front entry
+                    ForEach(entries) { entry in
+                        let start = max(entry.startedAt, windowStart)
+                        let end   = min(entry.endedAt ?? windowEnd, windowEnd)
+                        let startRatio = start.timeIntervalSince(windowStart) / windowDuration
+                        let endRatio   = end.timeIntervalSince(windowStart)   / windowDuration
 
-                        RoundedRectangle(cornerRadius: 3)
-                            .fill(member.displayColor)
-                            .frame(width: max(2, w), height: 18)
-                            .offset(x: x)
+                        if endRatio > startRatio {
+                            let x = geo.size.width * CGFloat(max(0, startRatio))
+                            let w = geo.size.width * CGFloat(min(1, endRatio) - max(0, startRatio))
+
+                            RoundedRectangle(cornerRadius: 3)
+                                .fill(member.displayColor)
+                                .frame(width: max(2, w), height: 18)
+                                .offset(x: x)
+                        }
                     }
                 }
-
-                // Member initial label on the left
-                Text(member.initials)
-                    .font(.system(size: 8, weight: .bold))
-                    .foregroundColor(member.displayColor)
-                    .frame(width: 16, alignment: .center)
-                    .offset(x: -20)
+                .clipped()
             }
-            .padding(.leading, 20)
+            .frame(height: 18)
         }
-        .frame(height: 18)
-        .padding(.leading, 20)
     }
 }
 

@@ -71,7 +71,7 @@ struct MembersView: View {
                                     Label("Delete", systemImage: "trash")
                                 }
                             }
-                            .listRowBackground(theme.backgroundCard)
+                            .listRowBackground(Color.clear)
                             .listRowSeparator(.hidden)
                             .listRowInsets(EdgeInsets(top: 5, leading: 24, bottom: 5, trailing: 24))
                         }
