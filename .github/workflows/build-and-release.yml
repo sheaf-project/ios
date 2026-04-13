@@ -142,6 +142,15 @@ jobs:
           echo "ipa_path=$RUNNER_TEMP/$IPA_NAME" >> "$GITHUB_OUTPUT"
           ls -lh "$IPA_NAME"
 
+      - name: Delete old release assets
+        run: |
+          gh release view dev --json assets --jq '.assets[].name' 2>/dev/null | while read -r name; do
+            gh release delete-asset dev "$name" --yes
+          done
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+
       - name: Update dev release
         uses: softprops/action-gh-release@v2
         with:
