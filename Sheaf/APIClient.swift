@@ -14,6 +14,8 @@ final class AuthManager: ObservableObject {
     @Published var baseURL: String = ""
     @Published var accountStatus: AccountStatus = .active
     @Published var emailVerified: Bool = true
+    @Published var deletionGraceDays: Int?
+    @Published var deletionRequestedAt: Date?
 
     // Held during TOTP step so we can finalize after verification
     private(set) var pendingTokens: TokenResponse?

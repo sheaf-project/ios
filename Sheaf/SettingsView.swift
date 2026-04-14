@@ -476,9 +476,22 @@ struct SettingsView: View {
                                         Text("Account Deletion Pending")
                                             .font(.system(size: 15, weight: .semibold))
                                             .foregroundColor(theme.danger)
-                                        Text("Requested \(deletionDate, style: .relative) ago")
-                                            .font(.system(size: 13))
-                                            .foregroundColor(theme.textSecondary)
+                                        if let days = authManager.deletionGraceDays {
+                                            let deletionDate2 = Calendar.current.date(byAdding: .day, value: days, to: deletionDate) ?? deletionDate
+                                            if deletionDate2 > Date() {
+                                                Text("Your account will be permanently deleted in \(deletionDate2, style: .relative).")
+                                                    .font(.system(size: 13))
+                                                    .foregroundColor(theme.textSecondary)
+                                            } else {
+                                                Text("Your account is past the grace period and may be deleted at any time.")
+                                                    .font(.system(size: 13))
+                                                    .foregroundColor(theme.danger)
+                                            }
+                                        } else {
+                                            Text("Requested \(deletionDate, style: .relative) ago")
+                                                .font(.system(size: 13))
+                                                .foregroundColor(theme.textSecondary)
+                                        }
                                     }
                                     Spacer()
                                 }
@@ -661,6 +674,13 @@ struct SettingsView: View {
             deleteConfirmLevel = profile.deleteConfirmation
         } else if let profile = try? await api.getMySystem() {
             deleteConfirmLevel = profile.deleteConfirmation
+        }
+        // Fetch deletion grace period if not already known
+        if authManager.deletionGraceDays == nil {
+            if let config = try? await api.getAuthConfig(),
+               let days = config["account_deletion_grace_days"] as? Int {
+                authManager.deletionGraceDays = days
+            }
         }
         // Load file usage
         await loadFileUsage()
@@ -2621,10 +2641,17 @@ struct DeleteAccountSheet: View {
                                 .font(.system(size: 20, weight: .bold))
                                 .foregroundColor(theme.textPrimary)
 
-                            Text("This will schedule your account for deletion. All your data — members, fronting history, groups, and files — will be permanently removed.")
-                                .font(.system(size: 14))
-                                .foregroundColor(theme.textSecondary)
-                                .multilineTextAlignment(.center)
+                            if let days = authManager.deletionGraceDays {
+                                Text("This will schedule your account for deletion. After \(days) days, all your data — members, fronting history, groups, and files — will be permanently removed.")
+                                    .font(.system(size: 14))
+                                    .foregroundColor(theme.textSecondary)
+                                    .multilineTextAlignment(.center)
+                            } else {
+                                Text("This will schedule your account for deletion. All your data — members, fronting history, groups, and files — will be permanently removed.")
+                                    .font(.system(size: 14))
+                                    .foregroundColor(theme.textSecondary)
+                                    .multilineTextAlignment(.center)
+                            }
                         }
                         .padding(.top, 20)
                         .padding(.horizontal, 24)
@@ -2706,7 +2733,11 @@ struct DeleteAccountSheet: View {
                 }
                 Button("Go Back", role: .cancel) {}
             } message: {
-                Text("This action cannot be easily undone. Your account and all associated data will be scheduled for permanent deletion.")
+                if let days = authManager.deletionGraceDays {
+                    Text("This action cannot be easily undone. Your account and all associated data will be permanently deleted after \(days) days.")
+                } else {
+                    Text("This action cannot be easily undone. Your account and all associated data will be scheduled for permanent deletion.")
+                }
             }
         }
     }
