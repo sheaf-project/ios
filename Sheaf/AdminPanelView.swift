@@ -1240,6 +1240,7 @@ struct AdminUserEditSheet: View {
     @State private var newEmail = ""
     @State private var showDisableTOTP = false
     @State private var showVerifyEmail = false
+    @State private var showCancelDeletion = false
 
     init(user: AdminUserRead, onSave: @escaping (AdminUserRead) -> Void) {
         self.user = user
@@ -1334,6 +1335,14 @@ struct AdminUserEditSheet: View {
                 Button("Cancel", role: .cancel) {}
             } message: {
                 Text("This will manually mark this user's email as verified.")
+            }
+            .confirmationDialog("Cancel Account Deletion?", isPresented: $showCancelDeletion, titleVisibility: .visible) {
+                Button("Cancel Deletion") {
+                    Task { await adminCancelDeletion() }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This will cancel the pending account deletion for this user.")
             }
         }
     }
@@ -1468,6 +1477,16 @@ struct AdminUserEditSheet: View {
                     title: "Disable 2FA",
                     desc: "Remove two-factor authentication"
                 ) { showDisableTOTP = true }
+
+                if user.accountStatus == .pendingDeletion {
+                    Divider().background(theme.divider)
+
+                    recoveryButton(
+                        icon: "arrow.uturn.backward.circle.fill",
+                        title: "Cancel Account Deletion",
+                        desc: "Remove pending deletion from this account"
+                    ) { showCancelDeletion = true }
+                }
             }
             .background(theme.backgroundCard)
             .cornerRadius(14)
@@ -1589,6 +1608,16 @@ struct AdminUserEditSheet: View {
         do {
             try await api.adminVerifyEmail(userID: user.id)
             setRecoveryMessage("Email has been marked as verified.")
+        } catch {
+            setRecoveryMessage(error.localizedDescription, isError: true)
+        }
+    }
+
+    private func adminCancelDeletion() async {
+        guard let api = store.api else { return }
+        do {
+            try await api.adminCancelDeletion(userID: user.id)
+            setRecoveryMessage("Account deletion has been cancelled.")
         } catch {
             setRecoveryMessage(error.localizedDescription, isError: true)
         }

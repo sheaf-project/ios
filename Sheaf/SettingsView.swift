@@ -59,10 +59,6 @@ struct SettingsView: View {
                                                 Text("Your account will be permanently deleted in \(deletionDate2, style: .relative).")
                                                     .font(.system(size: 13))
                                                     .foregroundColor(theme.textSecondary)
-                                            } else {
-                                                Text("Your account is past the grace period and may be deleted at any time.")
-                                                    .font(.system(size: 13))
-                                                    .foregroundColor(theme.danger)
                                             }
                                         } else {
                                             Text("Requested \(deletionDate, style: .relative) ago")
@@ -541,19 +537,21 @@ struct SettingsView: View {
                                 Divider().background(theme.divider)
                             }
 
-                            Button { showDeleteAccount = true } label: {
-                                HStack {
-                                    Image(systemName: "trash.fill")
-                                        .foregroundColor(theme.danger)
-                                    Text("Delete Account")
-                                        .font(.system(size: 15, weight: .medium))
-                                        .foregroundColor(theme.danger)
-                                    Spacer()
+                            if me?.accountStatus != .pendingDeletion {
+                                Button { showDeleteAccount = true } label: {
+                                    HStack {
+                                        Image(systemName: "trash.fill")
+                                            .foregroundColor(theme.danger)
+                                        Text("Delete Account")
+                                            .font(.system(size: 15, weight: .medium))
+                                            .foregroundColor(theme.danger)
+                                        Spacer()
+                                    }
+                                    .padding(.horizontal, 16).padding(.vertical, 14)
                                 }
-                                .padding(.horizontal, 16).padding(.vertical, 14)
-                            }
 
-                            Divider().background(theme.divider)
+                                Divider().background(theme.divider)
+                            }
 
                             Button { showLogoutConfirm = true } label: {
                                 HStack {

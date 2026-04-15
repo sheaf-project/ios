@@ -49,16 +49,12 @@ struct HomeView: View {
                             if let days = authManager.deletionGraceDays {
                                 let deadline = Calendar.current.date(byAdding: .day, value: days, to: deletionDate) ?? deletionDate
                                 if deadline > Date() {
-                                    Text("Your account will be permanently deleted in \(deadline, style: .relative). Go to Settings to cancel.")
+                                    Text("Your account will be permanently deleted in \(deadline, style: .relative). Go to Settings to cancel account deletion.")
                                         .font(.system(size: 13))
                                         .foregroundColor(theme.textSecondary)
-                                } else {
-                                    Text("Your account is past the grace period and may be deleted at any time. Go to Settings to cancel.")
-                                        .font(.system(size: 13))
-                                        .foregroundColor(theme.danger)
                                 }
                             } else {
-                                Text("Your account is scheduled for deletion. Go to Settings to cancel.")
+                                Text("Your account is scheduled for deletion. Go to Settings to cancel account deletion.")
                                     .font(.system(size: 13))
                                     .foregroundColor(theme.textSecondary)
                             }
