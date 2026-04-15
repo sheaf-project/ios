@@ -544,8 +544,9 @@ struct SimplyPluralImportSheet: View {
             // Instructions card
             VStack(alignment: .leading, spacing: 12) {
                 instructionRow(number: "1", text: "Open Simply Plural and go to Settings")
-                instructionRow(number: "2", text: "Tap \"Export Data\" and save the JSON file")
-                instructionRow(number: "3", text: "Come back here and select that file")
+                instructionRow(number: "2", text: "Tap Account")
+                instructionRow(number: "3", text: "Tap Export your data, then tap Request data export")
+                instructionRow(number: "4", text: "Come back here and select the JSON file you downloaded from the email")
             }
             .padding(16)
             .background(theme.backgroundCard)
