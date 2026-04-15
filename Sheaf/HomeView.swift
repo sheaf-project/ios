@@ -2,6 +2,7 @@ import SwiftUI
 
 struct HomeView: View {
     @EnvironmentObject var store: SystemStore
+    @EnvironmentObject var authManager: AuthManager
     @Environment(\.theme) var theme
     @State private var showSwitchSheet = false
 
@@ -31,6 +32,46 @@ struct HomeView: View {
                     }
                     .padding(.horizontal, 24)
                     .padding(.top, 16)
+
+                    // Pending deletion banner
+                    if authManager.accountStatus == .pendingDeletion,
+                       let deletionDate = authManager.deletionRequestedAt {
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack(spacing: 8) {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .foregroundColor(theme.danger)
+                                    .font(.system(size: 16))
+                                Text("Account Deletion Pending")
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundColor(theme.danger)
+                                Spacer()
+                            }
+                            if let days = authManager.deletionGraceDays {
+                                let deadline = Calendar.current.date(byAdding: .day, value: days, to: deletionDate) ?? deletionDate
+                                if deadline > Date() {
+                                    Text("Your account will be permanently deleted in \(deadline, style: .relative). Go to Settings to cancel.")
+                                        .font(.system(size: 13))
+                                        .foregroundColor(theme.textSecondary)
+                                } else {
+                                    Text("Your account is past the grace period and may be deleted at any time. Go to Settings to cancel.")
+                                        .font(.system(size: 13))
+                                        .foregroundColor(theme.danger)
+                                }
+                            } else {
+                                Text("Your account is scheduled for deletion. Go to Settings to cancel.")
+                                    .font(.system(size: 13))
+                                    .foregroundColor(theme.textSecondary)
+                            }
+                        }
+                        .padding(14)
+                        .background(theme.danger.opacity(0.12))
+                        .cornerRadius(14)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14)
+                                .stroke(theme.danger.opacity(0.3), lineWidth: 1)
+                        )
+                        .padding(.horizontal, 24)
+                    }
 
                     // Announcements
                     ForEach(store.visibleAnnouncements) { announcement in

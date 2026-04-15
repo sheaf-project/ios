@@ -92,7 +92,6 @@ struct MainView: View {
 
     @State private var showSwitchSheet = false
     @State private var showAddMember   = false
-    @State private var showDeletionAlert = false
 
     var body: some View {
         ContentView(selectedTab: $selectedTab)
@@ -125,22 +124,11 @@ struct MainView: View {
                            let days = config["account_deletion_grace_days"] as? Int {
                             authManager.deletionGraceDays = days
                         }
-                        showDeletionAlert = true
                     }
                     guard me.emailVerified,
                           me.accountStatus == .active || me.accountStatus == .pendingDeletion else { return }
                 }
                 systemStore.loadAll()
-            }
-            .alert("Account Pending Deletion", isPresented: $showDeletionAlert) {
-                Button("Go to Settings", role: .cancel) {
-                    selectedTab = 4
-                }
-                Button("Log Out", role: .destructive) {
-                    authManager.logout()
-                }
-            } message: {
-                Text(deletionAlertMessage)
             }
             .onReceive(quickActions.$pendingAction) { action in
                 guard let action else { return }
@@ -158,26 +146,6 @@ struct MainView: View {
                     }
                 }
             }
-    }
-
-    private var deletionAlertMessage: String {
-        if let days = authManager.deletionGraceDays,
-           let requested = authManager.deletionRequestedAt {
-            let deadline = Calendar.current.date(byAdding: .day, value: days, to: requested) ?? requested
-            if deadline > Date() {
-                let remaining = Calendar.current.dateComponents([.day, .hour], from: Date(), to: deadline)
-                let d = remaining.day ?? 0
-                let h = remaining.hour ?? 0
-                if d > 0 {
-                    return "Your account will be permanently deleted in \(d) day\(d == 1 ? "" : "s"). You can cancel this from Settings, or log out."
-                } else {
-                    return "Your account will be permanently deleted in \(h) hour\(h == 1 ? "" : "s"). You can cancel this from Settings, or log out."
-                }
-            } else {
-                return "Your account is past the grace period and may be deleted at any time. You can cancel this from Settings, or log out."
-            }
-        }
-        return "Your account is scheduled for deletion. You can cancel this from Settings, or log out."
     }
 
     private func donateQuickActions() {
