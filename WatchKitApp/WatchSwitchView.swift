@@ -10,9 +10,6 @@ struct WatchSwitchView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 8) {
-                Text("Switch")
-                    .font(.system(size: 16, weight: .bold, design: .rounded))
-
                 Text("Select who is fronting")
                     .font(.system(size: 11))
                     .foregroundColor(.secondary)
@@ -46,41 +43,29 @@ struct WatchSwitchView: View {
                     }
                     .buttonStyle(.plain)
                 }
-
-                Divider()
-
-                // Confirm button
+            }
+            .padding()
+        }
+        .navigationTitle("Switch")
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
                 if didSwitch {
-                    HStack(spacing: 6) {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundColor(.green)
-                        Text("Switched!")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundColor(.green)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.vertical, 4)
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundColor(.green)
                 } else {
                     Button {
                         Task { await confirmSwitch() }
                     } label: {
                         if isSwitching {
                             ProgressView()
-                                .frame(maxWidth: .infinity, alignment: .center)
                         } else {
-                            Text(selectedIDs.isEmpty
-                                 ? String(localized: "Clear Front")
-                                 : String(localized: "Switch (\(selectedIDs.count))"))
-                                .font(.system(size: 13, weight: .semibold))
-                                .frame(maxWidth: .infinity, alignment: .center)
+                            Image(systemName: selectedIDs.isEmpty
+                                  ? "xmark.circle" : "checkmark.circle")
                         }
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(selectedIDs.isEmpty ? .gray : .purple)
                     .disabled(isSwitching)
                 }
             }
-            .padding()
         }
         .onAppear {
             store.loadAll()
