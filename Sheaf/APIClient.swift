@@ -525,6 +525,12 @@ class APIClient {
         let data = try await request("/v1/auth/me")
         return try JSONDecoder.iso.decode(UserRead.self, from: data)
     }
+
+    func updateMe(_ update: UserUpdate) async throws -> UserRead {
+        let body = try JSONEncoder.iso.encode(update)
+        let data = try await request("/v1/auth/me", method: "PATCH", body: body)
+        return try JSONDecoder.iso.decode(UserRead.self, from: data)
+    }
     
     /// Version of getMe that doesn't auto-retry on 401 (for login flow TOTP detection)
     func getMeWithoutRetry() async throws -> UserRead {

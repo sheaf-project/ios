@@ -27,6 +27,7 @@ struct SettingsView: View {
     @State private var showDeleteAccount = false
     @State private var showCancelDeletion = false
     @State private var isCancellingDeletion = false
+    @State private var newsletterOptIn = false
 
     var body: some View {
         NavigationStack {
@@ -535,6 +536,26 @@ struct SettingsView: View {
                                 .padding(.horizontal, 16).padding(.vertical, 14)
 
                                 Divider().background(theme.divider)
+
+                                // Newsletter opt-in
+                                HStack(spacing: 12) {
+                                    Image(systemName: "envelope.fill")
+                                        .foregroundColor(theme.accentLight)
+                                        .frame(width: 20)
+                                    Text("Newsletter")
+                                        .font(.system(size: 15))
+                                        .foregroundColor(theme.textSecondary)
+                                    Spacer()
+                                    Toggle("", isOn: $newsletterOptIn)
+                                        .labelsHidden()
+                                        .tint(theme.accentLight)
+                                        .onChange(of: newsletterOptIn) {
+                                            Task { await updateNewsletterOptIn(newsletterOptIn) }
+                                        }
+                                }
+                                .padding(.horizontal, 16).padding(.vertical, 14)
+
+                                Divider().background(theme.divider)
                             }
 
                             if me?.accountStatus != .pendingDeletion {
@@ -665,6 +686,9 @@ struct SettingsView: View {
     private func loadMe() async {
         guard let api = store.api else { return }
         me = try? await api.getMe()
+        if let me {
+            newsletterOptIn = me.newsletterOptIn
+        }
         // Load delete confirmation level from system profile
         if let profile = store.systemProfile {
             deleteConfirmLevel = profile.deleteConfirmation
@@ -680,6 +704,14 @@ struct SettingsView: View {
         }
         // Load file usage
         await loadFileUsage()
+    }
+
+    private func updateNewsletterOptIn(_ value: Bool) async {
+        guard let api = store.api else { return }
+        let update = UserUpdate(newsletterOptIn: value)
+        if let updated = try? await api.updateMe(update) {
+            me = updated
+        }
     }
 
     private func loadFileUsage() async {

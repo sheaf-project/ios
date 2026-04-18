@@ -426,6 +426,7 @@ struct UserRead: Codable {
     let tier: String
     let accountStatus: AccountStatus
     let emailVerified: Bool
+    let newsletterOptIn: Bool
     let createdAt: Date
     let lastLoginAt: Date?
     let deletionRequestedAt: Date?
@@ -436,6 +437,7 @@ struct UserRead: Codable {
         case isAdmin              = "is_admin"
         case accountStatus        = "account_status"
         case emailVerified        = "email_verified"
+        case newsletterOptIn      = "newsletter_opt_in"
         case createdAt            = "created_at"
         case lastLoginAt          = "last_login_at"
         case deletionRequestedAt  = "deletion_requested_at"
@@ -450,9 +452,18 @@ struct UserRead: Codable {
         tier                = try c.decode(String.self, forKey: .tier)
         accountStatus       = try c.decodeIfPresent(AccountStatus.self, forKey: .accountStatus) ?? .active
         emailVerified       = try c.decodeIfPresent(Bool.self, forKey: .emailVerified) ?? true
+        newsletterOptIn     = try c.decodeIfPresent(Bool.self, forKey: .newsletterOptIn) ?? false
         createdAt           = try c.decode(Date.self, forKey: .createdAt)
         lastLoginAt         = try c.decodeIfPresent(Date.self, forKey: .lastLoginAt)
         deletionRequestedAt = try c.decodeIfPresent(Date.self, forKey: .deletionRequestedAt)
+    }
+}
+
+struct UserUpdate: Codable {
+    var newsletterOptIn: Bool?
+
+    enum CodingKeys: String, CodingKey {
+        case newsletterOptIn = "newsletter_opt_in"
     }
 }
 
