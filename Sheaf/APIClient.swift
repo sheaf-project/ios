@@ -190,7 +190,7 @@ class APIClient {
 
         // Try to extract a message from JSON error bodies
         if let serverMessage = parseJSONErrorMessage(from: data) {
-            return serverMessage
+            return humanizeErrorMessage(serverMessage)
         }
 
         // Cloudflare-specific status codes (520–530)
@@ -224,6 +224,43 @@ class APIClient {
         case 530: return "The server encountered a Cloudflare error (530)."
         default: return nil
         }
+    }
+
+    /// Replaces known technical server messages with friendlier alternatives.
+    /// Passes through messages that are already user-readable (e.g. "Email already in use").
+    private func humanizeErrorMessage(_ message: String) -> String {
+        let lowered = message.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+
+        let replacements: [String: String] = [
+            "rate limit exceeded": "Too many requests. Please wait a moment and try again.",
+            "too many requests": "Too many requests. Please wait a moment and try again.",
+            "internal server error": "The server encountered an error. Please try again later.",
+            "bad gateway": "The server is temporarily unavailable. Please try again later.",
+            "service unavailable": "The server is temporarily unavailable. Please try again later.",
+            "gateway timeout": "The server took too long to respond. Please try again later.",
+            "unauthorized": "Your session has expired. Please log in again.",
+            "not authenticated": "Your session has expired. Please log in again.",
+            "forbidden": "You don't have permission to do this.",
+            "not found": "The requested resource was not found.",
+            "method not allowed": "This action is not supported.",
+            "conflict": "A conflict occurred. Please try again.",
+            "unprocessable entity": "Please check your input and try again.",
+            "validation error": "Please check your input and try again.",
+            "bad request": "The server couldn't process your request. Please check your input.",
+            "request entity too large": "The data you're sending is too large.",
+            "payload too large": "The data you're sending is too large.",
+        ]
+
+        if let friendly = replacements[lowered] {
+            return friendly
+        }
+
+        // Prefix matches for messages with variable suffixes
+        if lowered.hasPrefix("rate limit") {
+            return "Too many requests. Please wait a moment and try again."
+        }
+
+        return message
     }
 
     /// Attempts to extract an error message from a JSON response body.
