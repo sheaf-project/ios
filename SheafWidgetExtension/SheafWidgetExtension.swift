@@ -394,6 +394,7 @@ struct MediumWidgetView: View {
                         Text("Currently Fronting")
                             .font(.caption2).fontWeight(.semibold)
                             .foregroundStyle(.secondary)
+                            .textCase(.uppercase)
                         if let startedAt = entry.members.compactMap({ $0.frontStartedAt }).min() {
                             Text("·")
                                 .font(.caption2).fontWeight(.semibold)

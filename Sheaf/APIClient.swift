@@ -164,6 +164,82 @@ class APIClient {
         }
     }
 
+    /// Detects Cloudflare Access interception — a 200 OK that returns HTML instead of JSON.
+    private func detectCloudflareInterception(_ data: Data) throws {
+        guard let prefix = String(data: data.prefix(200), encoding: .utf8),
+              prefix.contains("<!DOCTYPE") || prefix.contains("<html") else { return }
+        if prefix.lowercased().contains("cloudflare") {
+            throw NSError(domain: "APIError", code: 403,
+                          userInfo: [NSLocalizedDescriptionKey: "This server is behind Cloudflare Access. Tap the Sheaf logo 10 times on the login screen to configure your service token."])
+        }
+        throw NSError(domain: "APIError", code: 0,
+                      userInfo: [NSLocalizedDescriptionKey: "The server returned an HTML page instead of JSON. Check your server URL."])
+    }
+
+    /// Builds a user-friendly error message from an HTTP error response.
+    private func friendlyErrorMessage(statusCode: Int, data: Data) -> String {
+        // Check for HTML responses (e.g. Cloudflare error pages, proxy errors)
+        if let prefix = String(data: data.prefix(200), encoding: .utf8),
+           prefix.contains("<!DOCTYPE") || prefix.contains("<html") {
+            if prefix.lowercased().contains("cloudflare") {
+                return cloudflareStatusMessage(statusCode)
+                    ?? "Cloudflare blocked the request (HTTP \(statusCode)). Check your Cloudflare Access configuration."
+            }
+            return "The server returned an HTML error page (HTTP \(statusCode)). Check your server URL."
+        }
+
+        // Try to extract a message from JSON error bodies
+        if let serverMessage = parseJSONErrorMessage(from: data) {
+            return serverMessage
+        }
+
+        // Cloudflare-specific status codes (520–530)
+        if let cfMessage = cloudflareStatusMessage(statusCode) {
+            return cfMessage
+        }
+
+        switch statusCode {
+        case 400: return "Bad request. Please check your input."
+        case 403: return "Access denied."
+        case 404: return "The requested resource was not found."
+        case 409: return "Conflict — the resource may have been modified."
+        case 413: return "The request is too large."
+        case 422: return "The server couldn't process your request. Please check your input."
+        case 429: return "Too many requests. Please wait a moment and try again."
+        case 500...519: return "The server is having issues (HTTP \(statusCode)). Please try again later."
+        default: return "Request failed (HTTP \(statusCode))."
+        }
+    }
+
+    /// Returns a descriptive message for Cloudflare-specific status codes, or nil.
+    private func cloudflareStatusMessage(_ statusCode: Int) -> String? {
+        switch statusCode {
+        case 520: return "The server returned an unexpected response (Cloudflare 520)."
+        case 521: return "The server is down (Cloudflare 521)."
+        case 522: return "Connection to the server timed out (Cloudflare 522)."
+        case 523: return "The server is unreachable (Cloudflare 523)."
+        case 524: return "The server took too long to respond (Cloudflare 524)."
+        case 525: return "SSL handshake failed (Cloudflare 525)."
+        case 526: return "Invalid SSL certificate (Cloudflare 526)."
+        case 530: return "The server encountered a Cloudflare error (530)."
+        default: return nil
+        }
+    }
+
+    /// Attempts to extract an error message from a JSON response body.
+    private func parseJSONErrorMessage(from data: Data) -> String? {
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        if let detail = json["detail"] as? String, !detail.isEmpty { return detail }
+        if let message = json["message"] as? String, !message.isEmpty { return message }
+        if let error = json["error"] as? String, !error.isEmpty { return error }
+        // FastAPI-style validation errors: {"detail": [{"msg": "...", ...}, ...]}
+        if let details = json["detail"] as? [[String: Any]] {
+            let messages = details.compactMap { $0["msg"] as? String }
+            if !messages.isEmpty { return messages.joined(separator: "; ") }
+        }
+        return nil
+    }
+
     /// Cached CF-aware session. Recreated when tokens change.
     private static var _cfSession: URLSession?
     private static var _cfSessionTokenHash: String?
@@ -248,24 +324,14 @@ class APIClient {
         }
         let (data, response) = try await urlSession.data(for: req)
         guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
-        // Detect Cloudflare Access interception (returns 200 with HTML)
-        if let prefix = String(data: data.prefix(100), encoding: .utf8),
-           prefix.contains("<!DOCTYPE") || prefix.contains("<html") {
-            if prefix.contains("Cloudflare") {
-                throw NSError(domain: "APIError", code: 403,
-                              userInfo: [NSLocalizedDescriptionKey: "This server is behind Cloudflare Access. Tap the Sheaf logo 10 times on the login screen to configure your service token."])
-            }
+        // Detect Cloudflare Access interception (returns 200 with HTML instead of JSON)
+        if (200...299).contains(http.statusCode) {
+            try detectCloudflareInterception(data)
         }
-        // Throw for all errors except 401 (which we handle via retry) and 204 (no content)
+        // Throw for all errors except 401 (which we handle via retry)
         if http.statusCode != 401 && !(200...299).contains(http.statusCode) {
-            // Server errors (5xx / Cloudflare 52x) — show a friendly message
-            if (500...599).contains(http.statusCode) {
-                throw NSError(domain: "APIError", code: http.statusCode,
-                              userInfo: [NSLocalizedDescriptionKey: "The server is having issues, please try again later."])
-            }
-            let body = String(data: data, encoding: .utf8) ?? "(no body)"
             throw NSError(domain: "APIError", code: http.statusCode,
-                          userInfo: [NSLocalizedDescriptionKey: "HTTP \(http.statusCode): \(body)"])
+                          userInfo: [NSLocalizedDescriptionKey: friendlyErrorMessage(statusCode: http.statusCode, data: data)])
         }
         return (data, http.statusCode)
     }
@@ -290,15 +356,8 @@ class APIClient {
             let (data, response) = try await urlSession.data(for: req)
             guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
             guard (200...299).contains(http.statusCode) else {
-                // Server errors (5xx / Cloudflare 52x) — show a friendly message
-                if (500...599).contains(http.statusCode) {
-                    throw NSError(domain: "APIError", code: http.statusCode,
-                                  userInfo: [NSLocalizedDescriptionKey: "The server is having issues, please try again later."])
-                }
-                // Preserve the real status code so the caller can distinguish
-                // auth rejection (401/403) from transient server errors (5xx)
                 throw NSError(domain: "APIError", code: http.statusCode,
-                              userInfo: [NSLocalizedDescriptionKey: "Token refresh failed (HTTP \(http.statusCode))."])
+                              userInfo: [NSLocalizedDescriptionKey: friendlyErrorMessage(statusCode: http.statusCode, data: data)])
             }
             return try JSONDecoder.iso.decode(TokenResponse.self, from: data)
         }
@@ -329,10 +388,13 @@ class APIClient {
            http.value(forHTTPHeaderField: "X-Sheaf-2FA") == "required" {
             throw TOTPRequiredError()
         }
+        // Detect Cloudflare Access interception (200 OK with HTML)
+        if (200...299).contains(http.statusCode) {
+            try detectCloudflareInterception(data)
+        }
         guard http.statusCode == 200 else {
-            let message = String(data: data, encoding: .utf8) ?? "Login failed"
             throw NSError(domain: "APIError", code: http.statusCode,
-                         userInfo: [NSLocalizedDescriptionKey: message])
+                         userInfo: [NSLocalizedDescriptionKey: friendlyErrorMessage(statusCode: http.statusCode, data: data)])
         }
         return try Self.decodeJSON(TokenResponse.self, from: data)
     }
@@ -342,9 +404,8 @@ class APIClient {
         // Don't use request() because register endpoints shouldn't trigger token refresh
         let (data, status) = try await perform("/v1/auth/register", method: "POST", body: body)
         guard (200...201).contains(status) else {
-            let message = String(data: data, encoding: .utf8) ?? "Registration failed"
             throw NSError(domain: "APIError", code: status,
-                         userInfo: [NSLocalizedDescriptionKey: message])
+                         userInfo: [NSLocalizedDescriptionKey: friendlyErrorMessage(statusCode: status, data: data)])
         }
         return try JSONDecoder.iso.decode(TokenResponse.self, from: data)
     }
@@ -376,8 +437,12 @@ class APIClient {
         req.setValue("application/json", forHTTPHeaderField: "Accept")
         applyCFHeaders(to: &req)
         let (data, response) = try await urlSession.data(for: req)
-        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
-            throw URLError(.badServerResponse)
+        guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
+        if (200...299).contains(http.statusCode) {
+            try detectCloudflareInterception(data)
+        } else {
+            throw NSError(domain: "APIError", code: http.statusCode,
+                          userInfo: [NSLocalizedDescriptionKey: friendlyErrorMessage(statusCode: http.statusCode, data: data)])
         }
         return (try? JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
     }
@@ -395,8 +460,8 @@ class APIClient {
         let body = try JSONEncoder.iso.encode(PasswordResetRequest(email: email))
         let (data, status) = try await perform("/v1/auth/request-password-reset", method: "POST", body: body)
         guard (200...299).contains(status) else {
-            let msg = String(data: data, encoding: .utf8) ?? "Request failed"
-            throw NSError(domain: "APIError", code: status, userInfo: [NSLocalizedDescriptionKey: msg])
+            throw NSError(domain: "APIError", code: status,
+                          userInfo: [NSLocalizedDescriptionKey: friendlyErrorMessage(statusCode: status, data: data)])
         }
     }
 
@@ -404,8 +469,8 @@ class APIClient {
         let body = try JSONEncoder.iso.encode(PasswordReset(token: token, newPassword: newPassword))
         let (data, status) = try await perform("/v1/auth/reset-password", method: "POST", body: body)
         guard (200...299).contains(status) else {
-            let msg = String(data: data, encoding: .utf8) ?? "Request failed"
-            throw NSError(domain: "APIError", code: status, userInfo: [NSLocalizedDescriptionKey: msg])
+            throw NSError(domain: "APIError", code: status,
+                          userInfo: [NSLocalizedDescriptionKey: friendlyErrorMessage(statusCode: status, data: data)])
         }
     }
 
@@ -536,9 +601,8 @@ class APIClient {
     func getMeWithoutRetry() async throws -> UserRead {
         let (data, status) = try await perform("/v1/auth/me", method: "GET", body: nil)
         guard status == 200 else {
-            let message = String(data: data, encoding: .utf8) ?? "Request failed"
             throw NSError(domain: "APIError", code: status,
-                         userInfo: [NSLocalizedDescriptionKey: message])
+                         userInfo: [NSLocalizedDescriptionKey: friendlyErrorMessage(statusCode: status, data: data)])
         }
         return try JSONDecoder.iso.decode(UserRead.self, from: data)
     }
@@ -781,9 +845,8 @@ class APIClient {
         // the auto-refresh → retry → logout flow in request().
         let (data, status) = try await perform("/v1/admin/auth", method: "POST", body: body)
         guard (200...299).contains(status) else {
-            let message = String(data: data, encoding: .utf8) ?? "Authentication failed"
             throw NSError(domain: "APIError", code: status,
-                          userInfo: [NSLocalizedDescriptionKey: message])
+                          userInfo: [NSLocalizedDescriptionKey: friendlyErrorMessage(statusCode: status, data: data)])
         }
     }
 
@@ -981,10 +1044,11 @@ class APIClient {
         req.httpBody = body
         let (data, response) = try await urlSession.data(for: req)
         guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
-        guard (200...299).contains(http.statusCode) else {
-            let msg = String(data: data, encoding: .utf8) ?? "(no body)"
+        if (200...299).contains(http.statusCode) {
+            try detectCloudflareInterception(data)
+        } else {
             throw NSError(domain: "APIError", code: http.statusCode,
-                          userInfo: [NSLocalizedDescriptionKey: "HTTP \(http.statusCode): \(msg)"])
+                          userInfo: [NSLocalizedDescriptionKey: friendlyErrorMessage(statusCode: http.statusCode, data: data)])
         }
         return data
     }
@@ -1037,14 +1101,11 @@ class APIClient {
 
         let (data, response) = try await urlSession.data(for: req)
         guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
-        if http.statusCode != 401 && !(200...299).contains(http.statusCode) {
-            if http.statusCode == 413 {
-                throw NSError(domain: "APIError", code: 413,
-                              userInfo: [NSLocalizedDescriptionKey: "Your file is too large."])
-            }
-            let msg = String(data: data, encoding: .utf8) ?? "(no body)"
+        if (200...299).contains(http.statusCode) {
+            try detectCloudflareInterception(data)
+        } else if http.statusCode != 401 {
             throw NSError(domain: "APIError", code: http.statusCode,
-                          userInfo: [NSLocalizedDescriptionKey: "HTTP \(http.statusCode): \(msg)"])
+                          userInfo: [NSLocalizedDescriptionKey: friendlyErrorMessage(statusCode: http.statusCode, data: data)])
         }
         return (data, http.statusCode)
     }
@@ -1061,14 +1122,14 @@ class APIClient {
     /// Decodes JSON, detecting Cloudflare Access interception and giving a clear error.
     static func decodeJSON<T: Decodable>(_ type: T.Type, from data: Data) throws -> T {
         // Detect HTML responses (e.g. Cloudflare Access login page served as 200)
-        if let prefix = String(data: data.prefix(100), encoding: .utf8),
+        if let prefix = String(data: data.prefix(200), encoding: .utf8),
            prefix.contains("<!DOCTYPE") || prefix.contains("<html") {
-            if prefix.contains("Cloudflare") {
+            if prefix.lowercased().contains("cloudflare") {
                 throw NSError(domain: "APIError", code: 403,
                               userInfo: [NSLocalizedDescriptionKey: "This server is behind Cloudflare Access. Tap the Sheaf logo 10 times on the login screen to configure your service token."])
             }
             throw NSError(domain: "APIError", code: 0,
-                          userInfo: [NSLocalizedDescriptionKey: "Server returned an HTML page instead of JSON. Check your API URL."])
+                          userInfo: [NSLocalizedDescriptionKey: "The server returned an HTML page instead of JSON. Check your server URL."])
         }
         return try JSONDecoder.iso.decode(type, from: data)
     }
