@@ -96,9 +96,10 @@ struct MembersView: View {
                         showAddMember = true
                     } label: {
                         Image(systemName: "plus.circle.fill")
-                            .font(.system(size: 22))
+                            .font(.title3)
                             .foregroundColor(theme.accentLight)
                     }
+                    .accessibilityLabel("Add member")
                 }
             }
         }
@@ -161,11 +162,11 @@ struct MemberRow: View {
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(member.displayName ?? member.name)
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.subheadline).fontWeight(.semibold)
                         .foregroundColor(theme.textPrimary)
                     if let pronouns = member.pronouns, !pronouns.isEmpty {
                         Text(pronouns)
-                            .font(.system(size: 12))
+                            .font(.caption)
                             .foregroundColor(theme.textSecondary)
                     }
                 }
@@ -173,7 +174,7 @@ struct MemberRow: View {
                 Spacer()
 
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.caption).fontWeight(.semibold)
                     .foregroundColor(theme.textTertiary)
             }
             .padding(14)
@@ -246,19 +247,13 @@ struct MemberDetailSheet: View {
             theme.backgroundPrimary.ignoresSafeArea()
 
             VStack(spacing: 0) {
-                // Handle
-                Capsule()
-                    .fill(theme.inputBorder)
-                    .frame(width: 40, height: 4)
-                    .padding(.top, 12)
-
                 HStack {
                     Button("Close") { dismiss() }
                         .foregroundColor(theme.textSecondary)
                     Spacer()
                     Button("Edit") { showEdit = true }
                         .foregroundColor(theme.accentLight)
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.subheadline).fontWeight(.semibold)
                 }
                 .padding(.horizontal, 24)
                 .padding(.top, 16)
@@ -269,7 +264,7 @@ struct MemberDetailSheet: View {
                         VStack(spacing: 12) {
                             AvatarView(member: member, size: 96)
                             Text(member.displayName ?? member.name)
-                                .font(.system(size: 26, weight: .bold, design: .rounded))
+                                .font(.title2).fontWeight(.bold).fontDesign(.rounded)
                                 .foregroundColor(theme.textPrimary)
                             if let p = member.pronouns, !p.isEmpty {
                                 Text(p)
@@ -277,7 +272,7 @@ struct MemberDetailSheet: View {
                                     .background(member.displayColor.opacity(0.15))
                                     .cornerRadius(10)
                                     .foregroundColor(member.displayColor)
-                                    .font(.system(size: 14))
+                                    .font(.subheadline)
                             }
                         }
                         .padding(.top, 20)
@@ -285,7 +280,7 @@ struct MemberDetailSheet: View {
                         // Fronting status
                         if store.frontingMembers.contains(where: { $0.id == member.id }) {
                             Label("Currently Fronting", systemImage: "checkmark.seal.fill")
-                                .font(.system(size: 14, weight: .semibold))
+                                .font(.subheadline).fontWeight(.semibold)
                                 .foregroundColor(theme.success)
                                 .padding(.horizontal, 16).padding(.vertical, 8)
                                 .background(theme.success.opacity(0.1))
@@ -295,7 +290,7 @@ struct MemberDetailSheet: View {
                         // Description
                         if let desc = member.description, !desc.isEmpty {
                             MarkdownText(desc, color: theme.textSecondary)
-                                .font(.system(size: 15))
+                                .font(.subheadline)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(16)
                                 .background(theme.backgroundCard)
@@ -308,11 +303,11 @@ struct MemberDetailSheet: View {
                         if let bday = member.birthday, !bday.isEmpty {
                             HStack {
                                 Label("Birthday", systemImage: "gift")
-                                    .font(.system(size: 14, weight: .medium))
+                                    .font(.subheadline).fontWeight(.medium)
                                     .foregroundColor(theme.textSecondary)
                                 Spacer()
                                 Text(bday)
-                                    .font(.system(size: 15))
+                                    .font(.subheadline)
                                     .foregroundColor(theme.textPrimary)
                             }
                             .padding(16)
@@ -324,7 +319,7 @@ struct MemberDetailSheet: View {
                         if !fieldValues.isEmpty {
                             VStack(alignment: .leading, spacing: 10) {
                                 Text("Custom Fields")
-                                    .font(.system(size: 13, weight: .semibold))
+                                    .font(.footnote).fontWeight(.semibold)
                                     .foregroundColor(theme.textSecondary)
                                     .textCase(.uppercase)
                                     .kerning(0.8)
@@ -334,11 +329,11 @@ struct MemberDetailSheet: View {
                                         if let field = store.fields.first(where: { $0.id == fv.fieldID }) {
                                             HStack(alignment: .top, spacing: 12) {
                                                 Text(field.name)
-                                                    .font(.system(size: 14))
+                                                    .font(.subheadline)
                                                     .foregroundColor(theme.textSecondary)
                                                     .frame(width: 100, alignment: .leading)
                                                 MarkdownText(displayValue(fv.value, field: field), color: theme.textPrimary)
-                                                    .font(.system(size: 14, weight: .medium))
+                                                    .font(.subheadline).fontWeight(.medium)
                                                     .frame(maxWidth: .infinity, alignment: .leading)
                                             }
                                             .padding(.horizontal, 16)
@@ -366,7 +361,7 @@ struct MemberDetailSheet: View {
                             }
                         } label: {
                             Label("Switch to \(member.displayName ?? member.name)", systemImage: "arrow.left.arrow.right")
-                                .font(.system(size: 16, weight: .semibold))
+                                .font(.subheadline).fontWeight(.semibold)
                                 .foregroundColor(theme.textPrimary)
                                 .frame(maxWidth: .infinity)
                                 .padding(16)
@@ -385,6 +380,7 @@ struct MemberDetailSheet: View {
             MemberEditSheet(member: member)
                 .environmentObject(store)
         }
+        .presentationDragIndicator(.visible)
         .task {
             await loadFieldValues()
         }
@@ -413,7 +409,7 @@ struct MemberDetailSheet: View {
     func infoSection<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(title)
-                .font(.system(size: 13, weight: .semibold))
+                .font(.footnote).fontWeight(.semibold)
                 .foregroundColor(theme.textSecondary)
                 .textCase(.uppercase)
                 .kerning(0.8)
@@ -451,19 +447,17 @@ struct MemberEditSheet: View {
             theme.backgroundPrimary.ignoresSafeArea()
 
             VStack(spacing: 0) {
-                Capsule().fill(theme.inputBorder).frame(width: 40, height: 4).padding(.top, 12)
-
                 HStack {
                     Button("Cancel") { dismiss() }.foregroundColor(theme.textSecondary)
                     Spacer()
                     Text(isNew ? "Add Member" : "Edit Member")
-                        .font(.system(size: 17, weight: .semibold)).foregroundColor(theme.textPrimary)
+                        .font(.headline).foregroundColor(theme.textPrimary)
                     Spacer()
                     Button(isSaving ? "" : "Save") {
                         save()
                     }
                     .foregroundColor(theme.accentLight)
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.subheadline).fontWeight(.semibold)
                     .overlay(isSaving ? AnyView(ProgressView().tint(theme.accentLight)) : AnyView(EmptyView()))
                     .disabled(name.isEmpty || isSaving)
                 }
@@ -479,7 +473,7 @@ struct MemberEditSheet: View {
                         // Birthday
                         VStack(alignment: .leading, spacing: 6) {
                             Text("Birthday")
-                                .font(.system(size: 13, weight: .semibold))
+                                .font(.footnote).fontWeight(.semibold)
                                 .foregroundColor(theme.textSecondary)
                             HStack {
                                 DatePicker(
@@ -512,13 +506,13 @@ struct MemberEditSheet: View {
                                         fmt.dateFormat = "yyyy-MM-dd"
                                         birthday = fmt.string(from: Date())
                                     }
-                                    .font(.system(size: 14, weight: .medium))
+                                    .font(.subheadline).fontWeight(.medium)
                                     .foregroundColor(theme.accentLight)
                                 } else {
                                     Button("Clear") {
                                         birthday = ""
                                     }
-                                    .font(.system(size: 14, weight: .medium))
+                                    .font(.subheadline).fontWeight(.medium)
                                     .foregroundColor(theme.textSecondary)
                                 }
                             }
@@ -539,7 +533,7 @@ struct MemberEditSheet: View {
                         // Color picker
                         HStack {
                             Text("Color")
-                                .font(.system(size: 14, weight: .medium))
+                                .font(.subheadline).fontWeight(.medium)
                                 .foregroundColor(theme.textSecondary)
                             Spacer()
                             ColorPicker("", selection: Binding(
@@ -555,7 +549,7 @@ struct MemberEditSheet: View {
                         // Privacy picker
                         VStack(alignment: .leading, spacing: 6) {
                             Text("Privacy")
-                                .font(.system(size: 13, weight: .semibold))
+                                .font(.footnote).fontWeight(.semibold)
                                 .foregroundColor(theme.textSecondary)
                             Picker("Privacy", selection: $privacy) {
                                 ForEach(PrivacyLevel.allCases, id: \.self) { level in
@@ -569,7 +563,7 @@ struct MemberEditSheet: View {
                         if !store.fields.isEmpty {
                             VStack(alignment: .leading, spacing: 6) {
                                 Text("Custom Fields")
-                                    .font(.system(size: 13, weight: .semibold))
+                                    .font(.footnote).fontWeight(.semibold)
                                     .foregroundColor(theme.textSecondary)
                                 ForEach(store.fields) { field in
                                     customFieldEditor(field)
@@ -583,6 +577,7 @@ struct MemberEditSheet: View {
                 }
             }
         }
+        .presentationDragIndicator(.visible)
         .onAppear { populateFields() }
     }
 
@@ -614,7 +609,7 @@ struct MemberEditSheet: View {
 
     func formField(_ label: String, value: Binding<String>, placeholder: String, multiline: Bool = false) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(label).font(.system(size: 13, weight: .semibold)).foregroundColor(theme.textSecondary)
+            Text(label).font(.footnote).fontWeight(.semibold).foregroundColor(theme.textSecondary)
             if multiline {
                 TextField(placeholder, text: value, axis: .vertical)
                     .lineLimit(3...6)
@@ -663,7 +658,7 @@ struct MemberEditSheet: View {
     func customFieldEditor(_ field: CustomField) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(field.name)
-                .font(.system(size: 13, weight: .semibold))
+                .font(.footnote).fontWeight(.semibold)
                 .foregroundColor(theme.textSecondary)
             switch field.fieldType {
             case .boolean:
@@ -731,7 +726,7 @@ struct AvatarInputSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Avatar")
-                .font(.system(size: 13, weight: .semibold))
+                .font(.footnote).fontWeight(.semibold)
                 .foregroundColor(theme.textSecondary)
 
             // Preview
@@ -780,7 +775,7 @@ struct AvatarInputSection: View {
                                 Image(systemName: "photo.on.rectangle.angled")
                             }
                             Text(isUploading ? "Uploading..." : "Choose Photo")
-                                .font(.system(size: 14, weight: .medium))
+                                .font(.subheadline).fontWeight(.medium)
                         }
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
@@ -835,7 +830,7 @@ struct AvatarInputSection: View {
 
             if let uploadError {
                 Text(uploadError)
-                    .font(.system(size: 13))
+                    .font(.footnote)
                     .foregroundColor(theme.danger)
             }
         }
@@ -919,7 +914,7 @@ struct MemberDeleteConfirmSheet: View {
                 HStack {
                     Button("Cancel") { dismiss() }.foregroundColor(theme.textSecondary)
                     Spacer()
-                    Text("Confirm Deletion").font(.system(size: 17, weight: .semibold)).foregroundColor(theme.textPrimary)
+                    Text("Confirm Deletion").font(.headline).foregroundColor(theme.textPrimary)
                     Spacer()
                     // Spacer to balance the Cancel button
                     Text("Cancel").foregroundColor(.clear)
@@ -928,17 +923,17 @@ struct MemberDeleteConfirmSheet: View {
 
                 VStack(spacing: 16) {
                     Text("Deleting \(member.displayName ?? member.name)")
-                        .font(.system(size: 15, weight: .medium))
+                        .font(.subheadline).fontWeight(.medium)
                         .foregroundColor(theme.textPrimary)
 
                     Text("Deletion protection is enabled. Please verify your identity to continue.")
-                        .font(.system(size: 14))
+                        .font(.subheadline)
                         .foregroundColor(theme.textSecondary)
                         .multilineTextAlignment(.center)
 
                     if needsPassword {
                         VStack(alignment: .leading, spacing: 6) {
-                            Text("Password").font(.system(size: 13, weight: .semibold)).foregroundColor(theme.textSecondary)
+                            Text("Password").font(.footnote).fontWeight(.semibold).foregroundColor(theme.textSecondary)
                             SecureField("Enter your password", text: $password)
                                 .autocorrectionDisabled().textContentType(.password)
                                 .padding(14).background(theme.backgroundCard).cornerRadius(12).foregroundColor(theme.textPrimary)
@@ -947,7 +942,7 @@ struct MemberDeleteConfirmSheet: View {
 
                     if needsTOTP {
                         VStack(alignment: .leading, spacing: 6) {
-                            Text("TOTP Code").font(.system(size: 13, weight: .semibold)).foregroundColor(theme.textSecondary)
+                            Text("TOTP Code").font(.footnote).fontWeight(.semibold).foregroundColor(theme.textSecondary)
                             TextField("6-digit code", text: $totpCode)
                                 .keyboardType(.numberPad).textContentType(.oneTimeCode)
                                 .padding(14).background(theme.backgroundCard).cornerRadius(12).foregroundColor(theme.textPrimary)
@@ -959,7 +954,7 @@ struct MemberDeleteConfirmSheet: View {
 
                     if let errorMessage {
                         Text(errorMessage)
-                            .font(.system(size: 13))
+                            .font(.footnote)
                             .foregroundColor(theme.danger)
                     }
 
@@ -971,7 +966,7 @@ struct MemberDeleteConfirmSheet: View {
                                 ProgressView().tint(.white).scaleEffect(0.8)
                             }
                             Text("Delete Member")
-                                .font(.system(size: 16, weight: .semibold))
+                                .font(.subheadline).fontWeight(.semibold)
                         }
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)

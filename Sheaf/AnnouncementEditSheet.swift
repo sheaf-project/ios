@@ -35,7 +35,7 @@ struct AnnouncementEditSheet: View {
                         // Title
                         VStack(alignment: .leading, spacing: 6) {
                             Text("Title")
-                                .font(.system(size: 13, weight: .semibold))
+                                .font(.footnote).fontWeight(.semibold)
                                 .foregroundColor(theme.textSecondary)
                             TextField("Announcement title", text: $title)
                                 .autocorrectionDisabled()
@@ -48,7 +48,7 @@ struct AnnouncementEditSheet: View {
                         // Body
                         VStack(alignment: .leading, spacing: 6) {
                             Text("Body")
-                                .font(.system(size: 13, weight: .semibold))
+                                .font(.footnote).fontWeight(.semibold)
                                 .foregroundColor(theme.textSecondary)
                             TextField("Announcement body", text: $bodyText, axis: .vertical)
                                 .lineLimit(3...8)
@@ -61,7 +61,7 @@ struct AnnouncementEditSheet: View {
                         // Severity
                         VStack(alignment: .leading, spacing: 6) {
                             Text("Severity")
-                                .font(.system(size: 13, weight: .semibold))
+                                .font(.footnote).fontWeight(.semibold)
                                 .foregroundColor(theme.textSecondary)
                             Picker("Severity", selection: $severity) {
                                 Text("Info").tag(AnnouncementSeverity.info)
@@ -75,7 +75,7 @@ struct AnnouncementEditSheet: View {
                         VStack(spacing: 0) {
                             Toggle(isOn: $active) {
                                 Text("Active")
-                                    .font(.system(size: 15))
+                                    .font(.subheadline)
                                     .foregroundColor(theme.textPrimary)
                             }
                             .tint(theme.accentLight)
@@ -86,7 +86,7 @@ struct AnnouncementEditSheet: View {
 
                             Toggle(isOn: $dismissible) {
                                 Text("Dismissible")
-                                    .font(.system(size: 15))
+                                    .font(.subheadline)
                                     .foregroundColor(theme.textPrimary)
                             }
                             .tint(theme.accentLight)
@@ -100,7 +100,7 @@ struct AnnouncementEditSheet: View {
                         VStack(alignment: .leading, spacing: 6) {
                             Toggle(isOn: $hasStartDate) {
                                 Text("Starts at")
-                                    .font(.system(size: 15))
+                                    .font(.subheadline)
                                     .foregroundColor(theme.textPrimary)
                             }
                             .tint(theme.accentLight)
@@ -125,7 +125,7 @@ struct AnnouncementEditSheet: View {
                         VStack(alignment: .leading, spacing: 6) {
                             Toggle(isOn: $hasExpireDate) {
                                 Text("Expires at")
-                                    .font(.system(size: 15))
+                                    .font(.subheadline)
                                     .foregroundColor(theme.textPrimary)
                             }
                             .tint(theme.accentLight)
@@ -148,7 +148,7 @@ struct AnnouncementEditSheet: View {
 
                         if let error {
                             Text(error)
-                                .font(.system(size: 13))
+                                .font(.footnote)
                                 .foregroundColor(theme.danger)
                         }
                     }
@@ -172,7 +172,7 @@ struct AnnouncementEditSheet: View {
                             ProgressView().tint(theme.accentLight).scaleEffect(0.8)
                         } else {
                             Text("Save")
-                                .font(.system(size: 16, weight: .semibold))
+                                .font(.callout).fontWeight(.semibold)
                                 .foregroundColor(theme.accentLight)
                         }
                     }

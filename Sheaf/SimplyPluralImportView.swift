@@ -74,14 +74,14 @@ struct SheafImportSheet: View {
                         .fill(theme.accentSoft)
                         .frame(width: 72, height: 72)
                     Image(systemName: "arrow.down.doc.fill")
-                        .font(.system(size: 30))
+                        .font(.title)
                         .foregroundColor(theme.accentLight)
                 }
                 Text("Import from Sheaf Export")
-                    .font(.system(size: 20, weight: .bold, design: .rounded))
+                    .font(.title3).fontWeight(.bold).fontDesign(.rounded)
                     .foregroundColor(theme.textPrimary)
                 Text("Select a Sheaf export JSON file to preview and import your data.")
-                    .font(.system(size: 14))
+                    .font(.subheadline)
                     .foregroundColor(theme.textSecondary)
                     .multilineTextAlignment(.center)
             }
@@ -109,7 +109,7 @@ struct SheafImportSheet: View {
                 VStack(spacing: 16) {
                     ProgressView().tint(theme.accentLight).scaleEffect(1.3)
                     Text("Analyzing file...")
-                        .font(.system(size: 14))
+                        .font(.subheadline)
                         .foregroundColor(theme.textSecondary)
                 }
                 .frame(maxWidth: .infinity)
@@ -143,7 +143,7 @@ struct SheafImportSheet: View {
                             Image(systemName: "checkmark.circle.fill")
                                 .foregroundColor(theme.success)
                             Text("File is valid and ready to import")
-                                .font(.system(size: 15))
+                                .font(.subheadline)
                                 .foregroundColor(theme.textPrimary)
                             Spacer()
                         }
@@ -165,7 +165,7 @@ struct SheafImportSheet: View {
                     fileData = nil
                 } label: {
                     Text("Choose a different file")
-                        .font(.system(size: 14))
+                        .font(.subheadline)
                         .foregroundColor(theme.textTertiary)
                 }
             }
@@ -196,7 +196,7 @@ struct SheafImportSheet: View {
 
             Button { withAnimation { step = .preview } } label: {
                 Text("Back")
-                    .font(.system(size: 14))
+                    .font(.subheadline)
                     .foregroundColor(theme.textTertiary)
             }
         }
@@ -209,10 +209,10 @@ struct SheafImportSheet: View {
                 .tint(theme.accentLight)
                 .scaleEffect(1.5)
             Text("Importing your data...")
-                .font(.system(size: 16, weight: .medium))
+                .font(.body).fontWeight(.medium)
                 .foregroundColor(theme.textPrimary)
             Text("This may take a moment")
-                .font(.system(size: 13))
+                .font(.footnote)
                 .foregroundColor(theme.textSecondary)
         }
         .frame(maxWidth: .infinity)
@@ -227,17 +227,17 @@ struct SheafImportSheet: View {
                     .fill(theme.success.opacity(0.15))
                     .frame(width: 88, height: 88)
                 Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 48))
+                    .font(.largeTitle)
                     .foregroundColor(theme.success)
             }
             .shadow(color: theme.success.opacity(0.3), radius: 16)
 
             Text("Import Complete!")
-                .font(.system(size: 22, weight: .bold, design: .rounded))
+                .font(.title3).fontWeight(.bold).fontDesign(.rounded)
                 .foregroundColor(theme.textPrimary)
 
             Text("Your Sheaf data has been imported successfully.")
-                .font(.system(size: 14))
+                .font(.subheadline)
                 .foregroundColor(theme.textSecondary)
                 .multilineTextAlignment(.center)
 
@@ -257,16 +257,16 @@ struct SheafImportSheet: View {
                     .fill(theme.danger.opacity(0.12))
                     .frame(width: 88, height: 88)
                 Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 48))
+                    .font(.largeTitle)
                     .foregroundColor(theme.danger)
             }
 
             Text("Import Failed")
-                .font(.system(size: 22, weight: .bold, design: .rounded))
+                .font(.title3).fontWeight(.bold).fontDesign(.rounded)
                 .foregroundColor(theme.textPrimary)
 
             Text(errorMessage)
-                .font(.system(size: 14))
+                .font(.subheadline)
                 .foregroundColor(theme.textSecondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 8)
@@ -280,7 +280,7 @@ struct SheafImportSheet: View {
 
             Button { dismiss() } label: {
                 Text("Cancel")
-                    .font(.system(size: 14))
+                    .font(.subheadline)
                     .foregroundColor(theme.textTertiary)
             }
         }
@@ -372,11 +372,11 @@ struct SheafImportSheet: View {
                     .fill(theme.accentSoft)
                     .frame(width: 24, height: 24)
                 Text(number)
-                    .font(.system(size: 12, weight: .bold))
+                    .font(.caption).fontWeight(.bold)
                     .foregroundColor(theme.accentLight)
             }
             Text(text)
-                .font(.system(size: 14))
+                .font(.subheadline)
                 .foregroundColor(theme.textSecondary)
             Spacer()
         }
@@ -388,11 +388,11 @@ struct SheafImportSheet: View {
                 .foregroundColor(theme.accentLight)
                 .frame(width: 20)
             Text(label)
-                .font(.system(size: 15))
+                .font(.subheadline)
                 .foregroundColor(theme.textPrimary)
             Spacer()
             Text("\(count)")
-                .font(.system(size: 15, weight: .semibold))
+                .font(.subheadline).fontWeight(.semibold)
                 .foregroundColor(count > 0 ? theme.accentLight : theme.textTertiary)
         }
         .padding(.horizontal, 16)
@@ -401,7 +401,7 @@ struct SheafImportSheet: View {
 
     func sheafSectionHeader(_ title: String) -> some View {
         Text(title)
-            .font(.system(size: 12, weight: .semibold))
+            .font(.caption).fontWeight(.semibold)
             .foregroundColor(theme.textTertiary)
             .textCase(.uppercase)
             .kerning(0.8)
@@ -416,7 +416,7 @@ struct SheafImportSheet: View {
                 .foregroundColor(theme.accentLight)
                 .frame(width: 20)
             Text(label)
-                .font(.system(size: 15))
+                .font(.subheadline)
                 .foregroundColor(theme.textPrimary)
             Spacer()
             Toggle("", isOn: value)
@@ -430,7 +430,7 @@ struct SheafImportSheet: View {
     func sheafPrimaryButton(label: String, icon: String, disabled: Bool = false, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack {
-                Text(label).font(.system(size: 16, weight: .semibold))
+                Text(label).font(.body).fontWeight(.semibold)
                 Image(systemName: icon)
             }
             .foregroundColor(.white)
@@ -528,14 +528,14 @@ struct SimplyPluralImportSheet: View {
                         .fill(theme.accentSoft)
                         .frame(width: 72, height: 72)
                     Image(systemName: "square.and.arrow.down.fill")
-                        .font(.system(size: 30))
+                        .font(.title)
                         .foregroundColor(theme.accentLight)
                 }
                 Text("Import from Simply Plural")
-                    .font(.system(size: 20, weight: .bold, design: .rounded))
+                    .font(.title3).fontWeight(.bold).fontDesign(.rounded)
                     .foregroundColor(theme.textPrimary)
                 Text("Select your Simply Plural export.json file to preview and import your data.")
-                    .font(.system(size: 14))
+                    .font(.subheadline)
                     .foregroundColor(theme.textSecondary)
                     .multilineTextAlignment(.center)
             }
@@ -565,7 +565,7 @@ struct SimplyPluralImportSheet: View {
                 VStack(spacing: 16) {
                     ProgressView().tint(theme.accentLight).scaleEffect(1.3)
                     Text("Reading file…")
-                        .font(.system(size: 14))
+                        .font(.subheadline)
                         .foregroundColor(theme.textSecondary)
                 }
                 .frame(maxWidth: .infinity)
@@ -577,7 +577,7 @@ struct SimplyPluralImportSheet: View {
                         Image(systemName: "sparkles")
                             .foregroundColor(theme.accentLight)
                         Text(name)
-                            .font(.system(size: 17, weight: .semibold))
+                            .font(.headline)
                             .foregroundColor(theme.textPrimary)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -601,7 +601,7 @@ struct SimplyPluralImportSheet: View {
                 if !preview.members.isEmpty {
                     VStack(alignment: .leading, spacing: 10) {
                         Text("Members in this export")
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(.footnote).fontWeight(.semibold)
                             .foregroundColor(theme.textTertiary)
                             .textCase(.uppercase)
                             .kerning(0.8)
@@ -612,13 +612,13 @@ struct SimplyPluralImportSheet: View {
                                     .fill(theme.accentSoft)
                                     .frame(width: 8, height: 8)
                                 Text(member.name)
-                                    .font(.system(size: 14))
+                                    .font(.subheadline)
                                     .foregroundColor(theme.textPrimary)
                             }
                         }
                         if preview.members.count > 5 {
                             Text("and \(preview.members.count - 5) more…")
-                                .font(.system(size: 13))
+                                .font(.footnote)
                                 .foregroundColor(theme.textTertiary)
                         }
                     }
@@ -637,7 +637,7 @@ struct SimplyPluralImportSheet: View {
                     fileData = nil
                 } label: {
                     Text("Choose a different file")
-                        .font(.system(size: 14))
+                        .font(.subheadline)
                         .foregroundColor(theme.textTertiary)
                 }
             }
@@ -677,7 +677,7 @@ struct SimplyPluralImportSheet: View {
                             }
                         } label: {
                             Text(selectedMemberIDs.count == preview.members.count ? "Deselect All" : "Select All")
-                                .font(.system(size: 12, weight: .semibold))
+                                .font(.caption).fontWeight(.semibold)
                                 .foregroundColor(theme.accentLight)
                         }
                         .padding(.trailing, 16)
@@ -695,9 +695,9 @@ struct SimplyPluralImportSheet: View {
                                       ? "checkmark.circle.fill" : "circle")
                                     .foregroundColor(selectedMemberIDs.contains(member.id)
                                         ? theme.accentLight : theme.textTertiary)
-                                    .font(.system(size: 20))
+                                    .font(.title3)
                                 Text(member.name)
-                                    .font(.system(size: 15))
+                                    .font(.subheadline)
                                     .foregroundColor(theme.textPrimary)
                                 Spacer()
                             }
@@ -725,7 +725,7 @@ struct SimplyPluralImportSheet: View {
 
             Button { withAnimation { step = .preview } } label: {
                 Text("Back")
-                    .font(.system(size: 14))
+                    .font(.subheadline)
                     .foregroundColor(theme.textTertiary)
             }
         }
@@ -738,10 +738,10 @@ struct SimplyPluralImportSheet: View {
                 .tint(theme.accentLight)
                 .scaleEffect(1.5)
             Text("Importing your data…")
-                .font(.system(size: 16, weight: .medium))
+                .font(.body).fontWeight(.medium)
                 .foregroundColor(theme.textPrimary)
             Text("This may take a moment")
-                .font(.system(size: 13))
+                .font(.footnote)
                 .foregroundColor(theme.textSecondary)
         }
         .frame(maxWidth: .infinity)
@@ -756,13 +756,13 @@ struct SimplyPluralImportSheet: View {
                     .fill(theme.success.opacity(0.15))
                     .frame(width: 88, height: 88)
                 Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 48))
+                    .font(.largeTitle)
                     .foregroundColor(theme.success)
             }
             .shadow(color: theme.success.opacity(0.3), radius: 16)
 
             Text("Import Complete!")
-                .font(.system(size: 22, weight: .bold, design: .rounded))
+                .font(.title3).fontWeight(.bold).fontDesign(.rounded)
                 .foregroundColor(theme.textPrimary)
 
             if let result {
@@ -782,11 +782,11 @@ struct SimplyPluralImportSheet: View {
                 if !result.warnings.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
                         Label("Warnings", systemImage: "exclamationmark.triangle.fill")
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(.footnote).fontWeight(.semibold)
                             .foregroundColor(theme.warning)
                         ForEach(result.warnings, id: \.self) { warning in
                             Text("• \(warning)")
-                                .font(.system(size: 12))
+                                .font(.caption)
                                 .foregroundColor(theme.textSecondary)
                         }
                     }
@@ -814,16 +814,16 @@ struct SimplyPluralImportSheet: View {
                     .fill(theme.danger.opacity(0.12))
                     .frame(width: 88, height: 88)
                 Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 48))
+                    .font(.largeTitle)
                     .foregroundColor(theme.danger)
             }
 
             Text("Import Failed")
-                .font(.system(size: 22, weight: .bold, design: .rounded))
+                .font(.title3).fontWeight(.bold).fontDesign(.rounded)
                 .foregroundColor(theme.textPrimary)
 
             Text(errorMessage)
-                .font(.system(size: 14))
+                .font(.subheadline)
                 .foregroundColor(theme.textSecondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 8)
@@ -837,7 +837,7 @@ struct SimplyPluralImportSheet: View {
 
             Button { dismiss() } label: {
                 Text("Cancel")
-                    .font(.system(size: 14))
+                    .font(.subheadline)
                     .foregroundColor(theme.textTertiary)
             }
         }
@@ -931,11 +931,11 @@ struct SimplyPluralImportSheet: View {
                     .fill(theme.accentSoft)
                     .frame(width: 24, height: 24)
                 Text(number)
-                    .font(.system(size: 12, weight: .bold))
+                    .font(.caption).fontWeight(.bold)
                     .foregroundColor(theme.accentLight)
             }
             Text(text)
-                .font(.system(size: 14))
+                .font(.subheadline)
                 .foregroundColor(theme.textSecondary)
             Spacer()
         }
@@ -947,11 +947,11 @@ struct SimplyPluralImportSheet: View {
                 .foregroundColor(theme.accentLight)
                 .frame(width: 20)
             Text(label)
-                .font(.system(size: 15))
+                .font(.subheadline)
                 .foregroundColor(theme.textPrimary)
             Spacer()
             Text("\(count)")
-                .font(.system(size: 15, weight: .semibold))
+                .font(.subheadline).fontWeight(.semibold)
                 .foregroundColor(count > 0 ? theme.accentLight : theme.textTertiary)
         }
         .padding(.horizontal, 16)
@@ -964,11 +964,11 @@ struct SimplyPluralImportSheet: View {
                 .foregroundColor(count > 0 ? theme.success : theme.textTertiary)
                 .frame(width: 20)
             Text(label)
-                .font(.system(size: 14))
+                .font(.subheadline)
                 .foregroundColor(theme.textPrimary)
             Spacer()
             Text("\(count)")
-                .font(.system(size: 14, weight: .semibold))
+                .font(.subheadline).fontWeight(.semibold)
                 .foregroundColor(count > 0 ? theme.success : theme.textTertiary)
         }
         .padding(.horizontal, 16)
@@ -977,7 +977,7 @@ struct SimplyPluralImportSheet: View {
 
     func sectionHeader(_ title: String) -> some View {
         Text(title)
-            .font(.system(size: 12, weight: .semibold))
+            .font(.caption).fontWeight(.semibold)
             .foregroundColor(theme.textTertiary)
             .textCase(.uppercase)
             .kerning(0.8)
@@ -992,12 +992,12 @@ struct SimplyPluralImportSheet: View {
                 .foregroundColor(disabled ? theme.textTertiary : theme.accentLight)
                 .frame(width: 20)
             Text(label)
-                .font(.system(size: 15))
+                .font(.subheadline)
                 .foregroundColor(disabled ? theme.textTertiary : theme.textPrimary)
             Spacer()
             if disabled {
                 Text("Always")
-                    .font(.system(size: 13))
+                    .font(.footnote)
                     .foregroundColor(theme.textTertiary)
             } else {
                 Toggle("", isOn: value)
@@ -1012,7 +1012,7 @@ struct SimplyPluralImportSheet: View {
     func primaryButton(label: String, icon: String, disabled: Bool = false, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack {
-                Text(label).font(.system(size: 16, weight: .semibold))
+                Text(label).font(.body).fontWeight(.semibold)
                 Image(systemName: icon)
             }
             .foregroundColor(.white)

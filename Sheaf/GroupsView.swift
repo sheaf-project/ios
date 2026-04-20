@@ -5,6 +5,8 @@ struct GroupsView: View {
     @Environment(\.theme) var theme
     @State private var showAddGroup = false
     @State private var selectedGroup: SystemGroup?
+    @State private var groupToDelete: SystemGroup?
+    @State private var showDeleteGroupConfirm = false
 
     var body: some View {
         ZStack {
@@ -13,16 +15,17 @@ struct GroupsView: View {
             VStack(spacing: 0) {
                 HStack {
                     Text("Groups")
-                        .font(.system(size: 28, weight: .bold, design: .rounded))
+                        .font(.title2).fontWeight(.bold).fontDesign(.rounded)
                         .foregroundColor(theme.textPrimary)
                     Spacer()
                     Button {
                         showAddGroup = true
                     } label: {
                         Image(systemName: "plus.circle.fill")
-                            .font(.system(size: 26))
+                            .font(.title2)
                             .foregroundColor(theme.accentLight)
                     }
+                    .accessibilityLabel("Add group")
                 }
                 .padding(.horizontal, 24)
                 .padding(.top, 16)
@@ -36,13 +39,13 @@ struct GroupsView: View {
                     Spacer()
                     VStack(spacing: 12) {
                         Image(systemName: "square.grid.2x2")
-                            .font(.system(size: 44))
+                            .font(.largeTitle)
                             .foregroundColor(theme.textTertiary)
                         Text("No groups yet")
-                            .font(.system(size: 18, weight: .medium, design: .rounded))
+                            .font(.body).fontWeight(.medium).fontDesign(.rounded)
                             .foregroundColor(theme.textTertiary)
                         Text("Tap + to create your first group")
-                            .font(.system(size: 13))
+                            .font(.footnote)
                             .foregroundColor(theme.textTertiary)
                     }
                     Spacer()
@@ -55,7 +58,8 @@ struct GroupsView: View {
                                 }
                                 .swipeActions(edge: .trailing) {
                                     Button(role: .destructive) {
-                                        Task { await store.deleteGroup(id: group.id) }
+                                        groupToDelete = group
+                                        showDeleteGroupConfirm = true
                                     } label: {
                                         Label("Delete", systemImage: "trash")
                                     }
@@ -80,6 +84,14 @@ struct GroupsView: View {
             GroupDetailSheet(group: group)
                 .environmentObject(store)
         }
+        .confirmationDialog("Delete this group?", isPresented: $showDeleteGroupConfirm, presenting: groupToDelete) { group in
+            Button("Delete", role: .destructive) {
+                Task { await store.deleteGroup(id: group.id) }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: { group in
+            Text("This will permanently delete \"\(group.name)\" and cannot be undone.")
+        }
     }
 }
 
@@ -100,12 +112,12 @@ struct GroupCard: View {
 
                 VStack(alignment: .leading, spacing: 6) {
                     Text(group.name)
-                        .font(.system(size: 17, weight: .semibold))
+                        .font(.headline)
                         .foregroundColor(theme.textPrimary)
 
                     if let desc = group.description, !desc.isEmpty {
                         MarkdownText(desc, color: theme.textSecondary)
-                            .font(.system(size: 13))
+                            .font(.footnote)
                             .lineLimit(1)
                     }
 
@@ -120,12 +132,12 @@ struct GroupCard: View {
                                 ZStack {
                                     Circle().fill(theme.backgroundElevated).frame(width: 26, height: 26)
                                     Text("+\(members.count - 5)")
-                                        .font(.system(size: 9, weight: .bold))
+                                        .font(.caption2).fontWeight(.bold)
                                         .foregroundColor(theme.textPrimary)
                                 }
                             }
                             Text("\(members.count) member\(members.count == 1 ? "" : "s")")
-                                .font(.system(size: 12))
+                                .font(.caption)
                                 .foregroundColor(theme.textTertiary)
                                 .padding(.leading, 14)
                         }
@@ -135,7 +147,7 @@ struct GroupCard: View {
                 Spacer()
 
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.caption).fontWeight(.semibold)
                     .foregroundColor(theme.textTertiary)
             }
             .padding(16)
@@ -168,12 +180,12 @@ struct GroupDetailSheet: View {
                                 .fill(group.displayColor.opacity(0.2))
                                 .frame(width: 72, height: 72)
                             Image(systemName: "square.grid.2x2.fill")
-                                .font(.system(size: 30))
+                                .font(.title)
                                 .foregroundColor(group.displayColor)
                         }
                         if let desc = group.description, !desc.isEmpty {
                             MarkdownText(desc, color: theme.textSecondary)
-                                .font(.system(size: 14))
+                                .font(.subheadline)
                                 .multilineTextAlignment(.center)
                         }
                     }
@@ -186,7 +198,7 @@ struct GroupDetailSheet: View {
                 Section("Members (\(members.count))") {
                     if members.isEmpty {
                         Text("No members in this group")
-                            .font(.system(size: 14))
+                            .font(.subheadline)
                             .foregroundColor(theme.textTertiary)
                             .listRowBackground(theme.backgroundCard)
                     } else {
@@ -195,10 +207,10 @@ struct GroupDetailSheet: View {
                                 AvatarView(member: member, size: 40)
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(member.displayName ?? member.name)
-                                        .font(.system(size: 15, weight: .medium))
+                                        .font(.subheadline).fontWeight(.medium)
                                         .foregroundColor(theme.textPrimary)
                                     if let p = member.pronouns, !p.isEmpty {
-                                        Text(p).font(.system(size: 12)).foregroundColor(theme.textSecondary)
+                                        Text(p).font(.caption).foregroundColor(theme.textSecondary)
                                     }
                                 }
                                 Spacer()
@@ -319,7 +331,7 @@ struct GroupEditSheet: View {
                             } else {
                                 Text("\(selectedMemberIDs.count) selected")
                                     .foregroundColor(theme.textSecondary)
-                                    .font(.system(size: 14))
+                                    .font(.subheadline)
                             }
                         }
                     }
@@ -403,11 +415,11 @@ struct GroupMemberPickerView: View {
                         AvatarView(member: member, size: 36)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(member.displayName ?? member.name)
-                                .font(.system(size: 15, weight: .medium))
+                                .font(.subheadline).fontWeight(.medium)
                                 .foregroundColor(theme.textPrimary)
                             if let p = member.pronouns, !p.isEmpty {
                                 Text(p)
-                                    .font(.system(size: 12))
+                                    .font(.caption)
                                     .foregroundColor(theme.textSecondary)
                             }
                         }
@@ -416,7 +428,7 @@ struct GroupMemberPickerView: View {
                               ? "checkmark.circle.fill" : "circle")
                             .foregroundColor(selectedMemberIDs.contains(member.id)
                                 ? theme.accentLight : theme.textTertiary)
-                            .font(.system(size: 20))
+                            .font(.title3)
                     }
                 }
                 .buttonStyle(.plain)

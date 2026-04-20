@@ -28,7 +28,7 @@ struct TOTPView: View {
                             startPoint: .topLeading, endPoint: .bottomTrailing))
                         .frame(width: 72, height: 72)
                     Image(systemName: "lock.shield.fill")
-                        .font(.system(size: 30))
+                        .font(.title)
                         .foregroundColor(theme.textPrimary)
                 }
                 .shadow(color: theme.accentLight.opacity(0.5), radius: 20)
@@ -36,13 +36,13 @@ struct TOTPView: View {
                 Spacer().frame(height: 24)
 
                 Text("Two-Factor Auth")
-                    .font(.system(size: 26, weight: .bold, design: .rounded))
+                    .font(.title3).fontWeight(.bold).fontDesign(.rounded)
                     .foregroundColor(theme.textPrimary)
 
                 Spacer().frame(height: 8)
 
                 Text("Enter the 6-digit code from your authenticator app")
-                    .font(.system(size: 14))
+                    .font(.subheadline)
                     .foregroundColor(theme.textSecondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 48)
@@ -71,7 +71,7 @@ struct TOTPView: View {
                 // Error
                 if !error.isEmpty {
                     Text(error)
-                        .font(.system(size: 13))
+                        .font(.footnote)
                         .foregroundColor(theme.danger)
                         .transition(.opacity)
                 }
@@ -84,7 +84,7 @@ struct TOTPView: View {
                         if isVerifying { ProgressView().tint(.white) }
                         else {
                             Text("Verify")
-                                .font(.system(size: 17, weight: .semibold))
+                                .font(.headline)
                             Image(systemName: "checkmark")
                         }
                     }
@@ -114,7 +114,7 @@ struct TOTPView: View {
                     authManager.cancelTOTP()
                 } label: {
                     Text("Back to login")
-                        .font(.system(size: 14))
+                        .font(.subheadline)
                         .foregroundColor(theme.textTertiary)
                 }
 

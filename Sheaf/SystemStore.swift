@@ -997,12 +997,19 @@ class SystemStore: ObservableObject {
         guard let sharedDefaults = UserDefaults(suiteName: "group.systems.lupine.sheaf") else { return }
 
         let allSharedMembers = frontingMembers.map { member in
-            SharedMember(
+            let memberFrontStart = currentFronts
+                .filter { $0.memberIDs.contains(member.id) && $0.endedAt == nil }
+                .map { $0.startedAt }
+                .min()
+
+            return SharedMember(
                 id: member.id,
                 name: member.name,
                 displayName: member.displayName,
+                pronouns: member.pronouns,
                 color: member.color,
-                avatarURL: member.avatarURL
+                avatarURL: member.avatarURL,
+                frontStartedAt: memberFrontStart
             )
         }
 

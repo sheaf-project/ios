@@ -37,7 +37,7 @@ struct SettingsView: View {
                 ScrollView {
                     VStack(spacing: 24) {
                         Text("Settings")
-                        .font(.system(size: 28, weight: .bold, design: .rounded))
+                        .font(.title2).fontWeight(.bold).fontDesign(.rounded)
                         .foregroundColor(theme.textPrimary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 24)
@@ -52,18 +52,18 @@ struct SettingsView: View {
                                         .foregroundColor(theme.danger)
                                     VStack(alignment: .leading, spacing: 4) {
                                         Text("Account Deletion Pending")
-                                            .font(.system(size: 15, weight: .semibold))
+                                            .font(.subheadline).fontWeight(.semibold)
                                             .foregroundColor(theme.danger)
                                         if let days = authManager.deletionGraceDays {
                                             let deletionDate2 = Calendar.current.date(byAdding: .day, value: days, to: deletionDate) ?? deletionDate
                                             if deletionDate2 > Date() {
                                                 Text("Your account will be permanently deleted in \(deletionDate2, style: .relative).")
-                                                    .font(.system(size: 13))
+                                                    .font(.footnote)
                                                     .foregroundColor(theme.textSecondary)
                                             }
                                         } else {
                                             Text("Requested \(deletionDate, style: .relative) ago")
-                                                .font(.system(size: 13))
+                                                .font(.footnote)
                                                 .foregroundColor(theme.textSecondary)
                                         }
                                     }
@@ -78,7 +78,7 @@ struct SettingsView: View {
                                             ProgressView().tint(.white)
                                         }
                                         Text("Cancel Deletion")
-                                            .font(.system(size: 15, weight: .medium))
+                                            .font(.subheadline).fontWeight(.medium)
                                     }
                                     .frame(maxWidth: .infinity)
                                     .padding(.vertical, 10)
@@ -110,12 +110,12 @@ struct SettingsView: View {
                                             .foregroundColor(themeManager.mode == mode ? theme.accentLight : theme.textTertiary)
                                             .frame(width: 20)
                                         Text(mode.label)
-                                            .font(.system(size: 15))
+                                            .font(.subheadline)
                                             .foregroundColor(theme.textPrimary)
                                         Spacer()
                                         if themeManager.mode == mode {
                                             Image(systemName: "checkmark")
-                                                .font(.system(size: 13, weight: .semibold))
+                                                .font(.footnote).fontWeight(.semibold)
                                                 .foregroundColor(theme.accentLight)
                                         }
                                     }
@@ -139,12 +139,12 @@ struct SettingsView: View {
                                         : theme.textTertiary)
                                     .frame(width: 20)
                                 Text("Two-Factor Auth")
-                                    .font(.system(size: 15))
+                                    .font(.subheadline)
                                     .foregroundColor(theme.textSecondary)
                                 Spacer()
                                 if let me {
                                     Text(me.totpEnabled ? String(localized: "Enabled") : String(localized: "Disabled"))
-                                        .font(.system(size: 13, weight: .medium))
+                                        .font(.footnote).fontWeight(.medium)
                                         .foregroundColor(me.totpEnabled
                                             ? theme.success
                                             : theme.textTertiary)
@@ -163,11 +163,11 @@ struct SettingsView: View {
                                         Image(systemName: "gearshape.fill")
                                             .foregroundColor(theme.accentLight)
                                         Text("Manage Two-Factor Auth")
-                                            .font(.system(size: 15, weight: .medium))
+                                            .font(.subheadline).fontWeight(.medium)
                                             .foregroundColor(theme.accentLight)
                                         Spacer()
                                         Image(systemName: "chevron.right")
-                                            .font(.system(size: 12))
+                                            .font(.caption)
                                             .foregroundColor(theme.textTertiary)
                                     }
                                     .padding(.horizontal, 16).padding(.vertical, 14)
@@ -178,11 +178,11 @@ struct SettingsView: View {
                                         Image(systemName: "plus.circle.fill")
                                             .foregroundColor(theme.accentLight)
                                         Text("Set Up Two-Factor Auth")
-                                            .font(.system(size: 15, weight: .medium))
+                                            .font(.subheadline).fontWeight(.medium)
                                             .foregroundColor(theme.accentLight)
                                         Spacer()
                                         Image(systemName: "chevron.right")
-                                            .font(.system(size: 12))
+                                            .font(.caption)
                                             .foregroundColor(theme.textTertiary)
                                     }
                                     .padding(.horizontal, 16).padding(.vertical, 14)
@@ -199,15 +199,15 @@ struct SettingsView: View {
                                         .frame(width: 20)
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text("Delete Confirmation")
-                                            .font(.system(size: 15, weight: .medium))
+                                            .font(.subheadline).fontWeight(.medium)
                                             .foregroundColor(theme.textPrimary)
                                         Text(deleteConfirmLabel)
-                                            .font(.system(size: 12))
+                                            .font(.caption)
                                             .foregroundColor(theme.textTertiary)
                                     }
                                     Spacer()
                                     Image(systemName: "chevron.right")
-                                        .font(.system(size: 12))
+                                        .font(.caption)
                                         .foregroundColor(theme.textTertiary)
                                 }
                                 .padding(.horizontal, 16).padding(.vertical, 14)
@@ -224,14 +224,14 @@ struct SettingsView: View {
                                     .foregroundColor(theme.accentLight)
                                     .frame(width: 20)
                                 Text("Storage Used")
-                                    .font(.system(size: 15))
+                                    .font(.subheadline)
                                     .foregroundColor(theme.textSecondary)
                                 Spacer()
                                 if isLoadingFileUsage {
                                     ProgressView().tint(theme.accentLight).scaleEffect(0.7)
                                 } else {
                                     Text(fileUsageDisplay)
-                                        .font(.system(size: 14, weight: .medium))
+                                        .font(.subheadline).fontWeight(.medium)
                                         .foregroundColor(theme.textPrimary)
                                 }
                             }
@@ -247,7 +247,7 @@ struct SettingsView: View {
                                         .foregroundColor(theme.accentLight)
                                         .frame(width: 20)
                                     Text("Check for Orphaned Files")
-                                        .font(.system(size: 15, weight: .medium))
+                                        .font(.subheadline).fontWeight(.medium)
                                         .foregroundColor(theme.textPrimary)
                                     Spacer()
                                     if isRunningFileCleanup {
@@ -268,7 +268,7 @@ struct SettingsView: View {
                                         .foregroundColor(theme.accentLight)
                                         .frame(width: 20)
                                     Text("Clean Up Orphaned Files")
-                                        .font(.system(size: 15, weight: .medium))
+                                        .font(.subheadline).fontWeight(.medium)
                                         .foregroundColor(theme.textPrimary)
                                     Spacer()
                                 }
@@ -288,11 +288,11 @@ struct SettingsView: View {
                                         .foregroundColor(theme.accentLight)
                                         .frame(width: 20)
                                     Text("Import from Simply Plural")
-                                        .font(.system(size: 15, weight: .medium))
+                                        .font(.subheadline).fontWeight(.medium)
                                         .foregroundColor(theme.textPrimary)
                                     Spacer()
                                     Image(systemName: "chevron.right")
-                                        .font(.system(size: 12))
+                                        .font(.caption)
                                         .foregroundColor(theme.textTertiary)
                                 }
                                 .padding(.horizontal, 16).padding(.vertical, 14)
@@ -307,11 +307,11 @@ struct SettingsView: View {
                                         .foregroundColor(theme.accentLight)
                                         .frame(width: 20)
                                     Text("Import from Sheaf Export")
-                                        .font(.system(size: 15, weight: .medium))
+                                        .font(.subheadline).fontWeight(.medium)
                                         .foregroundColor(theme.textPrimary)
                                     Spacer()
                                     Image(systemName: "chevron.right")
-                                        .font(.system(size: 12))
+                                        .font(.caption)
                                         .foregroundColor(theme.textTertiary)
                                 }
                                 .padding(.horizontal, 16).padding(.vertical, 14)
@@ -328,7 +328,7 @@ struct SettingsView: View {
                                         .foregroundColor(theme.accentLight)
                                         .frame(width: 20)
                                     Text("Export All Data")
-                                        .font(.system(size: 15, weight: .medium))
+                                        .font(.subheadline).fontWeight(.medium)
                                         .foregroundColor(theme.textPrimary)
                                     Spacer()
                                     if isExporting {
@@ -355,11 +355,11 @@ struct SettingsView: View {
                                         .foregroundColor(theme.accentLight)
                                         .frame(width: 20)
                                     Text("Custom Fields")
-                                        .font(.system(size: 15, weight: .medium))
+                                        .font(.subheadline).fontWeight(.medium)
                                         .foregroundColor(theme.textPrimary)
                                     Spacer()
                                     Text("\(store.fields.count)")
-                                        .font(.system(size: 14))
+                                        .font(.subheadline)
                                         .foregroundColor(theme.textTertiary)
                                 }
                                 .padding(.horizontal, 16).padding(.vertical, 14)
@@ -372,7 +372,7 @@ struct SettingsView: View {
                                 HStack {
                                     Image(systemName: "arrow.clockwise").foregroundColor(theme.accent)
                                     Text("Refresh All Data")
-                                        .font(.system(size: 15, weight: .medium)).foregroundColor(theme.textPrimary)
+                                        .font(.subheadline).fontWeight(.medium).foregroundColor(theme.textPrimary)
                                     Spacer()
                                     if store.isLoading { ProgressView().tint(theme.accentLight) }
                                 }
@@ -398,17 +398,17 @@ struct SettingsView: View {
                                         } placeholder: { EmptyView() }
                                     } else {
                                         Text(String(profile.name.prefix(1)).uppercased())
-                                            .font(.system(size: 18, weight: .bold))
+                                            .font(.headline).fontWeight(.bold)
                                             .foregroundColor(.white)
                                     }
                                 }
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(profile.name)
-                                            .font(.system(size: 15, weight: .semibold))
+                                            .font(.subheadline).fontWeight(.semibold)
                                             .foregroundColor(theme.textPrimary)
                                         if let tag = profile.tag, !tag.isEmpty {
                                             Text(tag)
-                                                .font(.system(size: 12))
+                                                .font(.caption)
                                                 .foregroundColor(theme.textSecondary)
                                         }
                                     }
@@ -417,7 +417,7 @@ struct SettingsView: View {
                                         showEditSystem = true
                                     } label: {
                                         Text("Edit")
-                                            .font(.system(size: 14, weight: .medium))
+                                            .font(.subheadline).fontWeight(.medium)
                                             .foregroundColor(theme.accentLight)
                                     }
                                 }
@@ -445,11 +445,11 @@ struct SettingsView: View {
                                         .foregroundColor(theme.accentLight)
                                         .frame(width: 20)
                                     Text("Manage API Keys")
-                                        .font(.system(size: 15, weight: .medium))
+                                        .font(.subheadline).fontWeight(.medium)
                                         .foregroundColor(theme.textPrimary)
                                     Spacer()
                                     Image(systemName: "chevron.right")
-                                        .font(.system(size: 12))
+                                        .font(.caption)
                                         .foregroundColor(theme.textTertiary)
                                 }
                                 .padding(.horizontal, 16).padding(.vertical, 14)
@@ -471,11 +471,11 @@ struct SettingsView: View {
                                         .foregroundColor(theme.accentLight)
                                         .frame(width: 20)
                                     Text("Manage Sessions")
-                                        .font(.system(size: 15, weight: .medium))
+                                        .font(.subheadline).fontWeight(.medium)
                                         .foregroundColor(theme.textPrimary)
                                     Spacer()
                                     Image(systemName: "chevron.right")
-                                        .font(.system(size: 12))
+                                        .font(.caption)
                                         .foregroundColor(theme.textTertiary)
                                 }
                                 .padding(.horizontal, 16).padding(.vertical, 14)
@@ -498,11 +498,11 @@ struct SettingsView: View {
                                             .foregroundColor(theme.accentLight)
                                             .frame(width: 20)
                                         Text("Admin Panel")
-                                            .font(.system(size: 15, weight: .medium))
+                                            .font(.subheadline).fontWeight(.medium)
                                             .foregroundColor(theme.textPrimary)
                                         Spacer()
                                         Image(systemName: "chevron.right")
-                                            .font(.system(size: 12))
+                                            .font(.caption)
                                             .foregroundColor(theme.textTertiary)
                                     }
                                     .padding(.horizontal, 16).padding(.vertical, 14)
@@ -522,11 +522,11 @@ struct SettingsView: View {
                                         .foregroundColor(theme.accentLight)
                                         .frame(width: 20)
                                     Text("Tier")
-                                        .font(.system(size: 15))
+                                        .font(.subheadline)
                                         .foregroundColor(theme.textSecondary)
                                     Spacer()
                                     Text(formatTier(me.tier))
-                                        .font(.system(size: 14, weight: .medium))
+                                        .font(.subheadline).fontWeight(.medium)
                                         .foregroundColor(theme.accentLight)
                                         .padding(.horizontal, 10)
                                         .padding(.vertical, 4)
@@ -543,7 +543,7 @@ struct SettingsView: View {
                                         .foregroundColor(theme.accentLight)
                                         .frame(width: 20)
                                     Text("Newsletter")
-                                        .font(.system(size: 15))
+                                        .font(.subheadline)
                                         .foregroundColor(theme.textSecondary)
                                     Spacer()
                                     Toggle("", isOn: $newsletterOptIn)
@@ -564,7 +564,7 @@ struct SettingsView: View {
                                         Image(systemName: "trash.fill")
                                             .foregroundColor(theme.danger)
                                         Text("Delete Account")
-                                            .font(.system(size: 15, weight: .medium))
+                                            .font(.subheadline).fontWeight(.medium)
                                             .foregroundColor(theme.danger)
                                         Spacer()
                                     }
@@ -579,7 +579,7 @@ struct SettingsView: View {
                                     Image(systemName: "rectangle.portrait.and.arrow.right")
                                         .foregroundColor(theme.danger)
                                     Text("Disconnect & Log Out")
-                                        .font(.system(size: 15, weight: .medium))
+                                        .font(.subheadline).fontWeight(.medium)
                                         .foregroundColor(theme.danger)
                                     Spacer()
                                 }
@@ -589,8 +589,8 @@ struct SettingsView: View {
                     }
 
                     VStack(spacing: 4) {
-                        Text("Sheaf").font(.system(size: 13, weight: .semibold)).foregroundColor(theme.textTertiary)
-                        Text("v1.0.0").font(.system(size: 12)).foregroundColor(theme.textTertiary)
+                        Text("Sheaf").font(.footnote).fontWeight(.semibold).foregroundColor(theme.textTertiary)
+                        Text("v1.0.0").font(.caption).foregroundColor(theme.textTertiary)
                     }
                     .padding(.bottom, 80)
                 }
@@ -839,7 +839,7 @@ struct SettingsView: View {
     func settingsSection<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(title)
-                .font(.system(size: 12, weight: .semibold))
+                .font(.caption).fontWeight(.semibold)
                 .foregroundColor(theme.textSecondary)
                 .textCase(.uppercase)
                 .kerning(0.8)
@@ -855,10 +855,10 @@ struct SettingsView: View {
     func infoRow(icon: String, label: String, value: String) -> some View {
         HStack(spacing: 12) {
             Image(systemName: icon).foregroundColor(theme.textTertiary).frame(width: 20)
-            Text(label).font(.system(size: 15)).foregroundColor(theme.textSecondary)
+            Text(label).font(.subheadline).foregroundColor(theme.textSecondary)
             Spacer()
             Text(value)
-                .font(.system(size: 13)).foregroundColor(theme.textTertiary)
+                .font(.footnote).foregroundColor(theme.textTertiary)
                 .lineLimit(1).truncationMode(.middle).frame(maxWidth: 160, alignment: .trailing)
         }
         .padding(.horizontal, 16).padding(.vertical, 14)
@@ -866,9 +866,9 @@ struct SettingsView: View {
 
     func statRow(label: String, value: String) -> some View {
         HStack {
-            Text(label).font(.system(size: 15)).foregroundColor(theme.textSecondary)
+            Text(label).font(.subheadline).foregroundColor(theme.textSecondary)
             Spacer()
-            Text(value).font(.system(size: 15, weight: .semibold)).foregroundColor(theme.accentLight)
+            Text(value).font(.subheadline).fontWeight(.semibold).foregroundColor(theme.accentLight)
         }
         .padding(.horizontal, 16).padding(.vertical, 14)
     }

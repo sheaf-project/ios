@@ -23,13 +23,13 @@ struct ApiKeysView: View {
             } else if keys.isEmpty {
                 VStack(spacing: 16) {
                     Image(systemName: "key.horizontal.fill")
-                        .font(.system(size: 40))
+                        .font(.largeTitle)
                         .foregroundColor(theme.textTertiary)
                     Text("No API Keys")
-                        .font(.system(size: 17, weight: .semibold))
+                        .font(.body).fontWeight(.semibold)
                         .foregroundColor(theme.textPrimary)
                     Text("Create an API key to access the Sheaf API programmatically.")
-                        .font(.system(size: 14))
+                        .font(.subheadline)
                         .foregroundColor(theme.textSecondary)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 40)
@@ -64,7 +64,7 @@ struct ApiKeysView: View {
                     showCreate = true
                 } label: {
                     Image(systemName: "plus.circle.fill")
-                        .font(.system(size: 22))
+                        .font(.title2)
                         .foregroundColor(theme.accentLight)
                 }
             }
@@ -98,20 +98,20 @@ struct ApiKeysView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text(key.name)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.subheadline).fontWeight(.semibold)
                     .foregroundColor(theme.textPrimary)
                 Spacer()
                 if let expires = key.expiresAt {
                     if expires < Date() {
                         Text("Expired")
-                            .font(.system(size: 11, weight: .medium))
+                            .font(.caption2).fontWeight(.medium)
                             .foregroundColor(theme.danger)
                             .padding(.horizontal, 8).padding(.vertical, 3)
                             .background(theme.danger.opacity(0.12))
                             .cornerRadius(6)
                     } else {
                         Text("Expires \(expires, style: .relative)")
-                            .font(.system(size: 11))
+                            .font(.caption2)
                             .foregroundColor(theme.textTertiary)
                     }
                 }
@@ -122,7 +122,7 @@ struct ApiKeysView: View {
                 HStack(spacing: 6) {
                     ForEach(key.scopes, id: \.self) { scope in
                         Text(scope)
-                            .font(.system(size: 11, weight: .medium, design: .monospaced))
+                            .font(.caption2).fontWeight(.medium).fontDesign(.monospaced)
                             .foregroundColor(theme.accentLight)
                             .padding(.horizontal, 8).padding(.vertical, 3)
                             .background(theme.accentLight.opacity(0.1))
@@ -134,16 +134,16 @@ struct ApiKeysView: View {
             HStack(spacing: 16) {
                 if let lastUsed = key.lastUsedAt {
                     Label("Used \(lastUsed, style: .relative) ago", systemImage: "clock")
-                        .font(.system(size: 11))
+                        .font(.caption2)
                         .foregroundColor(theme.textTertiary)
                 } else {
                     Label("Never used", systemImage: "clock")
-                        .font(.system(size: 11))
+                        .font(.caption2)
                         .foregroundColor(theme.textTertiary)
                 }
                 Spacer()
                 Text("Created \(key.createdAt, style: .date)")
-                    .font(.system(size: 11))
+                    .font(.caption2)
                     .foregroundColor(theme.textTertiary)
             }
         }
@@ -157,26 +157,24 @@ struct ApiKeysView: View {
             theme.backgroundPrimary.ignoresSafeArea()
 
             VStack(spacing: 20) {
-                Capsule().fill(theme.inputBorder).frame(width: 40, height: 4).padding(.top, 12)
-
                 Image(systemName: "key.horizontal.fill")
-                    .font(.system(size: 40))
+                    .font(.largeTitle)
                     .foregroundColor(theme.success)
                     .padding(.top, 8)
 
                 Text("API Key Created")
-                    .font(.system(size: 22, weight: .bold, design: .rounded))
+                    .font(.title2).fontWeight(.bold).fontDesign(.rounded)
                     .foregroundColor(theme.textPrimary)
 
                 Text("Copy this key now. You won't be able to see it again.")
-                    .font(.system(size: 14))
+                    .font(.subheadline)
                     .foregroundColor(theme.textSecondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 24)
 
                 VStack(spacing: 8) {
                     Text(created.key)
-                        .font(.system(size: 13, weight: .medium, design: .monospaced))
+                        .font(.footnote).fontWeight(.medium).fontDesign(.monospaced)
                         .foregroundColor(theme.textPrimary)
                         .padding(14)
                         .frame(maxWidth: .infinity)
@@ -192,7 +190,7 @@ struct ApiKeysView: View {
                         HStack(spacing: 8) {
                             Image(systemName: copiedKey ? "checkmark" : "doc.on.doc")
                             Text(copiedKey ? "Copied!" : "Copy Key")
-                                .font(.system(size: 14, weight: .medium))
+                                .font(.subheadline).fontWeight(.medium)
                         }
                         .foregroundColor(copiedKey ? theme.success : theme.accentLight)
                         .frame(maxWidth: .infinity)
@@ -210,7 +208,7 @@ struct ApiKeysView: View {
                     createdKey = nil
                 } label: {
                     Text("Done")
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.callout).fontWeight(.semibold)
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
                         .padding(16)
@@ -223,6 +221,7 @@ struct ApiKeysView: View {
             }
         }
         .presentationDetents([.medium])
+        .presentationDragIndicator(.visible)
     }
 }
 
@@ -262,7 +261,7 @@ struct CreateApiKeySheet: View {
                         // Name
                         VStack(alignment: .leading, spacing: 6) {
                             Text("Name")
-                                .font(.system(size: 13, weight: .semibold))
+                                .font(.footnote).fontWeight(.semibold)
                                 .foregroundColor(theme.textSecondary)
                             TextField("My API Key", text: $name)
                                 .autocorrectionDisabled()
@@ -275,7 +274,7 @@ struct CreateApiKeySheet: View {
                         // Scopes
                         VStack(alignment: .leading, spacing: 10) {
                             Text("Scopes")
-                                .font(.system(size: 13, weight: .semibold))
+                                .font(.footnote).fontWeight(.semibold)
                                 .foregroundColor(theme.textSecondary)
 
                             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
@@ -289,10 +288,10 @@ struct CreateApiKeySheet: View {
                                     } label: {
                                         HStack(spacing: 6) {
                                             Image(systemName: selectedScopes.contains(scope) ? "checkmark.circle.fill" : "circle")
-                                                .font(.system(size: 14))
+                                                .font(.subheadline)
                                                 .foregroundColor(selectedScopes.contains(scope) ? theme.accentLight : theme.textTertiary)
                                             Text(scope)
-                                                .font(.system(size: 12, weight: .medium, design: .monospaced))
+                                                .font(.caption).fontWeight(.medium).fontDesign(.monospaced)
                                                 .foregroundColor(theme.textPrimary)
                                                 .lineLimit(1)
                                             Spacer()
@@ -315,7 +314,7 @@ struct CreateApiKeySheet: View {
                         VStack(alignment: .leading, spacing: 10) {
                             Toggle(isOn: $hasExpiry) {
                                 Text("Set Expiry")
-                                    .font(.system(size: 14, weight: .medium))
+                                    .font(.subheadline).fontWeight(.medium)
                                     .foregroundColor(theme.textPrimary)
                             }
                             .tint(theme.accentLight)
@@ -335,7 +334,7 @@ struct CreateApiKeySheet: View {
 
                         if let error {
                             Text(error)
-                                .font(.system(size: 13))
+                                .font(.footnote)
                                 .foregroundColor(theme.danger)
                         }
                     }

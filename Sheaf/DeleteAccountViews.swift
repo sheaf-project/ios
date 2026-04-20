@@ -32,7 +32,7 @@ struct DeleteConfirmationSheet: View {
                 ScrollView {
                     VStack(spacing: 20) {
                         Text("Choose the level of confirmation required when deleting members or other data.")
-                            .font(.system(size: 14))
+                            .font(.subheadline)
                             .foregroundColor(theme.textSecondary)
                             .padding(.horizontal, 4)
 
@@ -55,10 +55,10 @@ struct DeleteConfirmationSheet: View {
                             // Password confirmation
                             VStack(alignment: .leading, spacing: 8) {
                                 Text("Confirm with your password")
-                                    .font(.system(size: 13, weight: .semibold))
+                                    .font(.footnote).fontWeight(.semibold)
                                     .foregroundColor(theme.textSecondary)
                                 SecureField("Password", text: $password)
-                                    .autocapitalization(.none)
+                                    .textInputAutocapitalization(.never)
                                     .autocorrectionDisabled()
                                     .padding(14)
                                     .background(theme.inputBackground)
@@ -71,7 +71,7 @@ struct DeleteConfirmationSheet: View {
                             if totpEnabled {
                                 VStack(alignment: .leading, spacing: 8) {
                                     Text("2FA Code")
-                                        .font(.system(size: 13, weight: .semibold))
+                                        .font(.footnote).fontWeight(.semibold)
                                         .foregroundColor(theme.textSecondary)
                                     TextField("6-digit code", text: $totpCode)
                                         .keyboardType(.numberPad)
@@ -87,7 +87,7 @@ struct DeleteConfirmationSheet: View {
 
                         if !error.isEmpty {
                             Text(error)
-                                .font(.system(size: 13))
+                                .font(.footnote)
                                 .foregroundColor(theme.danger)
                         }
                     }
@@ -111,7 +111,7 @@ struct DeleteConfirmationSheet: View {
                             ProgressView().tint(theme.accentLight).scaleEffect(0.8)
                         } else {
                             Text("Save")
-                                .font(.system(size: 16, weight: .semibold))
+                                .font(.body).fontWeight(.semibold)
                                 .foregroundColor(selectedLevel != currentLevel && !password.isEmpty ? theme.accentLight : theme.textTertiary)
                         }
                     }
@@ -128,14 +128,14 @@ struct DeleteConfirmationSheet: View {
         } label: {
             HStack(spacing: 12) {
                 Image(systemName: selectedLevel == level ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 20))
+                    .font(.title3)
                     .foregroundColor(selectedLevel == level ? theme.accentLight : theme.textTertiary)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
-                        .font(.system(size: 15, weight: .medium))
+                        .font(.subheadline).fontWeight(.medium)
                         .foregroundColor(theme.textPrimary)
                     Text(desc)
-                        .font(.system(size: 12))
+                        .font(.caption)
                         .foregroundColor(theme.textTertiary)
                 }
                 Spacer()
@@ -193,21 +193,21 @@ struct DeleteAccountSheet: View {
                         // Warning banner
                         VStack(spacing: 12) {
                             Image(systemName: "exclamationmark.triangle.fill")
-                                .font(.system(size: 40))
+                                .font(.largeTitle)
                                 .foregroundColor(theme.danger)
 
                             Text("Delete Your Account")
-                                .font(.system(size: 20, weight: .bold))
+                                .font(.title3).fontWeight(.bold)
                                 .foregroundColor(theme.textPrimary)
 
                             if let days = authManager.deletionGraceDays {
                                 Text("This will schedule your account for deletion. After \(days) days, all your data — members, fronting history, groups, and files — will be permanently removed.")
-                                    .font(.system(size: 14))
+                                    .font(.subheadline)
                                     .foregroundColor(theme.textSecondary)
                                     .multilineTextAlignment(.center)
                             } else {
                                 Text("This will schedule your account for deletion. All your data — members, fronting history, groups, and files — will be permanently removed.")
-                                    .font(.system(size: 14))
+                                    .font(.subheadline)
                                     .foregroundColor(theme.textSecondary)
                                     .multilineTextAlignment(.center)
                             }
@@ -219,7 +219,7 @@ struct DeleteAccountSheet: View {
                             // Password field
                             VStack(alignment: .leading, spacing: 6) {
                                 Text("Password")
-                                    .font(.system(size: 13, weight: .medium))
+                                    .font(.footnote).fontWeight(.medium)
                                     .foregroundColor(theme.textSecondary)
                                 SecureField("Enter your password", text: $password)
                                     .textContentType(.password)
@@ -233,7 +233,7 @@ struct DeleteAccountSheet: View {
                             if me?.totpEnabled == true {
                                 VStack(alignment: .leading, spacing: 6) {
                                     Text("Two-Factor Code")
-                                        .font(.system(size: 13, weight: .medium))
+                                        .font(.footnote).fontWeight(.medium)
                                         .foregroundColor(theme.textSecondary)
                                     TextField("6-digit code", text: $totpCode)
                                         .keyboardType(.numberPad)
@@ -247,7 +247,7 @@ struct DeleteAccountSheet: View {
 
                             if let errorMessage {
                                 Text(errorMessage)
-                                    .font(.system(size: 13))
+                                    .font(.footnote)
                                     .foregroundColor(theme.danger)
                                     .frame(maxWidth: .infinity, alignment: .leading)
                             }
@@ -261,7 +261,7 @@ struct DeleteAccountSheet: View {
                             HStack {
                                 Image(systemName: "trash.fill")
                                 Text("Delete My Account")
-                                    .font(.system(size: 16, weight: .semibold))
+                                    .font(.body).fontWeight(.semibold)
                             }
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 14)

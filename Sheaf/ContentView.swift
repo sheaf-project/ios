@@ -23,7 +23,7 @@ struct ContentView: View {
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 6)
-                .background(Color.orange)
+                .background(theme.warning)
             } else if systemStore.isSyncing {
                 HStack(spacing: 8) {
                     ProgressView()
@@ -35,7 +35,7 @@ struct ContentView: View {
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 6)
-                .background(Color.blue)
+                .background(theme.accentLight)
             }
 
             TabView(selection: Binding(
@@ -68,7 +68,7 @@ struct ContentView: View {
                         Label("Settings", systemImage: "gearshape.fill")
                     }
             }
-            .tint(Color(hex: "#A78BFA")!)
+            .tint(theme.accentLight)
         }
         .alert("Error", isPresented: Binding(
             get: { systemStore.errorMessage != nil },

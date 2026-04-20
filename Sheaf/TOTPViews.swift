@@ -61,14 +61,14 @@ struct TOTPSetupSheet: View {
             Spacer().frame(height: 40)
             ProgressView().tint(theme.accentLight).scaleEffect(1.4)
             Text("Generating your secret…")
-                .font(.system(size: 15)).foregroundColor(theme.textSecondary)
+                .font(.subheadline).foregroundColor(theme.textSecondary)
         }
     }
 
     var scanStep: some View {
         VStack(spacing: 16) {
             Text("Scan with your authenticator app (Aegis, 1Password, Google Authenticator).")
-                .font(.system(size: 13))
+                .font(.footnote)
                 .foregroundColor(theme.textSecondary)
                 .multilineTextAlignment(.center)
 
@@ -89,13 +89,13 @@ struct TOTPSetupSheet: View {
             if let secret = setupResponse?.secret {
                 VStack(spacing: 6) {
                     Text("Or enter manually")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.caption2).fontWeight(.semibold)
                         .foregroundColor(theme.textTertiary)
                         .textCase(.uppercase).kerning(0.8)
 
                     HStack(spacing: 10) {
                         Text(secret)
-                            .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                            .font(.footnote).fontWeight(.semibold).fontDesign(.monospaced)
                             .foregroundColor(theme.textPrimary)
                             .multilineTextAlignment(.center)
                             .fixedSize(horizontal: false, vertical: true)
@@ -107,7 +107,7 @@ struct TOTPSetupSheet: View {
                         } label: {
                             Image(systemName: copiedSecret ? "checkmark" : "doc.on.doc")
                                 .foregroundColor(copiedSecret ? theme.success : theme.accentLight)
-                                .font(.system(size: 15))
+                                .font(.subheadline)
                         }
                     }
                     .padding(12)
@@ -131,11 +131,11 @@ struct TOTPSetupSheet: View {
             Spacer().frame(height: 8)
 
             Image(systemName: "checkmark.shield.fill")
-                .font(.system(size: 48))
+                .font(.largeTitle)
                 .foregroundColor(theme.accentLight)
 
             Text("Enter the 6-digit code from your authenticator app to confirm setup.")
-                .font(.system(size: 14))
+                .font(.subheadline)
                 .foregroundColor(theme.textSecondary)
                 .multilineTextAlignment(.center)
 
@@ -160,7 +160,7 @@ struct TOTPSetupSheet: View {
 
             Button { withAnimation { step = .scan } } label: {
                 Text("Back")
-                    .font(.system(size: 14))
+                    .font(.subheadline)
                     .foregroundColor(theme.textTertiary)
             }
         }
@@ -172,15 +172,15 @@ struct TOTPSetupSheet: View {
             Spacer().frame(height: 8)
 
             Image(systemName: "list.bullet.rectangle.portrait.fill")
-                .font(.system(size: 40))
+                .font(.largeTitle)
                 .foregroundColor(theme.warning)
 
             VStack(spacing: 6) {
                 Text("Save your recovery codes")
-                    .font(.system(size: 20, weight: .bold, design: .rounded))
+                    .font(.title3).fontWeight(.bold).fontDesign(.rounded)
                     .foregroundColor(theme.textPrimary)
                 Text("If you lose access to your authenticator, these one-time codes are the only way in. Store them somewhere safe.")
-                    .font(.system(size: 13))
+                    .font(.footnote)
                     .foregroundColor(theme.textSecondary)
                     .multilineTextAlignment(.center)
             }
@@ -191,11 +191,11 @@ struct TOTPSetupSheet: View {
                     ForEach(Array(codes.enumerated()), id: \.offset) { i, code in
                         HStack {
                             Text("\(i + 1).")
-                                .font(.system(size: 12))
+                                .font(.caption)
                                 .foregroundColor(theme.textTertiary)
                                 .frame(width: 20, alignment: .trailing)
                             Text(code)
-                                .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                                .font(.subheadline).fontWeight(.semibold).fontDesign(.monospaced)
                                 .foregroundColor(theme.textPrimary)
                             Spacer()
                         }
@@ -218,7 +218,7 @@ struct TOTPSetupSheet: View {
                     HStack(spacing: 8) {
                         Image(systemName: copiedCodes ? "checkmark" : "doc.on.doc")
                         Text(copiedCodes ? "Copied!" : "Copy All Codes")
-                            .font(.system(size: 14, weight: .medium))
+                            .font(.subheadline).fontWeight(.medium)
                     }
                     .foregroundColor(copiedCodes ? theme.success : theme.accentLight)
                 }
@@ -239,17 +239,17 @@ struct TOTPSetupSheet: View {
                     .fill(theme.success.opacity(0.15))
                     .frame(width: 100, height: 100)
                 Image(systemName: "lock.shield.fill")
-                    .font(.system(size: 44))
+                    .font(.largeTitle)
                     .foregroundColor(theme.success)
             }
             .shadow(color: theme.success.opacity(0.3), radius: 20)
 
             Text("Two-factor auth enabled!")
-                .font(.system(size: 22, weight: .bold, design: .rounded))
+                .font(.title3).fontWeight(.bold).fontDesign(.rounded)
                 .foregroundColor(theme.textPrimary)
 
             Text("Your account is now protected. You'll be asked for a code each time you sign in.")
-                .font(.system(size: 14))
+                .font(.subheadline)
                 .foregroundColor(theme.textSecondary)
                 .multilineTextAlignment(.center)
 
@@ -273,7 +273,7 @@ struct TOTPSetupSheet: View {
 
     var errorLabel: some View {
         Text(error)
-            .font(.system(size: 13))
+            .font(.footnote)
             .foregroundColor(theme.danger)
             .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -282,7 +282,7 @@ struct TOTPSetupSheet: View {
         Button(action: action) {
             HStack {
                 if loading { ProgressView().tint(.white) }
-                else { Text(label).font(.system(size: 16, weight: .semibold)).foregroundColor(.white) }
+                else { Text(label).font(.body).fontWeight(.semibold).foregroundColor(.white) }
             }
             .frame(maxWidth: .infinity)
             .padding(16)
@@ -431,13 +431,13 @@ struct TOTPManageSheet: View {
                     .fill(theme.success.opacity(0.15))
                     .frame(width: 80, height: 80)
                 Image(systemName: "lock.shield.fill")
-                    .font(.system(size: 36))
+                    .font(.title)
                     .foregroundColor(theme.success)
             }
             .shadow(color: theme.success.opacity(0.3), radius: 16)
 
             Text("Two-factor authentication is enabled")
-                .font(.system(size: 15))
+                .font(.subheadline)
                 .foregroundColor(theme.textSecondary)
                 .multilineTextAlignment(.center)
 
@@ -449,20 +449,20 @@ struct TOTPManageSheet: View {
             } label: {
                 HStack(spacing: 12) {
                     Image(systemName: "arrow.triangle.2.circlepath")
-                        .font(.system(size: 18))
+                        .font(.body)
                         .foregroundColor(theme.accentLight)
                         .frame(width: 28)
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Regenerate Recovery Codes")
-                            .font(.system(size: 15, weight: .medium))
+                            .font(.subheadline).fontWeight(.medium)
                             .foregroundColor(theme.textPrimary)
                         Text("Get new one-time backup codes")
-                            .font(.system(size: 12))
+                            .font(.caption)
                             .foregroundColor(theme.textTertiary)
                     }
                     Spacer()
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 12))
+                        .font(.caption)
                         .foregroundColor(theme.textTertiary)
                 }
                 .padding(16)
@@ -476,20 +476,20 @@ struct TOTPManageSheet: View {
             } label: {
                 HStack(spacing: 12) {
                     Image(systemName: "lock.open.fill")
-                        .font(.system(size: 18))
+                        .font(.body)
                         .foregroundColor(theme.danger)
                         .frame(width: 28)
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Disable Two-Factor Auth")
-                            .font(.system(size: 15, weight: .medium))
+                            .font(.subheadline).fontWeight(.medium)
                             .foregroundColor(theme.danger)
                         Text("Remove 2FA protection from your account")
-                            .font(.system(size: 12))
+                            .font(.caption)
                             .foregroundColor(theme.textTertiary)
                     }
                     Spacer()
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 12))
+                        .font(.caption)
                         .foregroundColor(theme.textTertiary)
                 }
                 .padding(16)
@@ -506,20 +506,20 @@ struct TOTPManageSheet: View {
             Spacer().frame(height: 12)
 
             Image(systemName: "exclamationmark.shield.fill")
-                .font(.system(size: 48))
+                .font(.largeTitle)
                 .foregroundColor(theme.warning)
 
             Text("This will remove two-factor authentication from your account. You'll need to verify your identity.")
-                .font(.system(size: 14))
+                .font(.subheadline)
                 .foregroundColor(theme.textSecondary)
                 .multilineTextAlignment(.center)
 
             VStack(alignment: .leading, spacing: 8) {
                 Text("Password")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.footnote).fontWeight(.semibold)
                     .foregroundColor(theme.textSecondary)
                 SecureField("Enter your password", text: $password)
-                    .autocapitalization(.none)
+                    .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .padding(14)
                     .background(theme.inputBackground)
@@ -530,7 +530,7 @@ struct TOTPManageSheet: View {
 
             VStack(alignment: .leading, spacing: 8) {
                 Text("Current 2FA Code")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.footnote).fontWeight(.semibold)
                     .foregroundColor(theme.textSecondary)
                 TextField("6-digit code", text: $totpCode)
                     .keyboardType(.numberPad)
@@ -543,14 +543,14 @@ struct TOTPManageSheet: View {
 
             if !error.isEmpty {
                 Text(error)
-                    .font(.system(size: 13))
+                    .font(.footnote)
                     .foregroundColor(theme.danger)
             }
 
             Button { Task { await disableTOTP() } } label: {
                 HStack {
                     if isProcessing { ProgressView().tint(.white) }
-                    else { Text("Disable Two-Factor Auth").font(.system(size: 16, weight: .semibold)) }
+                    else { Text("Disable Two-Factor Auth").font(.body).fontWeight(.semibold) }
                 }
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity)
@@ -563,7 +563,7 @@ struct TOTPManageSheet: View {
 
             Button { withAnimation { page = .menu } } label: {
                 Text("Back")
-                    .font(.system(size: 14))
+                    .font(.subheadline)
                     .foregroundColor(theme.textTertiary)
             }
         }
@@ -576,17 +576,17 @@ struct TOTPManageSheet: View {
             Spacer().frame(height: 12)
 
             Image(systemName: "arrow.triangle.2.circlepath")
-                .font(.system(size: 48))
+                .font(.largeTitle)
                 .foregroundColor(theme.warning)
 
             Text("This will invalidate your current recovery codes and generate new ones. Enter your current 2FA code to confirm.")
-                .font(.system(size: 14))
+                .font(.subheadline)
                 .foregroundColor(theme.textSecondary)
                 .multilineTextAlignment(.center)
 
             VStack(alignment: .leading, spacing: 8) {
                 Text("Current 2FA Code")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.footnote).fontWeight(.semibold)
                     .foregroundColor(theme.textSecondary)
                 TextField("6-digit code", text: $totpCode)
                     .keyboardType(.numberPad)
@@ -599,14 +599,14 @@ struct TOTPManageSheet: View {
 
             if !error.isEmpty {
                 Text(error)
-                    .font(.system(size: 13))
+                    .font(.footnote)
                     .foregroundColor(theme.danger)
             }
 
             Button { Task { await regenerateCodes() } } label: {
                 HStack {
                     if isProcessing { ProgressView().tint(.white) }
-                    else { Text("Regenerate Codes").font(.system(size: 16, weight: .semibold)) }
+                    else { Text("Regenerate Codes").font(.body).fontWeight(.semibold) }
                 }
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity)
@@ -620,7 +620,7 @@ struct TOTPManageSheet: View {
 
             Button { withAnimation { page = .menu } } label: {
                 Text("Back")
-                    .font(.system(size: 14))
+                    .font(.subheadline)
                     .foregroundColor(theme.textTertiary)
             }
         }
@@ -633,15 +633,15 @@ struct TOTPManageSheet: View {
             Spacer().frame(height: 8)
 
             Image(systemName: "list.bullet.rectangle.portrait.fill")
-                .font(.system(size: 40))
+                .font(.largeTitle)
                 .foregroundColor(theme.warning)
 
             VStack(spacing: 6) {
                 Text("New Recovery Codes")
-                    .font(.system(size: 20, weight: .bold, design: .rounded))
+                    .font(.title3).fontWeight(.bold).fontDesign(.rounded)
                     .foregroundColor(theme.textPrimary)
                 Text("Your old recovery codes are now invalid. Save these new codes somewhere safe.")
-                    .font(.system(size: 13))
+                    .font(.footnote)
                     .foregroundColor(theme.textSecondary)
                     .multilineTextAlignment(.center)
             }
@@ -650,11 +650,11 @@ struct TOTPManageSheet: View {
                 ForEach(Array(recoveryCodes.enumerated()), id: \.offset) { i, code in
                     HStack {
                         Text("\(i + 1).")
-                            .font(.system(size: 12))
+                            .font(.caption)
                             .foregroundColor(theme.textTertiary)
                             .frame(width: 20, alignment: .trailing)
                         Text(code)
-                            .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                            .font(.subheadline).fontWeight(.semibold).fontDesign(.monospaced)
                             .foregroundColor(theme.textPrimary)
                         Spacer()
                     }
@@ -676,7 +676,7 @@ struct TOTPManageSheet: View {
                 HStack(spacing: 8) {
                     Image(systemName: copiedCodes ? "checkmark" : "doc.on.doc")
                     Text(copiedCodes ? "Copied!" : "Copy All Codes")
-                        .font(.system(size: 14, weight: .medium))
+                        .font(.subheadline).fontWeight(.medium)
                 }
                 .foregroundColor(copiedCodes ? theme.success : theme.accentLight)
             }
@@ -694,17 +694,17 @@ struct TOTPManageSheet: View {
                     .fill(theme.warning.opacity(0.15))
                     .frame(width: 100, height: 100)
                 Image(systemName: "lock.open.fill")
-                    .font(.system(size: 44))
+                    .font(.largeTitle)
                     .foregroundColor(theme.warning)
             }
             .shadow(color: theme.warning.opacity(0.3), radius: 20)
 
             Text("Two-factor auth disabled")
-                .font(.system(size: 22, weight: .bold, design: .rounded))
+                .font(.title3).fontWeight(.bold).fontDesign(.rounded)
                 .foregroundColor(theme.textPrimary)
 
             Text("Your account is no longer protected by two-factor authentication. You can re-enable it from Settings.")
-                .font(.system(size: 14))
+                .font(.subheadline)
                 .foregroundColor(theme.textSecondary)
                 .multilineTextAlignment(.center)
         }

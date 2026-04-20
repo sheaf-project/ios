@@ -19,12 +19,12 @@ struct HomeView: View {
                         VStack(alignment: .leading, spacing: 4) {
                             if let name = store.systemProfile?.name {
                                 Text("Welcome, \(name)")
-                                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                                    .font(.title2).fontWeight(.bold).fontDesign(.rounded)
                                     .foregroundColor(theme.textPrimary)
                             }
                             if let since = store.oldestCurrentFront?.startedAt {
                                 Text("Since \(since.formatted(date: .omitted, time: .shortened))")
-                                    .font(.system(size: 13))
+                                    .font(.footnote)
                                     .foregroundColor(theme.textSecondary)
                             }
                         }
@@ -40,9 +40,9 @@ struct HomeView: View {
                             HStack(spacing: 8) {
                                 Image(systemName: "exclamationmark.triangle.fill")
                                     .foregroundColor(theme.danger)
-                                    .font(.system(size: 16))
+                                    .font(.subheadline)
                                 Text("Account Deletion Pending")
-                                    .font(.system(size: 15, weight: .semibold))
+                                    .font(.subheadline).fontWeight(.semibold)
                                     .foregroundColor(theme.danger)
                                 Spacer()
                             }
@@ -50,12 +50,12 @@ struct HomeView: View {
                                 let deadline = Calendar.current.date(byAdding: .day, value: days, to: deletionDate) ?? deletionDate
                                 if deadline > Date() {
                                     Text("Your account will be permanently deleted in \(deadline, style: .relative). Go to Settings to cancel account deletion.")
-                                        .font(.system(size: 13))
+                                        .font(.footnote)
                                         .foregroundColor(theme.textSecondary)
                                 }
                             } else {
                                 Text("Your account is scheduled for deletion. Go to Settings to cancel account deletion.")
-                                    .font(.system(size: 13))
+                                    .font(.footnote)
                                     .foregroundColor(theme.textSecondary)
                             }
                         }
@@ -103,7 +103,7 @@ struct HomeView: View {
                     // Quick switch section
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Quick Switch")
-                            .font(.system(size: 17, weight: .semibold))
+                            .font(.headline)
                             .foregroundColor(theme.textPrimary.opacity(0.8))
                             .padding(.horizontal, 24)
 
@@ -125,10 +125,10 @@ struct HomeView: View {
                                                 .frame(width: 52, height: 52)
                                             Image(systemName: "plus")
                                                 .foregroundColor(theme.textSecondary)
-                                                .font(.system(size: 18))
+                                                .font(.body)
                                         }
                                         Text("More")
-                                            .font(.system(size: 11))
+                                            .font(.caption2)
                                             .foregroundColor(theme.textTertiary)
                                     }
                                 }
@@ -194,12 +194,12 @@ struct FrontingMemberCard: View {
 
             VStack(alignment: .leading, spacing: 6) {
                 Text(member.displayName ?? member.name)
-                    .font(.system(size: 22, weight: .bold, design: .rounded))
+                    .font(.title3).fontWeight(.bold).fontDesign(.rounded)
                     .foregroundColor(theme.textPrimary)
 
                 if let pronouns = member.pronouns, !pronouns.isEmpty {
                     Text(pronouns)
-                        .font(.system(size: 13))
+                        .font(.footnote)
                         .foregroundColor(theme.textSecondary)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 3)
@@ -267,13 +267,13 @@ struct NoOneFrontingCard: View {
     var body: some View {
         VStack(spacing: 12) {
             Image(systemName: "moon.stars.fill")
-                .font(.system(size: 40))
+                .font(.largeTitle)
                 .foregroundColor(theme.textTertiary)
             Text("No one is fronting")
-                .font(.system(size: 18, weight: .medium, design: .rounded))
+                .font(.body).fontWeight(.medium).fontDesign(.rounded)
                 .foregroundColor(theme.textSecondary)
             Text("Use Quick Switch below to set who's fronting")
-                .font(.system(size: 13))
+                .font(.footnote)
                 .foregroundColor(theme.textTertiary)
                 .multilineTextAlignment(.center)
         }
@@ -298,13 +298,14 @@ struct QuickSwitchChip: View {
             VStack(spacing: 6) {
                 AvatarView(member: member, size: 52)
                 Text(member.displayName ?? member.name)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.caption2).fontWeight(.medium)
                     .foregroundColor(theme.textSecondary)
                     .lineLimit(1)
                     .frame(width: 64)
             }
         }
         .buttonStyle(ScaleButtonStyle())
+        .accessibilityLabel("Switch to \(member.displayName ?? member.name)")
     }
 }
 
@@ -336,10 +337,10 @@ struct AnnouncementBanner: View {
             HStack(spacing: 8) {
                 Image(systemName: severityIcon)
                     .foregroundColor(severityColor)
-                    .font(.system(size: 16))
+                    .font(.subheadline)
 
                 Text(announcement.title)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.subheadline).fontWeight(.semibold)
                     .foregroundColor(theme.textPrimary)
 
                 Spacer()
@@ -347,14 +348,15 @@ struct AnnouncementBanner: View {
                 if announcement.dismissible, let onDismiss {
                     Button(action: onDismiss) {
                         Image(systemName: "xmark")
-                            .font(.system(size: 12, weight: .medium))
+                            .font(.caption).fontWeight(.medium)
                             .foregroundColor(theme.textTertiary)
                     }
+                    .accessibilityLabel("Dismiss announcement")
                 }
             }
 
             Text(announcement.body)
-                .font(.system(size: 13))
+                .font(.footnote)
                 .foregroundColor(theme.textSecondary)
         }
         .padding(14)
@@ -421,15 +423,9 @@ struct SwitchFrontingSheet: View {
             theme.backgroundPrimary.ignoresSafeArea()
 
             VStack(spacing: 0) {
-                // Handle
-                Capsule()
-                    .fill(theme.inputBorder)
-                    .frame(width: 40, height: 4)
-                    .padding(.top, 12)
-
                 HStack {
                     Text("Switch Fronting")
-                        .font(.system(size: 20, weight: .bold, design: .rounded))
+                        .font(.title3).fontWeight(.bold).fontDesign(.rounded)
                         .foregroundColor(theme.textPrimary)
                     Spacer()
                     Button("Cancel") { dismiss() }
@@ -442,7 +438,7 @@ struct SwitchFrontingSheet: View {
                     Text(selectedIDs.isEmpty
                          ? "Select one or more"
                          : "\(selectedIDs.count) selected")
-                        .font(.system(size: 14))
+                        .font(.subheadline)
                         .foregroundColor(selectedIDs.isEmpty
                             ? .white.opacity(0.5)
                             : theme.accentLight)
@@ -458,7 +454,7 @@ struct SwitchFrontingSheet: View {
                         }
                     } label: {
                         Text(selectedIDs.count == store.members.count ? "Clear All" : "Select All")
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(.caption).fontWeight(.semibold)
                             .foregroundColor(theme.accentLight)
                             .padding(.horizontal, 10).padding(.vertical, 4)
                             .background(theme.accentLight.opacity(0.12))
@@ -503,7 +499,7 @@ struct SwitchFrontingSheet: View {
                             Text(selectedIDs.count > 1
                                  ? "Co-front (\(selectedIDs.count))"
                                  : "Switch Now")
-                                .font(.system(size: 17, weight: .semibold))
+                                .font(.headline)
                         }
                     }
                     .foregroundColor(.white)
@@ -524,6 +520,7 @@ struct SwitchFrontingSheet: View {
                 .padding(.bottom, 32)
             }
         }
+        .presentationDragIndicator(.visible)
         .onAppear {
             selectedIDs = Set(store.frontingMembers.map { $0.id })
         }
@@ -542,18 +539,18 @@ struct MemberSelectRow: View {
                 AvatarView(member: member, size: 44)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(member.displayName ?? member.name)
-                        .font(.system(size: 16, weight: .medium))
+                        .font(.subheadline).fontWeight(.medium)
                         .foregroundColor(theme.textPrimary)
                     if let p = member.pronouns, !p.isEmpty {
                         Text(p)
-                            .font(.system(size: 12))
+                            .font(.caption)
                             .foregroundColor(theme.textSecondary)
                     }
                 }
                 Spacer()
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                     .foregroundColor(isSelected ? theme.accentLight : theme.textTertiary)
-                    .font(.system(size: 22))
+                    .font(.title3)
             }
             .padding(14)
             .background(isSelected ? theme.accentLight.opacity(0.1) : theme.backgroundCard)

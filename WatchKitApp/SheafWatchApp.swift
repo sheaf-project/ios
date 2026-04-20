@@ -28,15 +28,15 @@ struct SheafWatchApp: App {
                 } else {
                     VStack(spacing: 12) {
                         Image(systemName: "iphone.and.arrow.forward")
-                            .font(.system(size: 36))
-                            .foregroundColor(.purple)
+                            .font(.largeTitle)
+                            .foregroundStyle(.tint)
 
                         Text("Set up on iPhone")
-                            .font(.system(size: 15, weight: .bold, design: .rounded))
+                            .font(.subheadline).fontWeight(.bold).fontDesign(.rounded)
                             .multilineTextAlignment(.center)
 
                         Text("Open Sheaf on your iPhone and sign in to get started.")
-                            .font(.system(size: 12))
+                            .font(.caption)
                             .foregroundColor(.secondary)
                             .multilineTextAlignment(.center)
 

@@ -82,14 +82,14 @@ extension SharedMember {
     }
 
     static var example: SharedMember {
-        SharedMember(id: "1", name: "Alice", displayName: "Alice", color: "#9B59B6", avatarURL: nil)
+        SharedMember(id: "1", name: "Alice", displayName: "Alice", pronouns: "she/her", color: "#9B59B6", avatarURL: nil, frontStartedAt: Date().addingTimeInterval(-7200))
     }
 
     static var examples: [SharedMember] {
         [
-            SharedMember(id: "1", name: "Alice", displayName: "Alice", color: "#9B59B6", avatarURL: nil),
-            SharedMember(id: "2", name: "Bob", displayName: "Bob", color: "#3498DB", avatarURL: nil),
-            SharedMember(id: "3", name: "Carol", displayName: "Carol", color: "#E74C3C", avatarURL: nil),
+            SharedMember(id: "1", name: "Alice", displayName: "Alice", pronouns: "she/her", color: "#9B59B6", avatarURL: nil, frontStartedAt: Date().addingTimeInterval(-7200)),
+            SharedMember(id: "2", name: "Bob", displayName: "Bob", pronouns: "he/him", color: "#3498DB", avatarURL: nil, frontStartedAt: Date().addingTimeInterval(-7200)),
+            SharedMember(id: "3", name: "Carol", displayName: "Carol", pronouns: nil, color: "#E74C3C", avatarURL: nil, frontStartedAt: Date().addingTimeInterval(-3600)),
         ]
     }
 }
@@ -97,20 +97,31 @@ extension SharedMember {
 // MARK: - Widget Avatar View
 
 struct WidgetAvatarView: View {
+    @Environment(\.widgetRenderingMode) var renderingMode
     let member: SharedMember
     let size: CGFloat
 
     var body: some View {
         ZStack {
-            Circle()
-                .fill(member.displayColor)
-            Text(member.initials)
-                .font(.system(size: size * 0.35, weight: .bold, design: .rounded))
-                .foregroundStyle(.white)
-                .fontWeight(.heavy)
-                .minimumScaleFactor(0.5)
-                .lineLimit(1)
-                .widgetAccentable()
+            if renderingMode == .accented {
+                Circle()
+                    .strokeBorder(.white, lineWidth: 1.5)
+                Text(member.initials)
+                    .font(.system(size: size * 0.35, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white)
+                    .fontWeight(.heavy)
+                    .minimumScaleFactor(0.5)
+                    .lineLimit(1)
+            } else {
+                Circle()
+                    .fill(member.displayColor)
+                Text(member.initials)
+                    .font(.system(size: size * 0.35, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white)
+                    .fontWeight(.heavy)
+                    .minimumScaleFactor(0.5)
+                    .lineLimit(1)
+            }
         }
         .frame(width: size, height: size)
         .clipShape(Circle())
@@ -231,9 +242,15 @@ struct RectangularView: View {
                             .font(.system(size: 11))
                             .foregroundColor(.secondary)
                     } else if entry.members.count == 1 {
-                        Text("Fronting")
-                            .font(.system(size: 11))
-                            .foregroundColor(.secondary)
+                        if let pronouns = entry.members[0].pronouns, !pronouns.isEmpty {
+                            Text(pronouns)
+                                .font(.system(size: 11))
+                                .foregroundStyle(.tertiary)
+                        } else {
+                            Text("Fronting")
+                                .font(.system(size: 11))
+                                .foregroundColor(.secondary)
+                        }
                     } else {
                         Text("Co-fronting")
                             .font(.system(size: 11))
@@ -285,13 +302,20 @@ struct SmallWidgetView: View {
             } else if entry.members.count == 1 {
                 let member = entry.members[0]
                 Spacer()
-                WidgetAvatarView(member: member, size: 48)
+                WidgetAvatarView(member: member, size: 44)
                 Text(member.displayName ?? member.name)
                     .font(.system(size: 14, weight: .semibold))
                     .lineLimit(1)
-                Text("Fronting")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
+                if let pronouns = member.pronouns, !pronouns.isEmpty {
+                    Text(pronouns)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.tertiary)
+                }
+                if let startedAt = member.frontStartedAt {
+                    Text(startedAt, style: .relative)
+                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                }
                 Spacer()
             } else {
                 Spacer()
@@ -314,6 +338,11 @@ struct SmallWidgetView: View {
                 } else {
                     Text("Co-fronting")
                         .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                }
+                if let startedAt = entry.members.first?.frontStartedAt {
+                    Text(startedAt, style: .relative)
+                        .font(.system(size: 11, weight: .medium, design: .monospaced))
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
@@ -361,25 +390,41 @@ struct MediumWidgetView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Currently Fronting")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                        .textCase(.uppercase)
+                    HStack(spacing: 4) {
+                        Text("Currently Fronting")
+                            .font(.caption2).fontWeight(.semibold)
+                            .foregroundStyle(.secondary)
+                        if let startedAt = entry.members.compactMap({ $0.frontStartedAt }).min() {
+                            Text("·")
+                                .font(.caption2).fontWeight(.semibold)
+                                .foregroundStyle(.secondary)
+                            Text(startedAt, style: .relative)
+                                .font(.caption2).fontWeight(.semibold)
+                                .fontDesign(.monospaced)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
 
                     ForEach(Array(entry.members.prefix(3).enumerated()), id: \.element.id) { _, member in
                         HStack(spacing: 6) {
                             Circle()
                                 .fill(member.displayColor)
                                 .frame(width: 8, height: 8)
+                                .widgetAccentable()
                             Text(member.displayName ?? member.name)
-                                .font(.system(size: 14, weight: .medium))
+                                .font(.subheadline).fontWeight(.medium)
                                 .lineLimit(1)
+                            if let pronouns = member.pronouns, !pronouns.isEmpty {
+                                Text(pronouns)
+                                    .font(.caption2)
+                                    .foregroundStyle(.tertiary)
+                            }
                         }
                     }
 
                     if entry.members.count > 3 {
                         Text("+\(entry.members.count - 3) more")
-                            .font(.system(size: 12))
+                            .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                 }

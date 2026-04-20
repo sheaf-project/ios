@@ -22,10 +22,10 @@ struct SessionsView: View {
             } else if sessions.isEmpty {
                 VStack(spacing: 12) {
                     Image(systemName: "desktopcomputer")
-                        .font(.system(size: 40))
+                        .font(.largeTitle)
                         .foregroundColor(theme.textTertiary)
                     Text("No Sessions")
-                        .font(.system(size: 18, weight: .semibold, design: .rounded))
+                        .font(.body).fontWeight(.semibold).fontDesign(.rounded)
                         .foregroundColor(theme.textSecondary)
                 }
             } else {
@@ -62,7 +62,7 @@ struct SessionsView: View {
                     }
                 } label: {
                     Image(systemName: "ellipsis.circle")
-                        .font(.system(size: 20))
+                        .font(.title3)
                         .foregroundColor(theme.accentLight)
                 }
             }
@@ -98,19 +98,19 @@ struct SessionsView: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 8) {
                     Image(systemName: iconForSession(session))
-                        .font(.system(size: 16))
+                        .font(.callout)
                         .foregroundColor(session.isCurrent ? theme.success : theme.accentLight)
                         .frame(width: 24)
 
                     VStack(alignment: .leading, spacing: 2) {
                         HStack(spacing: 6) {
                             Text(session.nickname ?? session.clientName ?? "Unknown Client")
-                                .font(.system(size: 15, weight: .medium))
+                                .font(.subheadline).fontWeight(.medium)
                                 .foregroundColor(theme.textPrimary)
                                 .lineLimit(1)
                             if session.isCurrent {
                                 Text("Current")
-                                    .font(.system(size: 10, weight: .bold))
+                                    .font(.caption2).fontWeight(.bold)
                                     .foregroundColor(theme.success)
                                     .padding(.horizontal, 6)
                                     .padding(.vertical, 2)
@@ -120,7 +120,7 @@ struct SessionsView: View {
                         }
                         if let ip = session.lastActiveIp ?? session.createdIp {
                             Text(ip)
-                                .font(.system(size: 12))
+                                .font(.caption)
                                 .foregroundColor(theme.textTertiary)
                         }
                     }
@@ -129,7 +129,7 @@ struct SessionsView: View {
 
                     if let lastActive = session.lastActiveAt {
                         Text(lastActive, format: .dateTime.month(.abbreviated).day().hour().minute())
-                            .font(.system(size: 11))
+                            .font(.caption2)
                             .foregroundColor(theme.textTertiary)
                     }
                 }

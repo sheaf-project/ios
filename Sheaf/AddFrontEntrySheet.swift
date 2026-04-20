@@ -38,7 +38,7 @@ struct AddFrontEntrySheet: View {
                                       ? "checkmark.circle.fill" : "circle")
                                     .foregroundColor(selectedIDs.contains(member.id)
                                         ? theme.accentLight : theme.textTertiary)
-                                    .font(.system(size: 20))
+                                    .font(.title3)
                             }
                         }
                         .buttonStyle(.plain)
@@ -52,11 +52,11 @@ struct AddFrontEntrySheet: View {
                                 Text(showAllMembers
                                      ? "Show less"
                                      : "Show \(allMembers.count - 5) more…")
-                                    .font(.system(size: 14))
+                                    .font(.subheadline)
                                     .foregroundColor(theme.accentLight)
                                 Spacer()
                                 Image(systemName: showAllMembers ? "chevron.up" : "chevron.down")
-                                    .font(.system(size: 12))
+                                    .font(.caption)
                                     .foregroundColor(theme.accentLight)
                             }
                         }
@@ -88,7 +88,7 @@ struct AddFrontEntrySheet: View {
                     Section {
                         Text(error)
                             .foregroundColor(theme.danger)
-                            .font(.system(size: 13))
+                            .font(.footnote)
                     }
                 }
             }

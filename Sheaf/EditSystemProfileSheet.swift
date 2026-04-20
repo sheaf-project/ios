@@ -69,7 +69,7 @@ struct EditSystemProfileSheet: View {
                     Section {
                         Text(error)
                             .foregroundColor(theme.danger)
-                            .font(.system(size: 13))
+                            .font(.footnote)
                     }
                 }
             }

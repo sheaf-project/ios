@@ -9,7 +9,8 @@ struct WatchSettingsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 10) {
                 Text("Settings")
-                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                    .font(.headline)
+                    .fontDesign(.rounded)
 
                 // Info rows
                 infoRow(icon: "link", label: String(localized: "URL"), value: shortURL)
@@ -22,18 +23,18 @@ struct WatchSettingsView: View {
                     Task { await store.loadAll() }
                 } label: {
                     Label("Refresh", systemImage: "arrow.clockwise")
-                        .font(.system(size: 13))
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .font(.footnote)
+                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                 }
                 .buttonStyle(.plain)
-                .foregroundColor(.purple)
+                .foregroundStyle(.tint)
 
                 Button {
                     showLogoutConfirm = true
                 } label: {
                     Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
-                        .font(.system(size: 13))
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .font(.footnote)
+                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                 }
                 .buttonStyle(.plain)
                 .foregroundColor(.red)
@@ -58,11 +59,12 @@ struct WatchSettingsView: View {
                 .foregroundColor(.secondary)
                 .frame(width: 16)
             Text(label)
-                .font(.system(size: 11))
+                .font(.caption2)
                 .foregroundColor(.secondary)
             Spacer()
             Text(value)
-                .font(.system(size: 11, weight: .medium))
+                .font(.caption2)
+                .fontWeight(.medium)
                 .lineLimit(1)
                 .truncationMode(.middle)
         }

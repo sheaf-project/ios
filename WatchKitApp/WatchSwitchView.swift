@@ -6,16 +6,19 @@ struct WatchSwitchView: View {
     @State private var selectedIDs: Set<String> = []
     @State private var isSwitching = false
     @State private var didSwitch   = false
+    @State private var searchText  = ""
+
+    private var filteredMembers: [Member] {
+        if searchText.isEmpty { return store.members }
+        return store.members.filter {
+            ($0.displayName ?? $0.name).localizedCaseInsensitiveContains(searchText)
+        }
+    }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Select who is fronting")
-                    .font(.system(size: 11))
-                    .foregroundColor(.secondary)
-
-                // Member checkboxes
-                ForEach(store.members) { member in
+        List {
+            // Member checkboxes
+            ForEach(filteredMembers) { member in
                     Button {
                         if selectedIDs.contains(member.id) {
                             selectedIDs.remove(member.id)
@@ -27,7 +30,8 @@ struct WatchSwitchView: View {
                             AvatarView(member: member, size: 28)
 
                             Text(member.displayName ?? member.name)
-                                .font(.system(size: 12, weight: .medium))
+                                .font(.footnote)
+                                .fontWeight(.semibold)
                                 .foregroundColor(.primary)
                                 .lineLimit(1)
 
@@ -37,16 +41,15 @@ struct WatchSwitchView: View {
                                   ? "checkmark.circle.fill" : "circle")
                                 .foregroundColor(selectedIDs.contains(member.id)
                                     ? .purple : .secondary)
-                                .font(.system(size: 16))
+                                .font(.title3)
                         }
-                        .padding(.vertical, 2)
+                        .padding(.vertical, 8)
                     }
                     .buttonStyle(.plain)
-                }
             }
-            .padding()
         }
         .navigationTitle("Switch")
+        .searchable(text: $searchText, prompt: "Search members")
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 if didSwitch {

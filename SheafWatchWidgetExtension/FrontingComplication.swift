@@ -233,9 +233,15 @@ struct RectangularComplicationView: View {
                             .font(.system(size: 11))
                             .foregroundColor(.secondary)
                     } else if entry.members.count == 1 {
-                        Text("Fronting")
-                            .font(.system(size: 11))
-                            .foregroundColor(.secondary)
+                        if let pronouns = entry.members[0].pronouns, !pronouns.isEmpty {
+                            Text(pronouns)
+                                .font(.system(size: 11))
+                                .foregroundColor(.secondary)
+                        } else {
+                            Text("Fronting")
+                                .font(.system(size: 11))
+                                .foregroundColor(.secondary)
+                        }
                     } else {
                         Text("Co-fronting")
                             .font(.system(size: 11))
@@ -385,14 +391,14 @@ struct FrontingComplication_Previews: PreviewProvider {
 // MARK: - Example Data
 extension SharedMember {
     static var example: SharedMember {
-        SharedMember(id: "1", name: "Alice", displayName: "Alice", color: "#9B59B6", avatarURL: nil)
+        SharedMember(id: "1", name: "Alice", displayName: "Alice", pronouns: "she/her", color: "#9B59B6", avatarURL: nil, frontStartedAt: Date().addingTimeInterval(-7200))
     }
     
     static var examples: [SharedMember] {
         [
-            SharedMember(id: "1", name: "Alice", displayName: "Alice", color: "#9B59B6", avatarURL: nil),
-            SharedMember(id: "2", name: "Bob", displayName: "Bob", color: "#3498DB", avatarURL: nil),
-            SharedMember(id: "3", name: "Carol", displayName: "Carol", color: "#E74C3C", avatarURL: nil),
+            SharedMember(id: "1", name: "Alice", displayName: "Alice", pronouns: "she/her", color: "#9B59B6", avatarURL: nil, frontStartedAt: Date().addingTimeInterval(-7200)),
+            SharedMember(id: "2", name: "Bob", displayName: "Bob", pronouns: "he/him", color: "#3498DB", avatarURL: nil, frontStartedAt: Date().addingTimeInterval(-7200)),
+            SharedMember(id: "3", name: "Carol", displayName: "Carol", pronouns: nil, color: "#E74C3C", avatarURL: nil, frontStartedAt: Date().addingTimeInterval(-3600)),
         ]
     }
 }

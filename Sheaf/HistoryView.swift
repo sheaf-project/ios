@@ -46,7 +46,7 @@ struct HistoryView: View {
                 // Header
                 HStack {
                     Text("History")
-                        .font(.system(size: 28, weight: .bold, design: .rounded))
+                        .font(.title2).fontWeight(.bold).fontDesign(.rounded)
                         .foregroundColor(theme.textPrimary)
                     Spacer()
                     HStack(spacing: 16) {
@@ -54,14 +54,14 @@ struct HistoryView: View {
                             showAddEntry = true
                         } label: {
                             Image(systemName: "plus.circle.fill")
-                                .font(.system(size: 22))
+                                .font(.title3)
                                 .foregroundColor(theme.accentLight)
                         }
                         Button {
                             Task { await reload() }
                         } label: {
                             Image(systemName: "arrow.clockwise")
-                                .font(.system(size: 16, weight: .semibold))
+                                .font(.subheadline).fontWeight(.semibold)
                                 .foregroundColor(theme.textSecondary)
                         }
                     }
@@ -78,10 +78,10 @@ struct HistoryView: View {
                     Spacer()
                     VStack(spacing: 12) {
                         Image(systemName: "clock")
-                            .font(.system(size: 44))
+                            .font(.largeTitle)
                             .foregroundColor(theme.textTertiary)
                         Text("No front history yet")
-                            .font(.system(size: 18, weight: .medium, design: .rounded))
+                            .font(.body).fontWeight(.medium).fontDesign(.rounded)
                             .foregroundColor(theme.textTertiary)
                     }
                     Spacer()
@@ -96,14 +96,14 @@ struct HistoryView: View {
                             } label: {
                                 HStack {
                                     Image(systemName: "chart.bar.fill")
-                                        .font(.system(size: 13))
+                                        .font(.footnote)
                                         .foregroundColor(theme.accentLight)
                                     Text("Timeline")
-                                        .font(.system(size: 14, weight: .semibold))
+                                        .font(.subheadline).fontWeight(.semibold)
                                         .foregroundColor(theme.textSecondary)
                                     Spacer()
                                     Image(systemName: showGraph ? "chevron.up" : "chevron.down")
-                                        .font(.system(size: 12, weight: .medium))
+                                        .font(.caption).fontWeight(.medium)
                                         .foregroundColor(theme.textTertiary)
                                 }
                             }
@@ -160,7 +160,7 @@ struct HistoryView: View {
                                         Button("Load More") {
                                             Task { await loadMore() }
                                         }
-                                        .font(.system(size: 14, weight: .medium))
+                                        .font(.subheadline).fontWeight(.medium)
                                         .foregroundColor(theme.accentLight)
                                     }
                                     Spacer()
@@ -264,7 +264,7 @@ struct FrontTimelineGraph: View {
             // Title + range picker
             HStack {
                 Text(timeRange.label)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.subheadline).fontWeight(.semibold)
                     .foregroundColor(theme.textSecondary)
                 Spacer()
                 HStack(spacing: 0) {
@@ -275,7 +275,7 @@ struct FrontTimelineGraph: View {
                             }
                         } label: {
                             Text(range.rawValue)
-                                .font(.system(size: 11, weight: timeRange == range ? .bold : .medium))
+                                .font(.caption2).fontWeight(timeRange == range ? .bold : .medium)
                                 .foregroundColor(timeRange == range ? theme.accentLight : theme.textTertiary)
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 4)
@@ -300,7 +300,7 @@ struct FrontTimelineGraph: View {
                                 .fill(member.displayColor)
                                 .frame(width: 7, height: 7)
                             Text(member.displayName ?? member.name)
-                                .font(.system(size: 10))
+                                .font(.caption2)
                                 .foregroundColor(theme.textSecondary)
                         }
                     }
@@ -317,7 +317,7 @@ struct FrontTimelineGraph: View {
                         Text(timeRange.days <= 14
                              ? day.formatted(.dateTime.weekday(.abbreviated))
                              : day.formatted(.dateTime.month(.abbreviated).day()))
-                            .font(.system(size: 9, weight: .medium))
+                            .font(.caption2).fontWeight(.medium)
                             .foregroundColor(theme.textTertiary)
                             .frame(maxWidth: .infinity)
                     }
@@ -357,7 +357,7 @@ struct SwimLane: View {
         HStack(spacing: 4) {
             // Member initial label
             Text(member.initials)
-                .font(.system(size: 8, weight: .bold))
+                .font(.caption2).fontWeight(.bold)
                 .foregroundColor(member.displayColor)
                 .frame(width: 20, alignment: .center)
 
@@ -427,23 +427,23 @@ struct FrontHistoryRow: View {
             VStack(alignment: .leading, spacing: 3) {
                 // Names
                 Text(members.isEmpty ? "Unknown" : members.map { $0.displayName ?? $0.name }.joined(separator: ", "))
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.subheadline).fontWeight(.semibold)
                     .foregroundColor(theme.textPrimary)
                     .lineLimit(1)
 
                 // Time range
                 HStack(spacing: 6) {
                     Text(entry.startedAt.formatted(date: .abbreviated, time: .shortened))
-                        .font(.system(size: 11))
+                        .font(.caption2)
                         .foregroundColor(theme.textTertiary)
 
                     if isActive {
                         Text("· now")
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(.caption2).fontWeight(.semibold)
                             .foregroundColor(theme.success)
                     } else if let end = entry.endedAt {
                         Text("→ \(end.formatted(date: .omitted, time: .shortened))")
-                            .font(.system(size: 11))
+                            .font(.caption2)
                             .foregroundColor(theme.textTertiary)
                     }
                 }
@@ -460,12 +460,12 @@ struct FrontHistoryRow: View {
                             .frame(width: 6, height: 6)
                             .shadow(color: theme.success.opacity(0.8), radius: 3)
                         Text("Active")
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(.caption2).fontWeight(.semibold)
                             .foregroundColor(theme.success)
                     }
                 }
                 Text(duration)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.caption).fontWeight(.medium)
                     .foregroundColor(theme.textTertiary)
             }
         }

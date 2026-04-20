@@ -4,6 +4,14 @@ import SwiftUI
 struct WatchMembersView: View {
     @EnvironmentObject var store: WatchStore
     @State private var showAddMember = false
+    @State private var searchText = ""
+
+    private var filteredMembers: [Member] {
+        if searchText.isEmpty { return store.members }
+        return store.members.filter {
+            ($0.displayName ?? $0.name).localizedCaseInsensitiveContains(searchText)
+        }
+    }
 
     var body: some View {
         List {
@@ -12,10 +20,10 @@ struct WatchMembersView: View {
                     .frame(maxWidth: .infinity, alignment: .center)
             } else if store.members.isEmpty {
                 Text("No members")
-                    .font(.system(size: 12))
+                    .font(.caption)
                     .foregroundColor(.secondary)
             } else {
-                ForEach(store.members) { member in
+                ForEach(filteredMembers) { member in
                     let isFronting = store.frontingMembers.contains(where: { $0.id == member.id })
                     NavigationLink {
                         WatchMemberDetailView(member: member, isFronting: isFronting)
@@ -63,6 +71,7 @@ struct WatchMembersView: View {
             }
         }
         .navigationTitle("Members")
+        .searchable(text: $searchText, prompt: "Search members")
         .onAppear { store.loadAll() }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -120,18 +129,20 @@ struct WatchMemberDetailView: View {
                 // Name + pronouns
                 VStack(spacing: 4) {
                     Text(member.displayName ?? member.name)
-                        .font(.system(size: 16, weight: .bold, design: .rounded))
+                        .font(.headline)
+                        .fontDesign(.rounded)
                         .multilineTextAlignment(.center)
 
                     if let pronouns = member.pronouns, !pronouns.isEmpty {
                         Text(pronouns)
-                            .font(.system(size: 12))
+                            .font(.caption)
                             .foregroundColor(.secondary)
                     }
 
                     if isFronting {
                         Label("Fronting", systemImage: "checkmark.seal.fill")
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(.caption2)
+                            .fontWeight(.semibold)
                             .foregroundColor(.green)
                             .padding(.top, 2)
                     }
@@ -140,7 +151,7 @@ struct WatchMemberDetailView: View {
                 // Description
                 if let desc = member.description, !desc.isEmpty {
                     Text(desc)
-                        .font(.system(size: 11))
+                        .font(.caption2)
                         .foregroundColor(.secondary)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 4)
@@ -159,7 +170,7 @@ struct WatchMemberDetailView: View {
                         }
                     } label: {
                         Label("Remove from Front", systemImage: "person.fill.xmark")
-                            .font(.system(size: 13))
+                            .font(.footnote)
                     }
                     .tint(.orange)
                     .buttonStyle(.borderedProminent)
@@ -172,7 +183,7 @@ struct WatchMemberDetailView: View {
                         }
                     } label: {
                         Label("Add to Front", systemImage: "person.fill.checkmark")
-                            .font(.system(size: 13))
+                            .font(.footnote)
                     }
                     .tint(.purple)
                     .buttonStyle(.borderedProminent)
@@ -182,7 +193,7 @@ struct WatchMemberDetailView: View {
                         Task { await store.switchFronting(to: [member.id]) }
                     } label: {
                         Label("Set as sole fronter", systemImage: "arrow.left.arrow.right")
-                            .font(.system(size: 13))
+                            .font(.footnote)
                     }
                     .buttonStyle(.bordered)
                     .buttonBorderShape(.roundedRectangle)
@@ -195,7 +206,7 @@ struct WatchMemberDetailView: View {
                         showGroupPicker = true
                     } label: {
                         Label("Add to Group", systemImage: "folder.badge.plus")
-                            .font(.system(size: 13))
+                            .font(.footnote)
                     }
                     .buttonStyle(.bordered)
                     .buttonBorderShape(.roundedRectangle)
@@ -223,11 +234,12 @@ struct WatchMemberTile: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(member.displayName ?? member.name)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.footnote)
+                    .fontWeight(.semibold)
                     .lineLimit(1)
                 if let pronouns = member.pronouns, !pronouns.isEmpty {
                     Text(pronouns)
-                        .font(.system(size: 10))
+                        .font(.caption2)
                         .foregroundColor(.secondary)
                 }
             }
@@ -267,13 +279,13 @@ struct WatchMemberGroupPickerView: View {
                                     .fill(group.displayColor)
                                     .frame(width: 10, height: 10)
                                 Text(group.name)
-                                    .font(.system(size: 13))
+                                    .font(.footnote)
                                     .lineLimit(1)
                                 Spacer()
                                 if memberGroupIDs.contains(group.id) {
                                     Image(systemName: "checkmark")
                                         .foregroundColor(.green)
-                                        .font(.system(size: 12))
+                                        .font(.caption)
                                 }
                             }
                         }
@@ -329,7 +341,7 @@ struct WatchGroupsView: View {
                     .frame(maxWidth: .infinity, alignment: .center)
             } else if store.groups.isEmpty {
                 Text("No groups")
-                    .font(.system(size: 12))
+                    .font(.caption)
                     .foregroundColor(.secondary)
             } else {
                 ForEach(store.groups) { group in
@@ -342,7 +354,8 @@ struct WatchGroupsView: View {
                                 .fill(group.displayColor)
                                 .frame(width: 10, height: 10)
                             Text(group.name)
-                                .font(.system(size: 13, weight: .semibold))
+                                .font(.footnote)
+                                .fontWeight(.semibold)
                                 .lineLimit(1)
                         }
                     }
@@ -386,7 +399,7 @@ struct WatchGroupDetailView: View {
         List {
             if let desc = group.description, !desc.isEmpty {
                 Text(desc)
-                    .font(.system(size: 11))
+                    .font(.caption2)
                     .foregroundColor(.secondary)
             }
 
@@ -396,14 +409,14 @@ struct WatchGroupDetailView: View {
                         .frame(maxWidth: .infinity, alignment: .center)
                 } else if groupMembers.isEmpty {
                     Text("No members")
-                        .font(.system(size: 12))
+                        .font(.caption)
                         .foregroundColor(.secondary)
                 } else {
                     ForEach(groupMembers) { member in
                         HStack(spacing: 10) {
                             AvatarView(member: member, size: 28)
                             Text(member.displayName ?? member.name)
-                                .font(.system(size: 13))
+                                .font(.footnote)
                                 .lineLimit(1)
                         }
                         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
@@ -421,7 +434,7 @@ struct WatchGroupDetailView: View {
                 showMemberPicker = true
             } label: {
                 Label("Manage Members", systemImage: "person.2.badge.gearshape")
-                    .font(.system(size: 13))
+                    .font(.footnote)
             }
         }
         .navigationTitle(group.name)
@@ -479,13 +492,13 @@ struct WatchGroupMemberPickerView: View {
                         HStack(spacing: 10) {
                             AvatarView(member: member, size: 28)
                             Text(member.displayName ?? member.name)
-                                .font(.system(size: 13))
+                                .font(.footnote)
                                 .lineLimit(1)
                             Spacer()
                             if selectedIDs.contains(member.id) {
                                 Image(systemName: "checkmark")
                                     .foregroundColor(.green)
-                                    .font(.system(size: 12))
+                                    .font(.caption)
                             }
                         }
                     }

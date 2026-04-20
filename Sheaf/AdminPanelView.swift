@@ -116,17 +116,17 @@ struct AdminPanelView: View {
             VStack(spacing: 24) {
                 VStack(spacing: 12) {
                     Image(systemName: "shield.lefthalf.filled")
-                        .font(.system(size: 48))
+                        .font(.largeTitle)
                         .foregroundColor(theme.accentLight)
 
                     Text("Admin Authentication")
-                        .font(.system(size: 22, weight: .bold, design: .rounded))
+                        .font(.title3).fontWeight(.bold).fontDesign(.rounded)
                         .foregroundColor(theme.textPrimary)
 
                     Text(authLevel == "totp"
                          ? "Enter your TOTP code to access the admin panel."
                          : "Enter your password to access the admin panel.")
-                        .font(.system(size: 14))
+                        .font(.subheadline)
                         .foregroundColor(theme.textSecondary)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 32)
@@ -137,10 +137,10 @@ struct AdminPanelView: View {
                     if authLevel == "password" {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Password")
-                                .font(.system(size: 13, weight: .semibold))
+                                .font(.footnote).fontWeight(.semibold)
                                 .foregroundColor(theme.textSecondary)
                             SecureField("Enter your password", text: $password)
-                                .autocapitalization(.none)
+                                .textInputAutocapitalization(.never)
                                 .autocorrectionDisabled()
                                 .padding(14)
                                 .background(theme.backgroundCard)
@@ -152,7 +152,7 @@ struct AdminPanelView: View {
                     if authLevel == "totp" {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("TOTP Code")
-                                .font(.system(size: 13, weight: .semibold))
+                                .font(.footnote).fontWeight(.semibold)
                                 .foregroundColor(theme.textSecondary)
                             TextField("6-digit code", text: $totpCode)
                                 .keyboardType(.numberPad)
@@ -167,7 +167,7 @@ struct AdminPanelView: View {
 
                 if let authError {
                     Text(authError)
-                        .font(.system(size: 13))
+                        .font(.footnote)
                         .foregroundColor(theme.danger)
                         .padding(.horizontal, 24)
                 }
@@ -181,7 +181,7 @@ struct AdminPanelView: View {
                             ProgressView().tint(.white).scaleEffect(0.8)
                         }
                         Text("Authenticate")
-                            .font(.system(size: 16, weight: .semibold))
+                            .font(.headline)
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
@@ -236,7 +236,7 @@ struct AdminPanelView: View {
     private var approvalsSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("PENDING APPROVALS")
-                .font(.system(size: 12, weight: .semibold))
+                .font(.caption).fontWeight(.semibold)
                 .foregroundColor(theme.textSecondary)
                 .textCase(.uppercase)
                 .kerning(0.8)
@@ -250,10 +250,10 @@ struct AdminPanelView: View {
                     Spacer()
                     VStack(spacing: 8) {
                         Image(systemName: "checkmark.seal.fill")
-                            .font(.system(size: 28))
+                            .font(.title2)
                             .foregroundColor(theme.success)
                         Text("No pending approvals")
-                            .font(.system(size: 14))
+                            .font(.subheadline)
                             .foregroundColor(theme.textSecondary)
                     }
                     .padding(.vertical, 20)
@@ -266,20 +266,20 @@ struct AdminPanelView: View {
                             HStack {
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text(user.email)
-                                        .font(.system(size: 15, weight: .medium))
+                                        .font(.subheadline).fontWeight(.medium)
                                         .foregroundColor(theme.textPrimary)
                                     HStack(spacing: 8) {
                                         Text(user.createdAt, style: .date)
-                                            .font(.system(size: 12))
+                                            .font(.caption)
                                             .foregroundColor(theme.textTertiary)
                                         if let ip = user.signupIp {
                                             Text(ip)
-                                                .font(.system(size: 11, design: .monospaced))
+                                                .font(.caption2).fontDesign(.monospaced)
                                                 .foregroundColor(theme.textTertiary)
                                         }
                                         if !user.emailVerified {
                                             Text("Unverified")
-                                                .font(.system(size: 10, weight: .medium))
+                                                .font(.caption2).fontWeight(.medium)
                                                 .foregroundColor(theme.warning)
                                                 .padding(.horizontal, 6)
                                                 .padding(.vertical, 2)
@@ -298,7 +298,7 @@ struct AdminPanelView: View {
                                         Image(systemName: "checkmark.circle.fill")
                                         Text("Approve")
                                     }
-                                    .font(.system(size: 13, weight: .semibold))
+                                    .font(.footnote).fontWeight(.semibold)
                                     .foregroundColor(theme.success)
                                     .padding(.horizontal, 14)
                                     .padding(.vertical, 8)
@@ -312,7 +312,7 @@ struct AdminPanelView: View {
                                         Image(systemName: "xmark.circle.fill")
                                         Text("Reject")
                                     }
-                                    .font(.system(size: 13, weight: .semibold))
+                                    .font(.footnote).fontWeight(.semibold)
                                     .foregroundColor(theme.danger)
                                     .padding(.horizontal, 14)
                                     .padding(.vertical, 8)
@@ -399,7 +399,7 @@ struct AdminPanelView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text("INVITE CODES")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.caption).fontWeight(.semibold)
                     .foregroundColor(theme.textSecondary)
                     .textCase(.uppercase)
                     .kerning(0.8)
@@ -408,7 +408,7 @@ struct AdminPanelView: View {
                     showCreateInvite = true
                 } label: {
                     Image(systemName: "plus.circle.fill")
-                        .font(.system(size: 20))
+                        .font(.title3)
                         .foregroundColor(theme.accentLight)
                 }
             }
@@ -422,10 +422,10 @@ struct AdminPanelView: View {
                     Spacer()
                     VStack(spacing: 8) {
                         Image(systemName: "ticket")
-                            .font(.system(size: 28))
+                            .font(.title2)
                             .foregroundColor(theme.textTertiary)
                         Text("No invite codes")
-                            .font(.system(size: 14))
+                            .font(.subheadline)
                             .foregroundColor(theme.textSecondary)
                     }
                     .padding(.vertical, 20)
@@ -472,7 +472,7 @@ struct AdminPanelView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text(invite.code)
-                    .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                    .font(.subheadline).fontWeight(.semibold).fontDesign(.monospaced)
                     .foregroundColor(theme.textPrimary)
                     .lineLimit(1)
 
@@ -484,7 +484,7 @@ struct AdminPanelView: View {
                     }
                 } label: {
                     Image(systemName: copiedInviteCode == invite.id ? "checkmark" : "doc.on.doc")
-                        .font(.system(size: 12))
+                        .font(.caption)
                         .foregroundColor(copiedInviteCode == invite.id ? theme.success : theme.textTertiary)
                 }
 
@@ -504,23 +504,23 @@ struct AdminPanelView: View {
                 // Uses
                 Label(invite.maxUses > 0 ? "\(invite.useCount)/\(invite.maxUses) uses" : "\(invite.useCount) uses",
                       systemImage: "person.2")
-                    .font(.system(size: 11))
+                    .font(.caption2)
                     .foregroundColor(theme.textTertiary)
 
                 // Expiry
                 if let exp = invite.expiresAt {
                     if exp < Date() {
                         Label("Expired \(exp, style: .relative) ago", systemImage: "clock")
-                            .font(.system(size: 11))
+                            .font(.caption2)
                             .foregroundColor(theme.danger)
                     } else {
                         Label("Expires \(exp, style: .relative)", systemImage: "clock")
-                            .font(.system(size: 11))
+                            .font(.caption2)
                             .foregroundColor(theme.textTertiary)
                     }
                 } else {
                     Label("No expiry", systemImage: "infinity")
-                        .font(.system(size: 11))
+                        .font(.caption2)
                         .foregroundColor(theme.textTertiary)
                 }
 
@@ -529,7 +529,7 @@ struct AdminPanelView: View {
                 // Delete button
                 Button { inviteToDelete = invite } label: {
                     Image(systemName: "trash")
-                        .font(.system(size: 13))
+                        .font(.footnote)
                         .foregroundColor(theme.danger.opacity(0.7))
                 }
             }
@@ -537,7 +537,7 @@ struct AdminPanelView: View {
             // Note
             if let note = invite.note, !note.isEmpty {
                 Text(note)
-                    .font(.system(size: 12))
+                    .font(.caption)
                     .foregroundColor(theme.textSecondary)
                     .lineLimit(2)
             }
@@ -548,7 +548,7 @@ struct AdminPanelView: View {
 
     private func inviteBadge(_ text: String, color: Color) -> some View {
         Text(text)
-            .font(.system(size: 10, weight: .semibold))
+            .font(.caption2).fontWeight(.semibold)
             .foregroundColor(color)
             .padding(.horizontal, 8)
             .padding(.vertical, 3)
@@ -585,7 +585,7 @@ struct AdminPanelView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text("ANNOUNCEMENTS")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.caption).fontWeight(.semibold)
                     .foregroundColor(theme.textSecondary)
                     .textCase(.uppercase)
                     .kerning(0.8)
@@ -594,7 +594,7 @@ struct AdminPanelView: View {
                     showCreateAnnouncement = true
                 } label: {
                     Image(systemName: "plus.circle.fill")
-                        .font(.system(size: 20))
+                        .font(.title3)
                         .foregroundColor(theme.accentLight)
                 }
             }
@@ -608,10 +608,10 @@ struct AdminPanelView: View {
                     Spacer()
                     VStack(spacing: 8) {
                         Image(systemName: "megaphone")
-                            .font(.system(size: 28))
+                            .font(.title2)
                             .foregroundColor(theme.textTertiary)
                         Text("No announcements")
-                            .font(.system(size: 14))
+                            .font(.subheadline)
                             .foregroundColor(theme.textSecondary)
                     }
                     .padding(.vertical, 20)
@@ -682,7 +682,7 @@ struct AdminPanelView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text(announcement.title)
-                    .font(.system(size: 15, weight: .medium))
+                    .font(.subheadline).fontWeight(.medium)
                     .foregroundColor(theme.textPrimary)
                     .lineLimit(1)
                 Spacer()
@@ -691,7 +691,7 @@ struct AdminPanelView: View {
             HStack(spacing: 8) {
                 if !announcement.active {
                     Text("Inactive")
-                        .font(.system(size: 10, weight: .medium))
+                        .font(.caption2).fontWeight(.medium)
                         .foregroundColor(theme.textTertiary)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
@@ -700,7 +700,7 @@ struct AdminPanelView: View {
                 }
                 if !announcement.dismissible {
                     Text("Persistent")
-                        .font(.system(size: 10, weight: .medium))
+                        .font(.caption2).fontWeight(.medium)
                         .foregroundColor(theme.warning)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
@@ -708,7 +708,7 @@ struct AdminPanelView: View {
                         .cornerRadius(4)
                 }
                 Text(announcement.createdAt, style: .date)
-                    .font(.system(size: 12))
+                    .font(.caption)
                     .foregroundColor(theme.textTertiary)
             }
         }
@@ -725,7 +725,7 @@ struct AdminPanelView: View {
             }
         }()
         return Text(text)
-            .font(.system(size: 10, weight: .semibold))
+            .font(.caption2).fontWeight(.semibold)
             .foregroundColor(color)
             .padding(.horizontal, 8)
             .padding(.vertical, 3)
@@ -755,7 +755,7 @@ struct AdminPanelView: View {
     private var statsSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("STATISTICS")
-                .font(.system(size: 12, weight: .semibold))
+                .font(.caption).fontWeight(.semibold)
                 .foregroundColor(theme.textSecondary)
                 .textCase(.uppercase)
                 .kerning(0.8)
@@ -774,11 +774,11 @@ struct AdminPanelView: View {
                         ForEach(stats.usersByTier.sorted(by: { $0.value > $1.value }), id: \.key) { tier, count in
                             HStack {
                                 Text(formatTierLabel(tier))
-                                    .font(.system(size: 14, weight: .medium))
+                                    .font(.subheadline).fontWeight(.medium)
                                     .foregroundColor(theme.textPrimary)
                                 Spacer()
                                 Text("\(count)")
-                                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                                    .font(.subheadline).fontWeight(.semibold).fontDesign(.rounded)
                                     .foregroundColor(theme.textSecondary)
                             }
                             .padding(.horizontal, 16)
@@ -799,13 +799,13 @@ struct AdminPanelView: View {
     private func adminStatCard(title: String, value: String, icon: String) -> some View {
         VStack(spacing: 8) {
             Image(systemName: icon)
-                .font(.system(size: 22))
+                .font(.title3)
                 .foregroundColor(theme.accentLight)
             Text(value)
-                .font(.system(size: 20, weight: .bold, design: .rounded))
+                .font(.title3).fontWeight(.bold).fontDesign(.rounded)
                 .foregroundColor(theme.textPrimary)
             Text(title)
-                .font(.system(size: 12, weight: .medium))
+                .font(.caption).fontWeight(.medium)
                 .foregroundColor(theme.textSecondary)
         }
         .frame(maxWidth: .infinity)
@@ -819,7 +819,7 @@ struct AdminPanelView: View {
     private var userManagementSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("USERS")
-                .font(.system(size: 12, weight: .semibold))
+                .font(.caption).fontWeight(.semibold)
                 .foregroundColor(theme.textSecondary)
                 .textCase(.uppercase)
                 .kerning(0.8)
@@ -831,7 +831,7 @@ struct AdminPanelView: View {
                     Image(systemName: "magnifyingglass")
                         .foregroundColor(theme.textTertiary)
                     TextField("Search users...", text: $searchText)
-                        .autocapitalization(.none)
+                        .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .foregroundColor(theme.textPrimary)
                 }
@@ -853,10 +853,10 @@ struct AdminPanelView: View {
                 } else if users.isEmpty {
                     VStack(spacing: 12) {
                         Image(systemName: "person.slash.fill")
-                            .font(.system(size: 32))
+                            .font(.title)
                             .foregroundColor(theme.textTertiary)
                         Text("No users found")
-                            .font(.system(size: 15))
+                            .font(.subheadline)
                             .foregroundColor(theme.textSecondary)
                     }
                     .padding(.vertical, 24)
@@ -884,7 +884,7 @@ struct AdminPanelView: View {
                                         ProgressView().tint(theme.accentLight).scaleEffect(0.8)
                                     }
                                     Text("Load More")
-                                        .font(.system(size: 14, weight: .medium))
+                                        .font(.subheadline).fontWeight(.medium)
                                         .foregroundColor(theme.accentLight)
                                 }
                                 .frame(maxWidth: .infinity)
@@ -906,12 +906,12 @@ struct AdminPanelView: View {
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
                     Text(user.email)
-                        .font(.system(size: 15, weight: .medium))
+                        .font(.subheadline).fontWeight(.medium)
                         .foregroundColor(theme.textPrimary)
                         .lineLimit(1)
                     if user.isAdmin {
                         Text("Admin")
-                            .font(.system(size: 10, weight: .bold))
+                            .font(.caption2).fontWeight(.bold)
                             .foregroundColor(theme.accentLight)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
@@ -921,19 +921,19 @@ struct AdminPanelView: View {
                 }
                 HStack(spacing: 8) {
                     Text(formatAdminTier(user.tier))
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.caption).fontWeight(.medium)
                         .foregroundColor(theme.textTertiary)
                     Text("\(user.memberCount) members")
-                        .font(.system(size: 12))
+                        .font(.caption)
                         .foregroundColor(theme.textTertiary)
                     Text(formatBytes(user.storageUsedBytes))
-                        .font(.system(size: 12))
+                        .font(.caption)
                         .foregroundColor(theme.textTertiary)
                 }
             }
             Spacer()
             Image(systemName: "chevron.right")
-                .font(.system(size: 12))
+                .font(.caption)
                 .foregroundColor(theme.textTertiary)
         }
         .padding(.horizontal, 16)
@@ -945,7 +945,7 @@ struct AdminPanelView: View {
     private var maintenanceSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("MAINTENANCE")
-                .font(.system(size: 12, weight: .semibold))
+                .font(.caption).fontWeight(.semibold)
                 .foregroundColor(theme.textSecondary)
                 .textCase(.uppercase)
                 .kerning(0.8)
@@ -1010,15 +1010,15 @@ struct AdminPanelView: View {
         Button(action: action) {
             HStack(spacing: 12) {
                 Image(systemName: icon)
-                    .font(.system(size: 18))
+                    .font(.body)
                     .foregroundColor(theme.warning)
                     .frame(width: 28)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
-                        .font(.system(size: 15, weight: .medium))
+                        .font(.subheadline).fontWeight(.medium)
                         .foregroundColor(theme.textPrimary)
                     Text(subtitle)
-                        .font(.system(size: 12))
+                        .font(.caption)
                         .foregroundColor(theme.textTertiary)
                 }
                 Spacer()
@@ -1263,13 +1263,13 @@ struct AdminUserEditSheet: View {
 
                         if let recoveryMessage {
                             Text(recoveryMessage)
-                                .font(.system(size: 13))
+                                .font(.footnote)
                                 .foregroundColor(isRecoveryError ? theme.danger : theme.success)
                         }
 
                         if let error {
                             Text(error)
-                                .font(.system(size: 13))
+                                .font(.footnote)
                                 .foregroundColor(theme.danger)
                         }
                     }
@@ -1293,7 +1293,7 @@ struct AdminUserEditSheet: View {
                             ProgressView().tint(theme.accentLight).scaleEffect(0.8)
                         } else {
                             Text("Save")
-                                .font(.system(size: 16, weight: .semibold))
+                                .font(.callout).fontWeight(.semibold)
                                 .foregroundColor(theme.accentLight)
                         }
                     }
@@ -1312,7 +1312,7 @@ struct AdminUserEditSheet: View {
             .alert("Change Email", isPresented: $showChangeEmail) {
                 TextField("New email address", text: $newEmail)
                     .keyboardType(.emailAddress)
-                    .autocapitalization(.none)
+                    .textInputAutocapitalization(.never)
                 Button("Change", role: .destructive) {
                     Task { await adminChangeEmail() }
                 }
@@ -1350,7 +1350,7 @@ struct AdminUserEditSheet: View {
     private var userInfoSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("USER INFO")
-                .font(.system(size: 12, weight: .semibold))
+                .font(.caption).fontWeight(.semibold)
                 .foregroundColor(theme.textSecondary)
                 .textCase(.uppercase)
                 .kerning(0.8)
@@ -1376,7 +1376,7 @@ struct AdminUserEditSheet: View {
     private var editableFieldsSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("SETTINGS")
-                .font(.system(size: 12, weight: .semibold))
+                .font(.caption).fontWeight(.semibold)
                 .foregroundColor(theme.textSecondary)
                 .textCase(.uppercase)
                 .kerning(0.8)
@@ -1384,7 +1384,7 @@ struct AdminUserEditSheet: View {
             VStack(spacing: 0) {
                 HStack {
                     Text("Tier")
-                        .font(.system(size: 15))
+                        .font(.subheadline)
                         .foregroundColor(theme.textPrimary)
                     Spacer()
                     Picker("Tier", selection: $selectedTier) {
@@ -1401,7 +1401,7 @@ struct AdminUserEditSheet: View {
 
                 Toggle(isOn: $isAdmin) {
                     Text("Administrator")
-                        .font(.system(size: 15))
+                        .font(.subheadline)
                         .foregroundColor(theme.textPrimary)
                 }
                 .tint(theme.accentLight)
@@ -1412,7 +1412,7 @@ struct AdminUserEditSheet: View {
 
                 HStack {
                     Text("Member Limit")
-                        .font(.system(size: 15))
+                        .font(.subheadline)
                         .foregroundColor(theme.textPrimary)
                     Spacer()
                     TextField("Default", text: $memberLimitText)
@@ -1440,7 +1440,7 @@ struct AdminUserEditSheet: View {
     private var recoveryToolsSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("RECOVERY TOOLS")
-                .font(.system(size: 12, weight: .semibold))
+                .font(.caption).fontWeight(.semibold)
                 .foregroundColor(theme.textSecondary)
                 .textCase(.uppercase)
                 .kerning(0.8)
@@ -1496,11 +1496,11 @@ struct AdminUserEditSheet: View {
     private func infoRow(label: String, value: String) -> some View {
         HStack {
             Text(label)
-                .font(.system(size: 15))
+                .font(.subheadline)
                 .foregroundColor(theme.textSecondary)
             Spacer()
             Text(value)
-                .font(.system(size: 14))
+                .font(.subheadline)
                 .foregroundColor(theme.textPrimary)
                 .lineLimit(1)
         }
@@ -1543,20 +1543,20 @@ struct AdminUserEditSheet: View {
         Button(action: action) {
             HStack(spacing: 12) {
                 Image(systemName: icon)
-                    .font(.system(size: 16))
+                    .font(.callout)
                     .foregroundColor(theme.danger)
                     .frame(width: 20)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
-                        .font(.system(size: 15, weight: .medium))
+                        .font(.subheadline).fontWeight(.medium)
                         .foregroundColor(theme.textPrimary)
                     Text(desc)
-                        .font(.system(size: 12))
+                        .font(.caption)
                         .foregroundColor(theme.textTertiary)
                 }
                 Spacer()
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.caption).fontWeight(.semibold)
                     .foregroundColor(theme.textTertiary)
             }
             .padding(.horizontal, 16)
@@ -1681,7 +1681,7 @@ struct CreateInviteSheet: View {
                                 ProgressView().tint(theme.accentLight).scaleEffect(0.8)
                             } else {
                                 Text("Create")
-                                    .font(.system(size: 16, weight: .semibold))
+                                    .font(.callout).fontWeight(.semibold)
                                     .foregroundColor(theme.accentLight)
                             }
                         }
@@ -1698,7 +1698,7 @@ struct CreateInviteSheet: View {
             // Note
             VStack(alignment: .leading, spacing: 6) {
                 Text("Note")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.footnote).fontWeight(.semibold)
                     .foregroundColor(theme.textSecondary)
                 TextField("Optional description", text: $note)
                     .autocorrectionDisabled()
@@ -1711,7 +1711,7 @@ struct CreateInviteSheet: View {
             // Max uses
             VStack(alignment: .leading, spacing: 6) {
                 Text("Max Uses")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.footnote).fontWeight(.semibold)
                     .foregroundColor(theme.textSecondary)
                 HStack {
                     TextField("Unlimited", text: $maxUsesText)
@@ -1722,7 +1722,7 @@ struct CreateInviteSheet: View {
                         .foregroundColor(theme.textPrimary)
                 }
                 Text("Leave empty for unlimited uses")
-                    .font(.system(size: 11))
+                    .font(.caption2)
                     .foregroundColor(theme.textTertiary)
             }
 
@@ -1730,7 +1730,7 @@ struct CreateInviteSheet: View {
             VStack(alignment: .leading, spacing: 6) {
                 Toggle(isOn: $hasExpiry) {
                     Text("Expires")
-                        .font(.system(size: 15))
+                        .font(.subheadline)
                         .foregroundColor(theme.textPrimary)
                 }
                 .tint(theme.accentLight)
@@ -1753,7 +1753,7 @@ struct CreateInviteSheet: View {
 
             if let error {
                 Text(error)
-                    .font(.system(size: 13))
+                    .font(.footnote)
                     .foregroundColor(theme.danger)
             }
         }
@@ -1766,19 +1766,19 @@ struct CreateInviteSheet: View {
                     .fill(theme.success.opacity(0.15))
                     .frame(width: 72, height: 72)
                 Image(systemName: "ticket.fill")
-                    .font(.system(size: 32))
+                    .font(.title)
                     .foregroundColor(theme.success)
             }
             .shadow(color: theme.success.opacity(0.3), radius: 16)
 
             Text("Invite Code Created")
-                .font(.system(size: 20, weight: .bold, design: .rounded))
+                .font(.title3).fontWeight(.bold).fontDesign(.rounded)
                 .foregroundColor(theme.textPrimary)
 
             // Code display
             VStack(spacing: 8) {
                 Text(invite.code)
-                    .font(.system(size: 18, weight: .semibold, design: .monospaced))
+                    .font(.body).fontWeight(.semibold).fontDesign(.monospaced)
                     .foregroundColor(theme.textPrimary)
                     .padding(16)
                     .frame(maxWidth: .infinity)
@@ -1794,7 +1794,7 @@ struct CreateInviteSheet: View {
                     HStack(spacing: 8) {
                         Image(systemName: copiedCode ? "checkmark" : "doc.on.doc")
                         Text(copiedCode ? "Copied!" : "Copy Code")
-                            .font(.system(size: 14, weight: .medium))
+                            .font(.subheadline).fontWeight(.medium)
                     }
                     .foregroundColor(copiedCode ? theme.success : theme.accentLight)
                     .frame(maxWidth: .infinity)
@@ -1809,11 +1809,11 @@ struct CreateInviteSheet: View {
                 if invite.maxUses > 0 {
                     HStack {
                         Text("Max Uses")
-                            .font(.system(size: 14))
+                            .font(.subheadline)
                             .foregroundColor(theme.textSecondary)
                         Spacer()
                         Text("\(invite.maxUses)")
-                            .font(.system(size: 14, weight: .medium))
+                            .font(.subheadline).fontWeight(.medium)
                             .foregroundColor(theme.textPrimary)
                     }
                     .padding(.horizontal, 16)
@@ -1823,11 +1823,11 @@ struct CreateInviteSheet: View {
                 if let exp = invite.expiresAt {
                     HStack {
                         Text("Expires")
-                            .font(.system(size: 14))
+                            .font(.subheadline)
                             .foregroundColor(theme.textSecondary)
                         Spacer()
                         Text(exp, style: .date)
-                            .font(.system(size: 14, weight: .medium))
+                            .font(.subheadline).fontWeight(.medium)
                             .foregroundColor(theme.textPrimary)
                     }
                     .padding(.horizontal, 16)

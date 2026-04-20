@@ -26,7 +26,7 @@ struct LoginView: View {
                                     startPoint: .topLeading, endPoint: .bottomTrailing))
                                 .frame(width: 80, height: 80)
                             Text("✦")
-                                .font(.system(size: 36))
+                                .font(.largeTitle)
                                 .foregroundColor(.white)
                         }
                         .shadow(color: theme.accentLight.opacity(0.6), radius: 20)
@@ -39,11 +39,11 @@ struct LoginView: View {
                         }
 
                         Text("Sheaf")
-                            .font(.system(size: 34, weight: .bold, design: .rounded))
+                            .font(.largeTitle).fontWeight(.bold).fontDesign(.rounded)
                             .foregroundColor(theme.textPrimary)
 
                         Text(isRegistering ? String(localized: "Create your account") : String(localized: "Sign in to your system"))
-                            .font(.system(size: 15, weight: .medium))
+                            .font(.subheadline).fontWeight(.medium)
                             .foregroundColor(theme.textSecondary)
                             .animation(.default, value: isRegistering)
                     }
@@ -80,10 +80,10 @@ struct CFAccessSheet: View {
                 Section {
                     TextField("Client ID", text: $clientId)
                         .autocorrectionDisabled()
-                        .autocapitalization(.none)
+                        .textInputAutocapitalization(.never)
                     SecureField("Client Secret", text: $clientSecret)
                         .autocorrectionDisabled()
-                        .autocapitalization(.none)
+                        .textInputAutocapitalization(.never)
                 } header: {
                     Text("Cloudflare Access Service Token")
                 } footer: {
@@ -161,7 +161,7 @@ struct SignInForm: View {
             // Forgot password
             Button { openForgotPassword() } label: {
                 Text("Forgot Password?")
-                    .font(.system(size: 14))
+                    .font(.subheadline)
                     .foregroundColor(theme.accentLight)
             }
             .disabled(baseURL.isEmpty)
@@ -175,7 +175,7 @@ struct SignInForm: View {
                         .foregroundColor(theme.accentLight)
                         .fontWeight(.semibold)
                 }
-                .font(.system(size: 14))
+                .font(.subheadline)
             }
         }
         .padding(24)
@@ -262,12 +262,12 @@ struct SignInForm: View {
                    value: Binding<String>, field: Field, keyboard: UIKeyboardType) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Label(label, systemImage: icon)
-                .font(.system(size: 13, weight: .semibold))
+                .font(.footnote).fontWeight(.semibold)
                 .foregroundColor(theme.textSecondary)
             TextField(placeholder, text: value)
                 .focused($focused, equals: field)
                 .keyboardType(keyboard)
-                .autocapitalization(.none)
+                .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .padding(14)
                 .background(theme.inputBackground)
@@ -281,11 +281,11 @@ struct SignInForm: View {
     func secureField(label: String, placeholder: String, value: Binding<String>, field: Field) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Label(label, systemImage: "lock.fill")
-                .font(.system(size: 13, weight: .semibold))
+                .font(.footnote).fontWeight(.semibold)
                 .foregroundColor(theme.textSecondary)
             SecureField(placeholder, text: value)
                 .focused($focused, equals: field)
-                .autocapitalization(.none)
+                .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .padding(14)
                 .background(theme.inputBackground)
@@ -299,7 +299,7 @@ struct SignInForm: View {
     func errorLabel(_ msg: String) -> some View {
         HStack(spacing: 8) {
             Image(systemName: "exclamationmark.triangle.fill").foregroundColor(theme.danger)
-            Text(msg).font(.system(size: 13)).foregroundColor(theme.danger)
+            Text(msg).font(.footnote).foregroundColor(theme.danger)
         }
         .padding(.horizontal, 4)
     }
@@ -308,7 +308,7 @@ struct SignInForm: View {
         HStack {
             if loading { ProgressView().tint(.white) }
             else {
-                Text(label).font(.system(size: 17, weight: .semibold))
+                Text(label).font(.headline)
                 Image(systemName: icon)
             }
         }
@@ -363,7 +363,7 @@ struct RegisterForm: View {
                 HStack(spacing: 8) {
                     Image(systemName: "lock.fill").foregroundColor(theme.warning)
                     Text("Registration is closed on this instance.")
-                        .font(.system(size: 13)).foregroundColor(theme.warning)
+                        .font(.footnote).foregroundColor(theme.warning)
                 }
                 .padding(.horizontal, 4)
             }
@@ -391,7 +391,7 @@ struct RegisterForm: View {
                         .foregroundColor(theme.accentLight)
                         .fontWeight(.semibold)
                 }
-                .font(.system(size: 14))
+                .font(.subheadline)
             }
         }
         .padding(24)
@@ -466,12 +466,12 @@ struct RegisterForm: View {
                    value: Binding<String>, field: Field, keyboard: UIKeyboardType) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Label(label, systemImage: icon)
-                .font(.system(size: 13, weight: .semibold))
+                .font(.footnote).fontWeight(.semibold)
                 .foregroundColor(theme.textSecondary)
             TextField(placeholder, text: value)
                 .focused($focused, equals: field)
                 .keyboardType(keyboard)
-                .autocapitalization(.none)
+                .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .padding(14)
                 .background(theme.inputBackground)
@@ -485,11 +485,11 @@ struct RegisterForm: View {
     func secureField(label: String, placeholder: String, value: Binding<String>, field: Field) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Label(label, systemImage: "lock.fill")
-                .font(.system(size: 13, weight: .semibold))
+                .font(.footnote).fontWeight(.semibold)
                 .foregroundColor(theme.textSecondary)
             SecureField(placeholder, text: value)
                 .focused($focused, equals: field)
-                .autocapitalization(.none)
+                .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .padding(14)
                 .background(theme.inputBackground)
@@ -503,7 +503,7 @@ struct RegisterForm: View {
     func errorLabel(_ msg: String) -> some View {
         HStack(spacing: 8) {
             Image(systemName: "exclamationmark.triangle.fill").foregroundColor(theme.danger)
-            Text(msg).font(.system(size: 13)).foregroundColor(theme.danger)
+            Text(msg).font(.footnote).foregroundColor(theme.danger)
         }
         .padding(.horizontal, 4)
     }
@@ -512,7 +512,7 @@ struct RegisterForm: View {
         HStack {
             if loading { ProgressView().tint(.white) }
             else {
-                Text(label).font(.system(size: 17, weight: .semibold))
+                Text(label).font(.headline)
                 Image(systemName: icon)
             }
         }
@@ -570,7 +570,7 @@ struct PasswordStrengthBar: View {
                 }
             }
             Text(label)
-                .font(.system(size: 11, weight: .medium))
+                .font(.caption2).fontWeight(.medium)
                 .foregroundColor(color)
         }
     }
@@ -617,7 +617,7 @@ struct EmailVerificationGateView: View {
                                 startPoint: .topLeading, endPoint: .bottomTrailing))
                             .frame(width: 72, height: 72)
                         Image(systemName: "envelope.badge.fill")
-                            .font(.system(size: 30))
+                            .font(.title)
                             .foregroundColor(.white)
                     }
                     .shadow(color: theme.accentLight.opacity(0.5), radius: 20)
@@ -625,13 +625,13 @@ struct EmailVerificationGateView: View {
                     Spacer().frame(height: 24)
 
                     Text("Verify Your Email")
-                        .font(.system(size: 26, weight: .bold, design: .rounded))
+                        .font(.title2).fontWeight(.bold).fontDesign(.rounded)
                         .foregroundColor(theme.textPrimary)
 
                     Spacer().frame(height: 8)
 
                     Text("We sent a verification link to your email. Paste the token from the email below, or click the link in your browser.")
-                        .font(.system(size: 14))
+                        .font(.subheadline)
                         .foregroundColor(theme.textSecondary)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 48)
@@ -641,10 +641,10 @@ struct EmailVerificationGateView: View {
                     // Token input
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Verification Token")
-                            .font(.system(size: 13, weight: .medium))
+                            .font(.footnote).fontWeight(.medium)
                             .foregroundColor(theme.textSecondary)
                         TextField("Paste token from email", text: $verificationToken)
-                            .autocapitalization(.none)
+                            .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
                             .padding(14)
                             .background(theme.inputBackground)
@@ -659,7 +659,7 @@ struct EmailVerificationGateView: View {
 
                     if !message.isEmpty {
                         Text(message)
-                            .font(.system(size: 13))
+                            .font(.footnote)
                             .foregroundColor(isError ? theme.danger : theme.success)
                             .padding(.horizontal, 40)
                             .padding(.bottom, 12)
@@ -673,7 +673,7 @@ struct EmailVerificationGateView: View {
                             if isVerifying { ProgressView().tint(.white) }
                             else {
                                 Text("Verify")
-                                    .font(.system(size: 16, weight: .semibold))
+                                    .font(.headline)
                             }
                         }
                         .foregroundColor(.white)
@@ -699,7 +699,7 @@ struct EmailVerificationGateView: View {
                             if isResending { ProgressView().tint(theme.accentLight) }
                             else {
                                 Text("Resend Verification Email")
-                                    .font(.system(size: 15, weight: .medium))
+                                    .font(.subheadline).fontWeight(.medium)
                             }
                         }
                         .foregroundColor(theme.accentLight)
@@ -715,7 +715,7 @@ struct EmailVerificationGateView: View {
 
                     Button { authManager.logout() } label: {
                         Text("Log Out")
-                            .font(.system(size: 14))
+                            .font(.subheadline)
                             .foregroundColor(theme.textTertiary)
                     }
 
@@ -799,7 +799,7 @@ struct AccountPendingGateView: View {
                             startPoint: .topLeading, endPoint: .bottomTrailing))
                         .frame(width: 72, height: 72)
                     Image(systemName: "hourglass")
-                        .font(.system(size: 30))
+                        .font(.title)
                         .foregroundColor(.white)
                 }
                 .shadow(color: theme.warning.opacity(0.5), radius: 20)
@@ -807,13 +807,13 @@ struct AccountPendingGateView: View {
                 Spacer().frame(height: 24)
 
                 Text("Awaiting Approval")
-                    .font(.system(size: 26, weight: .bold, design: .rounded))
+                    .font(.title2).fontWeight(.bold).fontDesign(.rounded)
                     .foregroundColor(theme.textPrimary)
 
                 Spacer().frame(height: 8)
 
                 Text("Your account has been created and is waiting for an administrator to approve it. You'll be able to use the app once approved.")
-                    .font(.system(size: 14))
+                    .font(.subheadline)
                     .foregroundColor(theme.textSecondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 48)
@@ -827,7 +827,7 @@ struct AccountPendingGateView: View {
                         if isChecking { ProgressView().tint(.white) }
                         else {
                             Text("Check Again")
-                                .font(.system(size: 16, weight: .semibold))
+                                .font(.headline)
                             Image(systemName: "arrow.clockwise")
                         }
                     }
@@ -845,7 +845,7 @@ struct AccountPendingGateView: View {
 
                 Button { authManager.logout() } label: {
                     Text("Log Out")
-                        .font(.system(size: 14))
+                        .font(.subheadline)
                         .foregroundColor(theme.textTertiary)
                 }
 
@@ -891,7 +891,7 @@ struct AccountRejectedGateView: View {
                             startPoint: .topLeading, endPoint: .bottomTrailing))
                         .frame(width: 72, height: 72)
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 30))
+                        .font(.title)
                         .foregroundColor(.white)
                 }
                 .shadow(color: theme.danger.opacity(0.5), radius: 20)
@@ -899,13 +899,13 @@ struct AccountRejectedGateView: View {
                 Spacer().frame(height: 24)
 
                 Text("Account Not Approved")
-                    .font(.system(size: 26, weight: .bold, design: .rounded))
+                    .font(.title2).fontWeight(.bold).fontDesign(.rounded)
                     .foregroundColor(theme.textPrimary)
 
                 Spacer().frame(height: 8)
 
                 Text("Your account registration was not approved. If you believe this is a mistake, please contact the server administrator.")
-                    .font(.system(size: 14))
+                    .font(.subheadline)
                     .foregroundColor(theme.textSecondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 48)
@@ -915,7 +915,7 @@ struct AccountRejectedGateView: View {
                 Button { authManager.logout() } label: {
                     HStack {
                         Text("Log Out")
-                            .font(.system(size: 16, weight: .semibold))
+                            .font(.headline)
                         Image(systemName: "rectangle.portrait.and.arrow.right")
                     }
                     .foregroundColor(.white)

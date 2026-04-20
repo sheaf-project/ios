@@ -12,13 +12,13 @@ struct CustomFieldsView: View {
             if store.fields.isEmpty {
                 VStack(spacing: 10) {
                     Image(systemName: "list.bullet.rectangle")
-                        .font(.system(size: 36))
+                        .font(.title)
                         .foregroundColor(theme.textTertiary)
                     Text("No custom fields yet")
-                        .font(.system(size: 15))
+                        .font(.subheadline)
                         .foregroundColor(theme.textTertiary)
                     Text("Custom fields let you store extra info on each member.")
-                        .font(.system(size: 13))
+                        .font(.footnote)
                         .foregroundColor(theme.textTertiary)
                         .multilineTextAlignment(.center)
                 }
@@ -34,21 +34,21 @@ struct CustomFieldsView: View {
                                 .frame(width: 20)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(field.name)
-                                    .font(.system(size: 15, weight: .medium))
+                                    .font(.subheadline).fontWeight(.medium)
                                     .foregroundColor(theme.textPrimary)
                                 Text(field.fieldType.rawValue.capitalized)
-                                    .font(.system(size: 12))
+                                    .font(.caption)
                                     .foregroundColor(theme.textSecondary)
                             }
                             Spacer()
                             Text(field.privacy.rawValue.capitalized)
-                                .font(.system(size: 11))
+                                .font(.caption2)
                                 .foregroundColor(theme.textTertiary)
                                 .padding(.horizontal, 8).padding(.vertical, 3)
                                 .background(theme.backgroundCard)
                                 .cornerRadius(6)
                             Image(systemName: "chevron.right")
-                                .font(.system(size: 11))
+                                .font(.caption2)
                                 .foregroundColor(theme.textTertiary)
                         }
                     }
@@ -159,7 +159,7 @@ struct EditCustomFieldSheet: View {
                     Section {
                         Text(error)
                             .foregroundColor(theme.danger)
-                            .font(.system(size: 13))
+                            .font(.footnote)
                             .listRowBackground(theme.backgroundCard)
                     }
                 }
@@ -246,7 +246,7 @@ struct AddCustomFieldSheet: View {
                     Section {
                         Text(error)
                             .foregroundColor(theme.danger)
-                            .font(.system(size: 13))
+                            .font(.footnote)
                             .listRowBackground(theme.backgroundCard)
                     }
                 }

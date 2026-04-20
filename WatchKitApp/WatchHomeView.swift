@@ -13,10 +13,10 @@ struct WatchHomeView: View {
                 } else if store.frontingMembers.isEmpty {
                     VStack(spacing: 6) {
                         Image(systemName: "moon.stars.fill")
-                            .font(.system(size: 24))
+                            .font(.title3)
                             .foregroundColor(.secondary)
                         Text("No one fronting")
-                            .font(.system(size: 12))
+                            .font(.caption)
                             .foregroundColor(.secondary)
                     }
                     .frame(maxWidth: .infinity, alignment: .center)
@@ -51,7 +51,7 @@ struct WatchHomeView: View {
                     Spacer()
                     Button { store.loadAll() } label: {
                         Image(systemName: "arrow.clockwise")
-                            .font(.system(size: 11))
+                            .font(.caption2)
                     }
                     .buttonStyle(.plain)
                     .foregroundColor(.purple)
@@ -59,7 +59,7 @@ struct WatchHomeView: View {
             } footer: {
                 if let since = store.oldestCurrentFront?.startedAt {
                     Text("Since \(since.formatted(date: .omitted, time: .shortened))")
-                        .font(.system(size: 10))
+                        .font(.caption2)
                         .foregroundColor(.secondary)
                 }
             }
