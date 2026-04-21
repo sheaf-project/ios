@@ -655,7 +655,7 @@ struct SettingsView: View {
             Button("Clean Up", role: .destructive) { Task { await cleanUpOrphanedFiles() } }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("\(fileCleanupResult ?? "") This will permanently remove them.")
+            Text("\(fileCleanupResult ?? "") This will permanently remove the orphaned files.")
         }
         .alert("File Cleanup", isPresented: $showFileCleanupResult) {
             Button("OK", role: .cancel) {}
