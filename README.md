@@ -4,8 +4,8 @@
   <img src="https://img.shields.io/badge/Platform-iOS%2017%2B%20%7C%20watchOS%2010%2B-blue" alt="Platform">
   <img src="https://img.shields.io/badge/Swift-6.0-orange" alt="Swift 6.0">
   <img src="https://img.shields.io/badge/SwiftUI-Native-brightgreen" alt="SwiftUI">
-  <img src="https://github.com/fullynocturnal/sheaf-ios/actions/workflows/build-and-release.yml/badge.svg" alt="Build Status">
-  <a href="https://github.com/fullynocturnal/sheaf-ios/releases/tag/dev"><img src="https://img.shields.io/badge/Download-Dev%20Build-blueviolet" alt="Download Dev Build"></a>
+  <img src="https://github.com/sheaf-project/ios/actions/workflows/build-and-release.yml/badge.svg" alt="Build Status">
+  <a href="https://github.com/sheaf-project/ios/releases/tag/dev"><img src="https://img.shields.io/badge/Download-Dev%20Build-blueviolet" alt="Download Dev Build"></a>
 </p>
 
 A native iOS and watchOS companion app for managing plural systems. Sheaf provides a beautiful, privacy-focused interface for tracking fronting history, managing members, organizing groups, and staying connected across devices.
@@ -134,11 +134,11 @@ You'll need:
 
 ### Download Pre-Built App
 
-**🚀 Quick Start**: Download the latest **unsigned** development build from the [dev release](https://github.com/fullynocturnal/sheaf-ios/releases/tag/dev).
+**🚀 Quick Start**: Download the latest **unsigned** development build from the [dev release](https://github.com/sheaf-project/ios/releases/tag/dev).
 
 **Installation (Easy with AltStore):**
 1. Install [AltStore](https://altstore.io/) on your iPhone (free, no paid developer account needed)
-2. Download the unsigned `.ipa` from the [dev release](https://github.com/fullynocturnal/sheaf-ios/releases/tag/dev)
+2. Download the unsigned `.ipa` from the [dev release](https://github.com/sheaf-project/ios/releases/tag/dev)
 3. Open the `.ipa` in AltStore
 4. AltStore signs and installs automatically with your Apple ID
 5. Trust the app in Settings → General → VPN & Device Management
@@ -155,8 +155,8 @@ You'll need:
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/fullynocturnal/sheaf-ios.git
-   cd sheaf-ios
+   git clone https://github.com/sheaf-project/ios.git
+   cd ios
    ```
 
 2. Open the project in Xcode:

@@ -823,7 +823,7 @@ class APIClient {
 
     // MARK: - Client Settings
 
-    static let clientSettingsId = "sheaf-ios"
+    static let clientSettingsId = "ios"
 
     func getClientSettings() async throws -> [String: Any] {
         let data = try await request("/v1/settings/client/\(Self.clientSettingsId)")
