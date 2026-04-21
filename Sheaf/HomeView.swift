@@ -409,7 +409,7 @@ struct ScaleButtonStyle: ButtonStyle {
     }
 }
 
-// MARK: - Switch Fronting Sheet
+// MARK: - Switch Sheet
 struct SwitchFrontingSheet: View {
     @EnvironmentObject var store: SystemStore
     @Environment(\.theme) var theme
@@ -424,7 +424,7 @@ struct SwitchFrontingSheet: View {
 
             VStack(spacing: 0) {
                 HStack {
-                    Text("Switch Fronting")
+                    Text("Switch")
                         .font(.title3).fontWeight(.bold).fontDesign(.rounded)
                         .foregroundColor(theme.textPrimary)
                     Spacer()
