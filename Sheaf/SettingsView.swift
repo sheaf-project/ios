@@ -243,27 +243,6 @@ struct SettingsView: View {
                                 Task { await checkOrphanedFiles() }
                             } label: {
                                 HStack {
-                                    Image(systemName: "magnifyingglass")
-                                        .foregroundColor(theme.accentLight)
-                                        .frame(width: 20)
-                                    Text("Check for Orphaned Files")
-                                        .font(.subheadline).fontWeight(.medium)
-                                        .foregroundColor(theme.textPrimary)
-                                    Spacer()
-                                    if isRunningFileCleanup {
-                                        ProgressView().tint(theme.accentLight).scaleEffect(0.7)
-                                    }
-                                }
-                                .padding(.horizontal, 16).padding(.vertical, 14)
-                            }
-                            .disabled(isRunningFileCleanup)
-
-                            Divider().background(theme.divider)
-
-                            Button {
-                                showFileCleanupConfirm = true
-                            } label: {
-                                HStack {
                                     Image(systemName: "doc.badge.gearshape")
                                         .foregroundColor(theme.accentLight)
                                         .frame(width: 20)
@@ -271,6 +250,9 @@ struct SettingsView: View {
                                         .font(.subheadline).fontWeight(.medium)
                                         .foregroundColor(theme.textPrimary)
                                     Spacer()
+                                    if isRunningFileCleanup {
+                                        ProgressView().tint(theme.accentLight).scaleEffect(0.7)
+                                    }
                                 }
                                 .padding(.horizontal, 16).padding(.vertical, 14)
                             }
@@ -673,7 +655,7 @@ struct SettingsView: View {
             Button("Clean Up", role: .destructive) { Task { await cleanUpOrphanedFiles() } }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This will permanently remove orphaned files that are no longer referenced by any member or system profile.")
+            Text("\(fileCleanupResult ?? "") This will permanently remove them.")
         }
         .alert("File Cleanup", isPresented: $showFileCleanupResult) {
             Button("OK", role: .cancel) {}
@@ -733,14 +715,19 @@ struct SettingsView: View {
         do {
             let result = try await api.cleanupFilesDryRun()
             let count = result["files_to_remove"] as? Int ?? result["count"] as? Int ?? 0
-            fileCleanupResult = count > 0
-                ? "\(count) orphaned file(s) found. Use 'Clean Up Orphaned Files' to remove them."
-                : "No orphaned files found."
+            isRunningFileCleanup = false
+            if count > 0 {
+                fileCleanupResult = "\(count) orphaned file(s) found."
+                showFileCleanupConfirm = true
+            } else {
+                fileCleanupResult = "No orphaned files found."
+                showFileCleanupResult = true
+            }
         } catch {
             fileCleanupResult = "Error: \(error.localizedDescription)"
+            isRunningFileCleanup = false
+            showFileCleanupResult = true
         }
-        isRunningFileCleanup = false
-        showFileCleanupResult = true
     }
 
     private func cleanUpOrphanedFiles() async {
