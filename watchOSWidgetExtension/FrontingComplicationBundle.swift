@@ -1,6 +1,6 @@
 //
 //  FrontingComplicationBundle.swift
-//  SheafWatchWidgetExtension
+//  watchOSWidgetExtension
 //
 //  Widget bundle entry point for watch complications
 //

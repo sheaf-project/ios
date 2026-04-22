@@ -34,7 +34,7 @@ jobs:
         run: |
           xcodebuild \
             -project "${{ env.PROJECT }}" \
-            -target "SheafWatch Watch App" \
+            -target "watchOS App" \
             -configuration "${{ env.CONFIGURATION }}" \
             -destination 'generic/platform=watchOS' \
             SYMROOT="$RUNNER_TEMP/Build" \
@@ -53,7 +53,7 @@ jobs:
         run: |
           xcodebuild \
             -project "${{ env.PROJECT }}" \
-            -target SheafWatchWidgetExtension \
+            -target watchOSWidgetExtension \
             -configuration "${{ env.CONFIGURATION }}" \
             -destination 'generic/platform=watchOS' \
             SYMROOT="$RUNNER_TEMP/Build" \
@@ -73,7 +73,7 @@ jobs:
         run: |
           xcodebuild \
             -project "${{ env.PROJECT }}" \
-            -target SheafWidgetExtension \
+            -target iOSWidgetExtension \
             -configuration "${{ env.CONFIGURATION }}" \
             -destination 'generic/platform=iOS' \
             SYMROOT="$RUNNER_TEMP/Build" \
@@ -112,8 +112,8 @@ jobs:
       - name: Assemble app bundle
         run: |
           IOS_APP="$RUNNER_TEMP/Build/${{ env.CONFIGURATION }}-iphoneos/Sheaf.app"
-          WATCH_APP="$RUNNER_TEMP/Build/${{ env.CONFIGURATION }}-watchos/SheafWatch Watch App.app"
-          WIDGET_EXT="$RUNNER_TEMP/Build/${{ env.CONFIGURATION }}-watchos/SheafWatchWidgetExtension.appex"
+          WATCH_APP="$RUNNER_TEMP/Build/${{ env.CONFIGURATION }}-watchos/watchOS App.app"
+          WIDGET_EXT="$RUNNER_TEMP/Build/${{ env.CONFIGURATION }}-watchos/watchOSWidgetExtension.appex"
 
           # Embed widget extension into watch app
           mkdir -p "$WATCH_APP/PlugIns"

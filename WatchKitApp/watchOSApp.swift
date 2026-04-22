@@ -2,7 +2,7 @@ import SwiftUI
 import AppIntents
 
 @main
-struct SheafWatchApp: App {
+struct watchOSApp: App {
     @StateObject private var authManager = WatchAuthManager()
     @StateObject private var store       = WatchStore()
     @Environment(\.scenePhase) private var scenePhase

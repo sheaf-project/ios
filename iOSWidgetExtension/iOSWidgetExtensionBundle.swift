@@ -2,7 +2,7 @@ import WidgetKit
 import SwiftUI
 
 @main
-struct SheafWidgetExtensionBundle: WidgetBundle {
+struct iOSWidgetExtensionBundle: WidgetBundle {
     var body: some Widget {
         FrontingWidget()
     }

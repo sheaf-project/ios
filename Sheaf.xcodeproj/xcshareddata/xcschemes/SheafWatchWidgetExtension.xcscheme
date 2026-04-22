@@ -17,8 +17,8 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "2ACEC18E2F6D27BD00B4AB57"
-               BuildableName = "SheafWatchWidgetExtension.appex"
-               BlueprintName = "SheafWatchWidgetExtension"
+               BuildableName = "watchOSWidgetExtension.appex"
+               BlueprintName = "watchOSWidgetExtension"
                ReferencedContainer = "container:Sheaf.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
@@ -72,8 +72,8 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "2ACEC18E2F6D27BD00B4AB57"
-            BuildableName = "SheafWatchWidgetExtension.appex"
-            BlueprintName = "SheafWatchWidgetExtension"
+            BuildableName = "watchOSWidgetExtension.appex"
+            BlueprintName = "watchOSWidgetExtension"
             ReferencedContainer = "container:Sheaf.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>

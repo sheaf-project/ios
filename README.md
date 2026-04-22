@@ -104,7 +104,7 @@ Sheaf is built with modern Swift best practices and Apple platform technologies:
 
 #### watchOS App
 
-- **`SheafWatchApp.swift`**: Watch app entry point
+- **`watchOSApp.swift`**: Watch app entry point
 - **`WatchStore`**: Watch-optimized data store
 - **`WatchConnectivityManager`**: Device-to-device communication
 - **`WatchTabView`**: Tab-based navigation for Watch
@@ -166,7 +166,7 @@ You'll need:
 
 3. Select your target:
    - **Sheaf** for iOS app
-   - **SheafWatch Watch App** for watchOS app
+   - **watchOS App** for watchOS app
 
 4. Build and run (⌘R)
 
@@ -275,8 +275,8 @@ Sheaf/
 │   │   └── ...
 │   └── Localizable.xcstrings       # String Catalog
 │
-└── SheafWatch Watch App/           # watchOS App
-    ├── SheafWatchApp.swift        # Watch app entry
+└── watchOS App/                    # watchOS App
+    ├── watchOSApp.swift           # Watch app entry
     ├── WatchStore.swift           # Watch data store
     ├── WatchAuthManager.swift     # Watch authentication
     ├── WatchAPIClient.swift       # Watch network layer
