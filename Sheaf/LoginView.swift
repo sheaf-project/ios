@@ -155,8 +155,10 @@ struct SignInForm: View {
             Button { signIn() } label: {
                 buttonContent(label: String(localized: "Sign In"), icon: "arrow.right", loading: isLoading)
             }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+            .tint(theme.accentLight)
             .disabled(baseURL.isEmpty || email.isEmpty || password.isEmpty || isLoading || (needsTOTP && totpCode.count != 6))
-            .opacity(baseURL.isEmpty || email.isEmpty || password.isEmpty || (needsTOTP && totpCode.count != 6) ? 0.5 : 1)
 
             // Forgot password
             Button { openForgotPassword() } label: {
@@ -306,19 +308,13 @@ struct SignInForm: View {
 
     func buttonContent(label: String, icon: String, loading: Bool) -> some View {
         HStack {
-            if loading { ProgressView().tint(.white) }
+            if loading { ProgressView() }
             else {
-                Text(label).font(.headline)
+                Text(label)
                 Image(systemName: icon)
             }
         }
-        .foregroundColor(.white)
         .frame(maxWidth: .infinity)
-        .padding(16)
-        .background(LinearGradient(colors: [theme.accentLight, theme.accent],
-                                   startPoint: .leading, endPoint: .trailing))
-        .cornerRadius(14)
-        .shadow(color: theme.accentLight.opacity(0.4), radius: 12, y: 4)
     }
 }
 
@@ -379,8 +375,10 @@ struct RegisterForm: View {
             Button { register() } label: {
                 buttonContent(label: String(localized: "Create Account"), icon: "person.badge.plus", loading: isLoading)
             }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+            .tint(theme.accentLight)
             .disabled(isClosed || baseURL.isEmpty || email.isEmpty || password.isEmpty || confirmPassword.isEmpty || isLoading)
-            .opacity(isClosed || baseURL.isEmpty || email.isEmpty || password.isEmpty || confirmPassword.isEmpty ? 0.5 : 1)
 
             // Switch to sign in
             Button(action: onSwitch) {
@@ -510,19 +508,13 @@ struct RegisterForm: View {
 
     func buttonContent(label: String, icon: String, loading: Bool) -> some View {
         HStack {
-            if loading { ProgressView().tint(.white) }
+            if loading { ProgressView() }
             else {
-                Text(label).font(.headline)
+                Text(label)
                 Image(systemName: icon)
             }
         }
-        .foregroundColor(.white)
         .frame(maxWidth: .infinity)
-        .padding(16)
-        .background(LinearGradient(colors: [theme.accentLight, theme.accent],
-                                   startPoint: .leading, endPoint: .trailing))
-        .cornerRadius(14)
-        .shadow(color: theme.accentLight.opacity(0.4), radius: 12, y: 4)
     }
 }
 
@@ -670,22 +662,16 @@ struct EmailVerificationGateView: View {
                         verifyWithToken()
                     } label: {
                         HStack {
-                            if isVerifying { ProgressView().tint(.white) }
+                            if isVerifying { ProgressView() }
                             else {
                                 Text("Verify")
-                                    .font(.headline)
                             }
                         }
-                        .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
-                        .padding(16)
-                        .background(LinearGradient(
-                            colors: verificationToken.isEmpty
-                                ? [theme.accentLight.opacity(0.4), theme.accent.opacity(0.4)]
-                                : [theme.accentLight, theme.accent],
-                            startPoint: .leading, endPoint: .trailing))
-                        .cornerRadius(14)
                     }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    .tint(theme.accentLight)
                     .disabled(verificationToken.isEmpty || isVerifying)
                     .padding(.horizontal, 40)
 
@@ -824,20 +810,17 @@ struct AccountPendingGateView: View {
                     checkStatus()
                 } label: {
                     HStack {
-                        if isChecking { ProgressView().tint(.white) }
+                        if isChecking { ProgressView() }
                         else {
                             Text("Check Again")
-                                .font(.headline)
                             Image(systemName: "arrow.clockwise")
                         }
                     }
-                    .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
-                    .padding(16)
-                    .background(LinearGradient(colors: [theme.accentLight, theme.accent],
-                                               startPoint: .leading, endPoint: .trailing))
-                    .cornerRadius(14)
                 }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .tint(theme.accentLight)
                 .disabled(isChecking)
                 .padding(.horizontal, 40)
 
@@ -915,16 +898,13 @@ struct AccountRejectedGateView: View {
                 Button { authManager.logout() } label: {
                     HStack {
                         Text("Log Out")
-                            .font(.headline)
                         Image(systemName: "rectangle.portrait.and.arrow.right")
                     }
-                    .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
-                    .padding(16)
-                    .background(LinearGradient(colors: [theme.danger, theme.danger.opacity(0.8)],
-                                               startPoint: .leading, endPoint: .trailing))
-                    .cornerRadius(14)
                 }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .tint(theme.danger)
                 .padding(.horizontal, 40)
 
                 Spacer()

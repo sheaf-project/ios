@@ -415,149 +415,107 @@ struct SwitchFrontingSheet: View {
     @Environment(\.theme) var theme
     @Environment(\.dismiss) var dismiss
     @State private var selectedIDs: Set<String> = []
-    @State private var note = ""
     @State private var isSwitching = false
+    @State private var searchText = ""
+
+    private var filteredMembers: [Member] {
+        if searchText.isEmpty { return store.members }
+        return store.members.filter {
+            ($0.displayName ?? $0.name).localizedCaseInsensitiveContains(searchText)
+        }
+    }
+
+    private var currentlyFronting: [Member] {
+        filteredMembers.filter { m in store.frontingMembers.contains(where: { $0.id == m.id }) }
+    }
+
+    private var notFronting: [Member] {
+        filteredMembers.filter { m in !store.frontingMembers.contains(where: { f in f.id == m.id }) }
+    }
 
     var body: some View {
-        ZStack {
-            theme.backgroundPrimary.ignoresSafeArea()
-
-            VStack(spacing: 0) {
-                HStack {
-                    Text("Switch")
-                        .font(.title3).fontWeight(.bold).fontDesign(.rounded)
-                        .foregroundColor(theme.textPrimary)
-                    Spacer()
-                    Button("Cancel") { dismiss() }
-                        .foregroundColor(theme.textSecondary)
+        NavigationStack {
+            List {
+                if !currentlyFronting.isEmpty {
+                    Section("Currently Fronting") {
+                        ForEach(currentlyFronting) { member in
+                            memberRow(member)
+                        }
+                    }
                 }
-                .padding(.horizontal, 24)
-                .padding(.top, 20)
 
-                HStack(spacing: 6) {
-                    Text(selectedIDs.isEmpty
-                         ? "Select one or more"
-                         : "\(selectedIDs.count) selected")
-                        .font(.subheadline)
-                        .foregroundColor(selectedIDs.isEmpty
-                            ? .white.opacity(0.5)
-                            : theme.accentLight)
-
-                    Spacer()
-
-                    // Select all / clear toggle
+                Section(currentlyFronting.isEmpty ? "Select Members" : "Add More") {
+                    ForEach(notFronting) { member in
+                        memberRow(member)
+                    }
+                }
+            }
+            .listStyle(.insetGrouped)
+            .navigationTitle("Switch")
+            .navigationBarTitleDisplayMode(.inline)
+            .searchable(text: $searchText, prompt: "Search members")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
                     Button {
-                        if selectedIDs.count == store.members.count {
-                            selectedIDs.removeAll()
-                        } else {
-                            selectedIDs = Set(store.members.map { $0.id })
+                        Task {
+                            isSwitching = true
+                            await store.switchFronting(to: Array(selectedIDs))
+                            isSwitching = false
+                            dismiss()
                         }
                     } label: {
-                        Text(selectedIDs.count == store.members.count ? "Clear All" : "Select All")
-                            .font(.caption).fontWeight(.semibold)
-                            .foregroundColor(theme.accentLight)
-                            .padding(.horizontal, 10).padding(.vertical, 4)
-                            .background(theme.accentLight.opacity(0.12))
-                            .cornerRadius(8)
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 24)
-                .padding(.top, 4)
-
-                ScrollView {
-                    VStack(spacing: 10) {
-                        ForEach(store.members) { member in
-                            MemberSelectRow(member: member, isSelected: selectedIDs.contains(member.id)) {
-                                if selectedIDs.contains(member.id) {
-                                    selectedIDs.remove(member.id)
-                                } else {
-                                    selectedIDs.insert(member.id)
-                                }
-                            }
-                        }
-                    }
-                    .padding(.horizontal, 24)
-                    .padding(.top, 16)
-                }
-
-
-
-                // Confirm
-                Button {
-                    Task {
-                        isSwitching = true
-                        await store.switchFronting(to: Array(selectedIDs))
-                        isSwitching = false
-                        dismiss()
-                    }
-                } label: {
-                    HStack {
-                        if isSwitching { ProgressView().tint(.white) }
-                        else {
-                            Image(systemName: "arrow.left.arrow.right")
+                        if isSwitching {
+                            ProgressView()
+                        } else {
                             Text(selectedIDs.count > 1
                                  ? "Co-front (\(selectedIDs.count))"
-                                 : "Switch Now")
-                                .font(.headline)
+                                 : "Switch")
+                                .fontWeight(.semibold)
                         }
                     }
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(16)
-                    .background(Group {
-                        if selectedIDs.isEmpty {
-                            theme.backgroundElevated
-                        } else {
-                            LinearGradient(colors: [theme.accentLight, theme.accent],
-                                           startPoint: .leading, endPoint: .trailing)
-                        }
-                    })
-                    .cornerRadius(14)
+                    .disabled(selectedIDs.isEmpty || isSwitching)
                 }
-                .disabled(selectedIDs.isEmpty || isSwitching)
-                .padding(.horizontal, 24)
-                .padding(.bottom, 32)
             }
         }
-        .presentationDragIndicator(.visible)
         .onAppear {
             selectedIDs = Set(store.frontingMembers.map { $0.id })
         }
     }
-}
 
-struct MemberSelectRow: View {
-    @Environment(\.theme) var theme
-    let member: Member
-    let isSelected: Bool
-    let onTap: () -> Void
+    private func memberRow(_ member: Member) -> some View {
+        Button {
+            if selectedIDs.contains(member.id) {
+                selectedIDs.remove(member.id)
+            } else {
+                selectedIDs.insert(member.id)
+            }
+        } label: {
+            HStack(spacing: 12) {
+                AvatarView(member: member, size: 40)
 
-    var body: some View {
-        Button(action: onTap) {
-            HStack(spacing: 14) {
-                AvatarView(member: member, size: 44)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(member.displayName ?? member.name)
                         .font(.subheadline).fontWeight(.medium)
-                        .foregroundColor(theme.textPrimary)
                     if let p = member.pronouns, !p.isEmpty {
                         Text(p)
                             .font(.caption)
-                            .foregroundColor(theme.textSecondary)
+                            .foregroundColor(.secondary)
                     }
                 }
+
                 Spacer()
-                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .foregroundColor(isSelected ? theme.accentLight : theme.textTertiary)
+
+                Image(systemName: selectedIDs.contains(member.id)
+                      ? "checkmark.circle.fill" : "circle")
+                    .foregroundColor(selectedIDs.contains(member.id)
+                        ? .accentColor : .secondary)
                     .font(.title3)
             }
-            .padding(14)
-            .background(isSelected ? theme.accentLight.opacity(0.1) : theme.backgroundCard)
-            .cornerRadius(14)
-            .overlay(RoundedRectangle(cornerRadius: 14)
-                .stroke(isSelected ? theme.accentLight.opacity(0.4) : theme.border, lineWidth: 1.5))
+            .contentShape(Rectangle())
         }
-        .buttonStyle(ScaleButtonStyle())
+        .buttonStyle(.plain)
     }
 }

@@ -361,15 +361,11 @@ struct MemberDetailSheet: View {
                             }
                         } label: {
                             Label("Switch to \(member.displayName ?? member.name)", systemImage: "arrow.left.arrow.right")
-                                .font(.subheadline).fontWeight(.semibold)
-                                .foregroundColor(theme.textPrimary)
                                 .frame(maxWidth: .infinity)
-                                .padding(16)
-                                .background(LinearGradient(
-                                    colors: [theme.accentLight, theme.accent],
-                                    startPoint: .leading, endPoint: .trailing))
-                                .cornerRadius(14)
                         }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.large)
+                        .tint(theme.accentLight)
                         .padding(.bottom, 40)
                     }
                     .padding(.horizontal, 24)
@@ -780,8 +776,7 @@ struct AvatarInputSection: View {
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
                         .padding(12)
-                        .background(LinearGradient(colors: [theme.accentLight, theme.accent],
-                                                   startPoint: .leading, endPoint: .trailing))
+                        .background(theme.accentLight)
                         .cornerRadius(12)
                     }
                     .disabled(isUploading)

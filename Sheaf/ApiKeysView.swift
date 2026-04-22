@@ -208,14 +208,11 @@ struct ApiKeysView: View {
                     createdKey = nil
                 } label: {
                     Text("Done")
-                        .font(.callout).fontWeight(.semibold)
-                        .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
-                        .padding(16)
-                        .background(LinearGradient(colors: [theme.accentLight, theme.accent],
-                                                   startPoint: .leading, endPoint: .trailing))
-                        .cornerRadius(14)
                 }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .tint(theme.accentLight)
                 .padding(.horizontal, 24)
                 .padding(.bottom, 40)
             }

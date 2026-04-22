@@ -281,22 +281,15 @@ struct TOTPSetupSheet: View {
     func primaryButton(label: String, loading: Bool = false, disabled: Bool = false, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack {
-                if loading { ProgressView().tint(.white) }
-                else { Text(label).font(.body).fontWeight(.semibold).foregroundColor(.white) }
+                if loading { ProgressView() }
+                else { Text(label) }
             }
             .frame(maxWidth: .infinity)
-            .padding(16)
-            .background(Group {
-                if disabled {
-                    theme.backgroundElevated
-                } else {
-                    LinearGradient(colors: [theme.accentLight, theme.accent],
-                                   startPoint: .leading, endPoint: .trailing)
-                }
-            })
-            .cornerRadius(14)
         }
-        .disabled(disabled)
+        .buttonStyle(.borderedProminent)
+        .controlSize(.large)
+        .tint(theme.accentLight)
+        .disabled(disabled || loading)
     }
 
     func handleDigit(index: Int, value: String) {
@@ -605,18 +598,15 @@ struct TOTPManageSheet: View {
 
             Button { Task { await regenerateCodes() } } label: {
                 HStack {
-                    if isProcessing { ProgressView().tint(.white) }
-                    else { Text("Regenerate Codes").font(.body).fontWeight(.semibold) }
+                    if isProcessing { ProgressView() }
+                    else { Text("Regenerate Codes") }
                 }
-                .foregroundColor(.white)
                 .frame(maxWidth: .infinity)
-                .padding(16)
-                .background(LinearGradient(colors: [theme.accentLight, theme.accent],
-                                           startPoint: .leading, endPoint: .trailing))
-                .cornerRadius(14)
             }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+            .tint(theme.accentLight)
             .disabled(totpCode.count != 6 || isProcessing)
-            .opacity(totpCode.count != 6 ? 0.5 : 1)
 
             Button { withAnimation { page = .menu } } label: {
                 Text("Back")

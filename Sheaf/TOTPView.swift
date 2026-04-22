@@ -81,29 +81,17 @@ struct TOTPView: View {
                 // Verify button
                 Button { verify() } label: {
                     HStack {
-                        if isVerifying { ProgressView().tint(.white) }
+                        if isVerifying { ProgressView() }
                         else {
                             Text("Verify")
-                                .font(.headline)
                             Image(systemName: "checkmark")
                         }
                     }
-                    .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
-                    .padding(16)
-                    .background(
-                        Group {
-                            if isComplete {
-                                LinearGradient(colors: [theme.accentLight, theme.accent],
-                                               startPoint: .leading, endPoint: .trailing)
-                            } else {
-                                theme.backgroundElevated
-                            }
-                        }
-                    )
-                    .cornerRadius(14)
-                    .shadow(color: isComplete ? theme.accentLight.opacity(0.4) : .clear, radius: 12, y: 4)
                 }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .tint(theme.accentLight)
                 .disabled(!isComplete || isVerifying)
                 .padding(.horizontal, 24)
 

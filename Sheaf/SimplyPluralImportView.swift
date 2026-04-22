@@ -430,22 +430,14 @@ struct SheafImportSheet: View {
     func sheafPrimaryButton(label: String, icon: String, disabled: Bool = false, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack {
-                Text(label).font(.body).fontWeight(.semibold)
+                Text(label)
                 Image(systemName: icon)
             }
-            .foregroundColor(.white)
             .frame(maxWidth: .infinity)
-            .padding(16)
-            .background(Group {
-                if disabled {
-                    theme.backgroundElevated
-                } else {
-                    LinearGradient(colors: [theme.accentLight, theme.accent],
-                                   startPoint: .leading, endPoint: .trailing)
-                }
-            })
-            .cornerRadius(14)
         }
+        .buttonStyle(.borderedProminent)
+        .controlSize(.large)
+        .tint(theme.accentLight)
         .disabled(disabled)
     }
 }
@@ -1012,22 +1004,14 @@ struct SimplyPluralImportSheet: View {
     func primaryButton(label: String, icon: String, disabled: Bool = false, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack {
-                Text(label).font(.body).fontWeight(.semibold)
+                Text(label)
                 Image(systemName: icon)
             }
-            .foregroundColor(.white)
             .frame(maxWidth: .infinity)
-            .padding(16)
-            .background(Group {
-                if disabled {
-                    theme.backgroundElevated
-                } else {
-                    LinearGradient(colors: [theme.accentLight, theme.accent],
-                                   startPoint: .leading, endPoint: .trailing)
-                }
-            })
-            .cornerRadius(14)
         }
+        .buttonStyle(.borderedProminent)
+        .controlSize(.large)
+        .tint(theme.accentLight)
         .disabled(disabled)
     }
 }
