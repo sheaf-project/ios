@@ -184,8 +184,8 @@ The Watch app will automatically sync credentials from your iPhone.
 
 ### API Endpoint
 
-The app stores your API base URL securely in UserDefaults. On first launch, you'll be prompted to enter:
-- Server URL (e.g., `https://api.example.com`)
+The app stores your API base URL securely in iCloud Keychain. On first launch, you'll be prompted to enter:
+- Server URL (e.g., `https://test.sheaf.sh`)
 - Email/username
 - Password
 - TOTP code (if enabled)
