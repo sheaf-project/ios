@@ -322,12 +322,6 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 - [X] Offline mode with local caching
 - [ ] Custom notifications for system events
 
-## Known Issues
-
-- Multiple `Localizable.xcstrings` target membership can cause build errors (ensure one per target)
-- Watch app requires iPhone app to be configured first
-- Large member lists may impact performance (pagination planned)
-
 ## Acknowledgments
 
 - Built with SwiftUI and Swift Concurrency
