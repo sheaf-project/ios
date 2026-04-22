@@ -293,7 +293,7 @@ Sheaf/
 
 Sheaf takes your privacy seriously:
 
-- **Local Storage**: Credentials stored securely in UserDefaults (migrate to Keychain recommended)
+- **Local Storage**: Credentials stored securely in Keychain
 - **No Analytics**: No tracking or analytics
 - **No Third-Party**: No external dependencies or SDKs
 - **Privacy Controls**: Granular privacy settings for members and system
