@@ -19,16 +19,10 @@ struct LoginView: View {
 
                     // Logo
                     VStack(spacing: 12) {
-                        ZStack {
-                            Circle()
-                                .fill(LinearGradient(
-                                    colors: [theme.accentLight, theme.accent],
-                                    startPoint: .topLeading, endPoint: .bottomTrailing))
-                                .frame(width: 80, height: 80)
-                            Text("✦")
-                                .font(.largeTitle)
-                                .foregroundColor(.white)
-                        }
+                        Image("SheafLogo")
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 80, height: 80)
                         .shadow(color: theme.accentLight.opacity(0.6), radius: 20)
                         .onTapGesture {
                             logoTapCount += 1
@@ -346,7 +340,7 @@ struct RegisterForm: View {
 
     var body: some View {
         VStack(spacing: 20) {
-            formField(icon: "link",          label: String(localized: "API Base URL"),      placeholder: String(localized: "https://app.sheaf.sh"), value: $baseURL,         field: .url,     keyboard: .URL)
+            formField(icon: "link", label: String(localized: "API Base URL"),      placeholder: String(localized: "https://app.sheaf.sh"), value: $baseURL,         field: .url,     keyboard: .URL)
             formField(icon: "envelope.fill", label: String(localized: "Email"),              placeholder: String(localized: "you@example.com"),              value: $email,           field: .email,   keyboard: .emailAddress)
             secureField(                     label: String(localized: "Password"),            placeholder: String(localized: "At least 8 characters"),        value: $password,        field: .password)
             secureField(                     label: String(localized: "Confirm Password"),    placeholder: String(localized: "••••••••"),                     value: $confirmPassword, field: .confirm)
