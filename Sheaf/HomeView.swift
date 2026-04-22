@@ -444,7 +444,7 @@ struct SwitchFrontingSheet: View {
                     }
                 }
 
-                Section(currentlyFronting.isEmpty ? "Select Members" : "Add More") {
+                Section(currentlyFronting.isEmpty ? "Select Members" : "Other Members") {
                     ForEach(notFronting) { member in
                         memberRow(member)
                     }
