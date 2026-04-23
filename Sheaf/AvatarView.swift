@@ -1,5 +1,6 @@
 import SwiftUI
 import ImageIO
+import CryptoKit
 #if os(watchOS)
 import WatchConnectivity
 #endif
@@ -12,9 +13,37 @@ final class AvatarImageCache: @unchecked Sendable {
 
     private let cache = NSCache<NSURL, UIImage>()
 
+    private static let diskCacheDirectory: URL = {
+        let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+        let dir = caches.appendingPathComponent("avatars")
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }()
+
     init() {
         cache.countLimit = 150
         cache.totalCostLimit = 50 * 1024 * 1024 // 50 MB
+    }
+
+    /// Returns a stable filename for a URL using its SHA256 hash.
+    private static func diskKey(for url: URL) -> String {
+        let hash = SHA256.hash(data: Data(url.absoluteString.utf8))
+        return hash.map { String(format: "%02x", $0) }.joined()
+    }
+
+    /// Loads image data from the disk cache.
+    func imageFromDisk(for url: URL) -> UIImage? {
+        let path = Self.diskCacheDirectory.appendingPathComponent(Self.diskKey(for: url))
+        guard let data = try? Data(contentsOf: path) else { return nil }
+        guard let img = UIImage(data: data) ?? Self.decodeWithImageIO(data) else { return nil }
+        set(img, for: url)
+        return img
+    }
+
+    /// Persists raw image data to disk.
+    func writeToDisk(_ data: Data, for url: URL) {
+        let path = Self.diskCacheDirectory.appendingPathComponent(Self.diskKey(for: url))
+        try? data.write(to: path, options: .atomic)
     }
 
     func image(for url: URL) -> UIImage? {
@@ -27,10 +56,11 @@ final class AvatarImageCache: @unchecked Sendable {
         cache.setObject(image, forKey: url as NSURL, cost: cost)
     }
 
-    /// Fetches an image from the network or cache.
+    /// Fetches an image from memory, disk, or network (in that order).
     func fetch(request: URLRequest) async -> UIImage? {
         guard let url = request.url else { return nil }
         if let cached = image(for: url) { return cached }
+        if let disk = imageFromDisk(for: url) { return disk }
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
             guard let http = response as? HTTPURLResponse,
@@ -39,6 +69,7 @@ final class AvatarImageCache: @unchecked Sendable {
                 return nil
             }
             set(image, for: url)
+            writeToDisk(data, for: url)
             return image
         } catch {
             return nil
@@ -162,6 +193,12 @@ struct AvatarView: View {
         // Check in-memory cache
         if let cached = AvatarImageCache.shared.image(for: url) {
             image = cached
+            return
+        }
+
+        // Check disk cache
+        if let disk = AvatarImageCache.shared.imageFromDisk(for: url) {
+            image = disk
             return
         }
 
