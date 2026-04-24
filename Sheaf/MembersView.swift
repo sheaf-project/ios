@@ -89,7 +89,6 @@ struct MembersView: View {
             .navigationTitle("Members")
             .navigationBarTitleDisplayMode(.large)
             .searchable(text: $searchText, placement: .automatic, prompt: "Search members")
-            .searchToolbarBehavior(.automatic)
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Button {
