@@ -203,6 +203,8 @@ struct AvatarView: View {
         }
 
         var request = URLRequest(url: url)
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown"
+        request.setValue("Sheaf iOS/\(version)", forHTTPHeaderField: "User-Agent")
         if member.avatarURL?.hasPrefix("/") == true {
             if !accessToken.isEmpty {
                 request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
