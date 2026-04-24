@@ -197,9 +197,17 @@ struct SignInForm: View {
         let api = APIClient(auth: tempAuth)
         Task {
             do {
+                var captchaPayload: String?
+                if let config = try? await api.getAuthConfig(),
+                   config["captcha_provider"] as? String == "altcha",
+                   config["captcha_on_login"] as? Bool == true {
+                    debugLog("Login: Altcha required, fetching challenge...")
+                    let challenge = try await api.getAltchaChallenge()
+                    captchaPayload = try await APIClient.solveAltchaChallenge(challenge)
+                    debugLog("Login: Altcha challenge solved")
+                }
                 debugLog("Login: Starting login request... (TOTP: \(totpCode.isEmpty ? "no" : "yes"))")
-                // Pass TOTP code if available
-                let tokens = try await api.login(email: email, password: password, totpCode: totpCode.isEmpty ? nil : totpCode)
+                let tokens = try await api.login(email: email, password: password, totpCode: totpCode.isEmpty ? nil : totpCode, captcha: captchaPayload)
                 debugLog("Login: Login successful, got tokens")
                 
                 // Login succeeded, save credentials
@@ -224,6 +232,8 @@ struct SignInForm: View {
                     focused = .totp
                     isLoading = false
                 }
+            } catch is CancellationError {
+                await MainActor.run { isLoading = false }
             } catch {
                 debugLog("Login: Login failed: \(error.localizedDescription)")
                 await MainActor.run {
@@ -430,11 +440,18 @@ struct RegisterForm: View {
         let api = APIClient(auth: tempAuth)
         Task {
             do {
-                let code = inviteCode.trimmingCharacters(in: .whitespacesAndNewlines)
+                var captchaPayload: String?
+                if let config = try? await api.getAuthConfig(),
+                   config["captcha_provider"] as? String == "altcha" {
+                    let challenge = try await api.getAltchaChallenge()
+                    captchaPayload = try await APIClient.solveAltchaChallenge(challenge)
+                }
+                let invCode = inviteCode.trimmingCharacters(in: .whitespacesAndNewlines)
                 let tokens = try await api.register(
                     email: email,
                     password: password,
-                    inviteCode: code.isEmpty ? nil : code
+                    inviteCode: invCode.isEmpty ? nil : invCode,
+                    captcha: captchaPayload
                 )
                 await MainActor.run {
                     authManager.save(baseURL: cleanURL, tokens: tokens)
@@ -447,6 +464,8 @@ struct RegisterForm: View {
                         authManager.emailVerified = me.emailVerified
                     }
                 }
+                await MainActor.run { isLoading = false }
+            } catch is CancellationError {
                 await MainActor.run { isLoading = false }
             } catch {
                 await MainActor.run { self.error = error.localizedDescription; isLoading = false }
@@ -725,6 +744,8 @@ struct EmailVerificationGateView: View {
                     authManager.emailVerified = true
                     isVerifying = false
                 }
+            } catch is CancellationError {
+                await MainActor.run { isVerifying = false }
             } catch {
                 await MainActor.run {
                     message = "Verification failed. Please check your token and try again."
@@ -747,6 +768,8 @@ struct EmailVerificationGateView: View {
                     message = "Verification email sent!"
                     isResending = false
                 }
+            } catch is CancellationError {
+                await MainActor.run { isResending = false }
             } catch {
                 await MainActor.run {
                     message = error.localizedDescription

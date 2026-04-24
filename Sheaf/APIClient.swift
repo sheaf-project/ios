@@ -1,9 +1,28 @@
 import Foundation
 import SwiftUI
 import Combine
+import CommonCrypto
 #if os(iOS)
 import WatchConnectivity
 #endif
+
+// MARK: - Hex Data
+
+extension Data {
+    init?(hexString: String) {
+        let len = hexString.count
+        guard len % 2 == 0 else { return nil }
+        var data = Data(capacity: len / 2)
+        var index = hexString.startIndex
+        while index < hexString.endIndex {
+            let next = hexString.index(index, offsetBy: 2)
+            guard let byte = UInt8(hexString[index..<next], radix: 16) else { return nil }
+            data.append(byte)
+            index = next
+        }
+        self = data
+    }
+}
 
 // MARK: - AuthManager
 final class AuthManager: ObservableObject {
@@ -407,8 +426,8 @@ class APIClient {
     /// Error thrown when the server requires a TOTP code to complete login.
     struct TOTPRequiredError: Error {}
 
-    func login(email: String, password: String, totpCode: String? = nil) async throws -> TokenResponse {
-        let body = try JSONEncoder.iso.encode(UserLogin(email: email, password: password, totpCode: totpCode))
+    func login(email: String, password: String, totpCode: String? = nil, captcha: String? = nil) async throws -> TokenResponse {
+        let body = try JSONEncoder.iso.encode(UserLogin(email: email, password: password, totpCode: totpCode, captcha: captcha))
         // Don't use request() because login endpoints shouldn't trigger token refresh
         guard let url = URL(string: auth.baseURL + "/v1/auth/login") else { throw URLError(.badURL) }
         var req = URLRequest(url: url)
@@ -436,8 +455,8 @@ class APIClient {
         return try Self.decodeJSON(TokenResponse.self, from: data)
     }
 
-    func register(email: String, password: String, inviteCode: String? = nil) async throws -> TokenResponse {
-        let body = try JSONEncoder.iso.encode(UserRegister(email: email, password: password, inviteCode: inviteCode))
+    func register(email: String, password: String, inviteCode: String? = nil, captcha: String? = nil) async throws -> TokenResponse {
+        let body = try JSONEncoder.iso.encode(UserRegister(email: email, password: password, inviteCode: inviteCode, captcha: captcha))
         // Don't use request() because register endpoints shouldn't trigger token refresh
         let (data, status) = try await perform("/v1/auth/register", method: "POST", body: body)
         guard (200...201).contains(status) else {
@@ -482,6 +501,96 @@ class APIClient {
                           userInfo: [NSLocalizedDescriptionKey: friendlyErrorMessage(statusCode: http.statusCode, data: data)])
         }
         return (try? JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
+    }
+
+    // MARK: - Altcha (v2 PBKDF2/SHA-256)
+
+    func getAltchaChallenge() async throws -> [String: Any] {
+        guard let url = URL(string: auth.baseURL + "/v1/auth/captcha/challenge") else { throw URLError(.badURL) }
+        var req = URLRequest(url: url)
+        req.httpMethod = "GET"
+        req.setValue("application/json", forHTTPHeaderField: "Accept")
+        applyCFHeaders(to: &req)
+        let (data, response) = try await urlSession.data(for: req)
+        guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
+        if (200...299).contains(http.statusCode) {
+            try detectCloudflareInterception(data)
+        } else {
+            throw NSError(domain: "APIError", code: http.statusCode,
+                          userInfo: [NSLocalizedDescriptionKey: friendlyErrorMessage(statusCode: http.statusCode, data: data)])
+        }
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw NSError(domain: "AltchaSolver", code: 0,
+                          userInfo: [NSLocalizedDescriptionKey: "Invalid captcha challenge format"])
+        }
+        return json
+    }
+
+    /// Solves an Altcha v2 PBKDF2/SHA-256 challenge and returns a base64-encoded payload string.
+    static func solveAltchaChallenge(_ challenge: [String: Any]) async throws -> String {
+        guard let params = challenge["parameters"] as? [String: Any],
+              let nonce = params["nonce"] as? String,
+              let salt = params["salt"] as? String,
+              let cost = params["cost"] as? Int,
+              let keyLength = params["keyLength"] as? Int,
+              let keyPrefix = params["keyPrefix"] as? String else {
+            throw NSError(domain: "AltchaSolver", code: 0,
+                          userInfo: [NSLocalizedDescriptionKey: "Missing challenge parameters"])
+        }
+
+        guard let nonceBytes = Data(hexString: nonce),
+              let saltBytes = Data(hexString: salt) else {
+            throw NSError(domain: "AltchaSolver", code: 0,
+                          userInfo: [NSLocalizedDescriptionKey: "Invalid hex in challenge nonce/salt"])
+        }
+
+        return try await withCheckedThrowingContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                for counter in 0..<(1 << 20) {
+                    // password = hex_decode(nonce) + uint32_big_endian(counter)
+                    var password = nonceBytes
+                    var bigEndian = UInt32(counter).bigEndian
+                    password.append(Data(bytes: &bigEndian, count: 4))
+
+                    var derivedKey = Data(count: keyLength)
+                    let status = derivedKey.withUnsafeMutableBytes { dkPtr in
+                        password.withUnsafeBytes { pwPtr in
+                            saltBytes.withUnsafeBytes { saltPtr in
+                                CCKeyDerivationPBKDF(
+                                    CCPBKDFAlgorithm(kCCPBKDF2),
+                                    pwPtr.baseAddress?.assumingMemoryBound(to: Int8.self),
+                                    password.count,
+                                    saltPtr.baseAddress?.assumingMemoryBound(to: UInt8.self),
+                                    saltBytes.count,
+                                    CCPseudoRandomAlgorithm(kCCPRFHmacAlgSHA256),
+                                    UInt32(cost),
+                                    dkPtr.baseAddress?.assumingMemoryBound(to: UInt8.self),
+                                    keyLength
+                                )
+                            }
+                        }
+                    }
+
+                    guard status == kCCSuccess else { continue }
+
+                    let hex = derivedKey.map { String(format: "%02x", $0) }.joined()
+                    if hex.hasPrefix(keyPrefix) {
+                        let solution: [String: Any] = ["counter": counter, "derivedKey": hex]
+                        let payload: [String: Any] = ["challenge": challenge, "solution": solution]
+                        if let jsonData = try? JSONSerialization.data(withJSONObject: payload),
+                           let base64 = jsonData.base64EncodedString() as String? {
+                            continuation.resume(returning: base64)
+                        } else {
+                            continuation.resume(throwing: NSError(domain: "AltchaSolver", code: 0,
+                                userInfo: [NSLocalizedDescriptionKey: "Failed to encode captcha solution"]))
+                        }
+                        return
+                    }
+                }
+                continuation.resume(throwing: NSError(domain: "AltchaSolver", code: 0,
+                    userInfo: [NSLocalizedDescriptionKey: "Could not solve the verification challenge. Please try again."]))
+            }
+        }
     }
 
     // MARK: - Logout

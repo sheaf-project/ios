@@ -395,9 +395,10 @@ struct UserLogin: Codable {
     var email: String
     var password: String
     var totpCode: String?
-    
+    var captcha: String?
+
     enum CodingKeys: String, CodingKey {
-        case email, password
+        case email, password, captcha
         case totpCode = "totp_code"
     }
 }
@@ -481,9 +482,10 @@ struct UserRegister: Codable {
     var email: String
     var password: String
     var inviteCode: String?
+    var captcha: String?
 
     enum CodingKeys: String, CodingKey {
-        case email, password
+        case email, password, captcha
         case inviteCode = "invite_code"
     }
 }
