@@ -157,6 +157,7 @@ class SystemStore: ObservableObject {
 
     /// Sets errorMessage unless the error is a 403 (handled by gate views).
     private func showError(_ error: Error) {
+        if error is CancellationError || (error as NSError).code == NSURLErrorCancelled { return }
         let ns = error as NSError
         if ns.domain == "APIError" && ns.code == 403 { return }
         errorMessage = error.localizedDescription

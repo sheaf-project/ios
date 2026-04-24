@@ -237,6 +237,8 @@ struct AnnouncementEditSheet: View {
                 onSave()
                 dismiss()
             }
+        } catch is CancellationError {
+            await MainActor.run { isSaving = false }
         } catch {
             await MainActor.run {
                 self.error = error.localizedDescription

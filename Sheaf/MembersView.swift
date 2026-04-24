@@ -863,6 +863,8 @@ struct AvatarInputSection: View {
                 }
                 selectedPhoto = nil
             }
+        } catch is CancellationError {
+            await MainActor.run { selectedPhoto = nil }
         } catch {
             await MainActor.run {
                 uploadError = error.localizedDescription

@@ -778,6 +778,8 @@ struct SettingsView: View {
                 isExporting = false
                 presentShareSheet(url: tempURL)
             }
+        } catch is CancellationError {
+            await MainActor.run { isExporting = false }
         } catch {
             await MainActor.run {
                 isExporting = false

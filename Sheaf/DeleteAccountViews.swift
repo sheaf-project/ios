@@ -161,6 +161,8 @@ struct DeleteConfirmationSheet: View {
                 isSaving = false
                 dismiss()
             }
+        } catch is CancellationError {
+            await MainActor.run { isSaving = false }
         } catch {
             await MainActor.run {
                 self.error = error.localizedDescription
@@ -313,6 +315,8 @@ struct DeleteAccountSheet: View {
             // Don't dismiss() — logout changes the view hierarchy,
             // which removes this sheet automatically.
             await MainActor.run { authManager.logout() }
+        } catch is CancellationError {
+            isDeleting = false
         } catch {
             errorMessage = error.localizedDescription
             isDeleting = false

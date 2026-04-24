@@ -158,6 +158,8 @@ struct TOTPView: View {
                     authManager.completeTOTP()
                     isVerifying = false
                 }
+            } catch is CancellationError {
+                await MainActor.run { isVerifying = false }
             } catch {
                 await MainActor.run {
                     self.error = String(localized: "Incorrect code — please try again")

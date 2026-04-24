@@ -315,6 +315,7 @@ struct TOTPSetupSheet: View {
                 setupResponse = response
                 withAnimation { step = .scan }
             }
+        } catch is CancellationError {
         } catch {
             await MainActor.run {
                 self.error = error.localizedDescription
@@ -718,6 +719,8 @@ struct TOTPManageSheet: View {
                 isProcessing = false
                 withAnimation { page = .disabled }
             }
+        } catch is CancellationError {
+            await MainActor.run { isProcessing = false }
         } catch {
             await MainActor.run {
                 self.error = error.localizedDescription
@@ -737,6 +740,8 @@ struct TOTPManageSheet: View {
                 isProcessing = false
                 withAnimation { page = .recoveryCodes }
             }
+        } catch is CancellationError {
+            await MainActor.run { isProcessing = false }
         } catch {
             await MainActor.run {
                 self.error = error.localizedDescription

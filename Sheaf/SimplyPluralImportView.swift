@@ -319,6 +319,8 @@ struct SheafImportSheet: View {
                 previewSummary = summary
                 isLoading = false
             }
+        } catch is CancellationError {
+            await MainActor.run { isLoading = false }
         } catch {
             await MainActor.run {
                 errorMessage = error.localizedDescription
@@ -344,6 +346,7 @@ struct SheafImportSheet: View {
             await MainActor.run {
                 withAnimation { step = .done }
             }
+        } catch is CancellationError {
         } catch {
             await MainActor.run {
                 errorMessage = error.localizedDescription
@@ -868,6 +871,8 @@ struct SimplyPluralImportSheet: View {
                 preview = summary
                 isLoading = false
             }
+        } catch is CancellationError {
+            await MainActor.run { isLoading = false }
         } catch {
             await MainActor.run {
                 errorMessage = error.localizedDescription
@@ -895,6 +900,7 @@ struct SimplyPluralImportSheet: View {
                 result = importResult
                 withAnimation { step = .done }
             }
+        } catch is CancellationError {
         } catch {
             await MainActor.run {
                 errorMessage = error.localizedDescription

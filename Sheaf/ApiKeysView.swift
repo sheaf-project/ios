@@ -384,6 +384,8 @@ struct CreateApiKeySheet: View {
                 isCreating = false
                 onCreate(created)
             }
+        } catch is CancellationError {
+            await MainActor.run { isCreating = false }
         } catch {
             await MainActor.run {
                 self.error = error.localizedDescription
