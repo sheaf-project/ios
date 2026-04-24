@@ -85,7 +85,7 @@ struct MembersView: View {
                     }
                 }
             }
-            .background(theme.backgroundPrimary)
+            .background(theme.backgroundPrimary.ignoresSafeArea())
             .navigationTitle("Members")
             .navigationBarTitleDisplayMode(.large)
             .searchable(text: $searchText, placement: .automatic, prompt: "Search members")
