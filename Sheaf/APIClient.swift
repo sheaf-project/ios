@@ -40,6 +40,10 @@ final class AuthManager: ObservableObject {
     private(set) var pendingTokens: TokenResponse?
     private(set) var pendingBaseURL: String = ""
 
+    /// Shared across all APIClient instances so concurrent refreshes coalesce
+    /// even when multiple short-lived clients exist.
+    var refreshTask: Task<TokenResponse, Error>?
+
     private let accessKey  = "sheaf_access_token"
     private let refreshKey = "sheaf_refresh_token"
     private let urlKey     = "sheaf_base_url"
@@ -146,9 +150,6 @@ final class AuthManager: ObservableObject {
 // MARK: - APIClient
 class APIClient {
     let auth: AuthManager
-
-    /// Serialises concurrent refresh attempts so only one goes out at a time.
-    private var refreshTask: Task<TokenResponse, Error>?
 
     private var clientIdentifier: String {
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown"
@@ -394,9 +395,9 @@ class APIClient {
     /// Saves the rotated tokens before releasing the coalescing lock so
     /// subsequent callers never see a stale refresh token.
     private func refreshOnce() async throws -> TokenResponse {
-        if let existing = refreshTask { return try await existing.value }
+        if let existing = auth.refreshTask { return try await existing.value }
         let task = Task<TokenResponse, Error> { [auth] in
-            defer { refreshTask = nil }
+            defer { auth.refreshTask = nil }
             guard !auth.refreshToken.isEmpty else {
                 throw NSError(domain: "APIError", code: 401,
                               userInfo: [NSLocalizedDescriptionKey: "No refresh token available."])
@@ -419,7 +420,7 @@ class APIClient {
             await MainActor.run { auth.save(baseURL: auth.baseURL, tokens: fresh) }
             return fresh
         }
-        refreshTask = task
+        auth.refreshTask = task
         return try await task.value
     }
 
