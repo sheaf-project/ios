@@ -32,7 +32,7 @@ struct SessionsView: View {
                 List {
                     ForEach(sessions) { session in
                         sessionRow(session)
-                            .listRowBackground(theme.backgroundCard)
+                            .listRowBackground(theme.backgroundPrimary)
                             .listRowSeparator(.hidden)
                             .listRowInsets(EdgeInsets(top: 5, leading: 24, bottom: 5, trailing: 24))
                             .swipeActions(edge: .trailing, allowsFullSwipe: false) {
@@ -47,6 +47,7 @@ struct SessionsView: View {
                     }
                 }
                 .listStyle(.plain)
+                .scrollContentBackground(.hidden)
                 .refreshable { await load() }
             }
         }
@@ -126,15 +127,30 @@ struct SessionsView: View {
                     }
 
                     Spacer()
+                }
 
+                HStack(spacing: 16) {
                     if let lastActive = session.lastActiveAt {
-                        Text(lastActive, format: .dateTime.month(.abbreviated).day().hour().minute())
+                        Text("Active \(lastActive, style: .relative) ago")
+                            .font(.caption2)
+                            .foregroundColor(theme.textTertiary)
+                    } else {
+                        Text("Never active")
                             .font(.caption2)
                             .foregroundColor(theme.textTertiary)
                     }
+                    Spacer()
+                    Text("Created \(session.createdAt, style: .date)")
+                        .font(.caption2)
+                        .foregroundColor(theme.textTertiary)
                 }
+                .padding(.leading, 32)
             }
-            .padding(.vertical, 6)
+            .padding(14)
+            .background(theme.backgroundCard)
+            .cornerRadius(14)
+            .overlay(RoundedRectangle(cornerRadius: 14)
+                .stroke(session.isCurrent ? theme.success.opacity(0.4) : Color.clear, lineWidth: 1))
         }
         .buttonStyle(.plain)
     }

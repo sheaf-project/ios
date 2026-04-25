@@ -38,7 +38,7 @@ struct ApiKeysView: View {
                 List {
                     ForEach(keys) { key in
                         apiKeyRow(key)
-                            .listRowBackground(theme.backgroundCard)
+                            .listRowBackground(theme.backgroundPrimary)
                             .listRowSeparator(.hidden)
                             .listRowInsets(EdgeInsets(top: 5, leading: 24, bottom: 5, trailing: 24))
                     }
@@ -133,11 +133,11 @@ struct ApiKeysView: View {
 
             HStack(spacing: 16) {
                 if let lastUsed = key.lastUsedAt {
-                    Label("Used \(lastUsed, style: .relative) ago", systemImage: "clock")
+                    Text("Used \(lastUsed, style: .relative) ago")
                         .font(.caption2)
                         .foregroundColor(theme.textTertiary)
                 } else {
-                    Label("Never used", systemImage: "clock")
+                    Text("Never used")
                         .font(.caption2)
                         .foregroundColor(theme.textTertiary)
                 }
