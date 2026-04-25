@@ -4,6 +4,7 @@ import Foundation
 /// same endpoints as iOS APIClient but using WatchAuthManager.
 class WatchAPIClient {
     let auth: WatchAuthManager
+    private var refreshTask: Task<TokenResponse, Error>?
 
     init(auth: WatchAuthManager) { self.auth = auth }
 
@@ -17,6 +18,31 @@ class WatchAPIClient {
     }
 
     private func request(_ path: String, method: String = "GET", body: Data? = nil) async throws -> Data {
+        let (data, status) = try await perform(path, method: method, body: body)
+        if status != 401 { return data }
+
+        do {
+            _ = try await refreshOnce()
+        } catch {
+            let code = (error as NSError).code
+            if code == 401 || code == 403 {
+                await MainActor.run { auth.logout() }
+                WatchConnectivityManager.shared.requestCredentials()
+                throw URLError(.userAuthenticationRequired)
+            }
+            throw error
+        }
+
+        let (retryData, retryStatus) = try await perform(path, method: method, body: body)
+        guard retryStatus != 401 else {
+            await MainActor.run { auth.logout() }
+            WatchConnectivityManager.shared.requestCredentials()
+            throw URLError(.userAuthenticationRequired)
+        }
+        return retryData
+    }
+
+    private func perform(_ path: String, method: String, body: Data?) async throws -> (Data, Int) {
         guard let url = URL(string: auth.baseURL + path) else { throw URLError(.badURL) }
         var req = URLRequest(url: url)
         req.httpMethod = method
@@ -29,38 +55,44 @@ class WatchAPIClient {
         }
         let (data, response) = try await URLSession.shared.data(for: req)
         guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
-        if http.statusCode == 401 {
-            // Attempt token refresh then retry once
-            if let fresh = try? await refreshTokens() {
-                await MainActor.run {
-                    auth.save(baseURL: auth.baseURL,
-                              accessToken: fresh.accessToken,
-                              refreshToken: fresh.refreshToken)
-                }
-                return try await request(path, method: method, body: body)
-            }
-            // Refresh failed — log out and ask iPhone for fresh credentials
-            await MainActor.run { auth.logout() }
-            WatchConnectivityManager.shared.requestCredentials()
-            throw URLError(.userAuthenticationRequired)
-        }
-        guard (200...299).contains(http.statusCode) else {
+        if http.statusCode != 401 && !(200...299).contains(http.statusCode) {
             let msg = String(data: data, encoding: .utf8) ?? "(no body)"
             throw NSError(domain: "APIError", code: http.statusCode,
                           userInfo: [NSLocalizedDescriptionKey: "HTTP \(http.statusCode): \(msg)"])
         }
-        return data
+        return (data, http.statusCode)
     }
 
-    private func refreshTokens() async throws -> TokenResponse {
-        guard let url = URL(string: auth.baseURL + "/v1/auth/refresh") else { throw URLError(.badURL) }
-        var req = URLRequest(url: url)
-        req.httpMethod = "POST"
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        applyCFHeaders(to: &req)
-        req.httpBody = try JSONEncoder.iso.encode(TokenRefresh(refreshToken: auth.refreshToken))
-        let (data, _) = try await URLSession.shared.data(for: req)
-        return try JSONDecoder.iso.decode(TokenResponse.self, from: data)
+    private func refreshOnce() async throws -> TokenResponse {
+        if let existing = refreshTask { return try await existing.value }
+        let task = Task<TokenResponse, Error> { [auth] in
+            defer { refreshTask = nil }
+            guard !auth.refreshToken.isEmpty else {
+                throw NSError(domain: "APIError", code: 401,
+                              userInfo: [NSLocalizedDescriptionKey: "No refresh token available."])
+            }
+            guard let url = URL(string: auth.baseURL + "/v1/auth/refresh") else { throw URLError(.badURL) }
+            var req = URLRequest(url: url)
+            req.httpMethod = "POST"
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            applyCFHeaders(to: &req)
+            req.httpBody = try JSONEncoder.iso.encode(TokenRefresh(refreshToken: auth.refreshToken))
+            let (data, response) = try await URLSession.shared.data(for: req)
+            guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
+            guard (200...299).contains(http.statusCode) else {
+                throw NSError(domain: "APIError", code: http.statusCode,
+                              userInfo: [NSLocalizedDescriptionKey: "HTTP \(http.statusCode)"])
+            }
+            let fresh = try JSONDecoder.iso.decode(TokenResponse.self, from: data)
+            await MainActor.run {
+                auth.save(baseURL: auth.baseURL,
+                          accessToken: fresh.accessToken,
+                          refreshToken: fresh.refreshToken)
+            }
+            return fresh
+        }
+        refreshTask = task
+        return try await task.value
     }
 
     func login(email: String, password: String) async throws -> TokenResponse {

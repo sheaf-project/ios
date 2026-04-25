@@ -339,9 +339,8 @@ class APIClient {
         if status != 401 { return data }
 
         // 401 — try to refresh once, then retry
-        let fresh: TokenResponse
         do {
-            fresh = try await refreshOnce()
+            _ = try await refreshOnce()
         } catch {
             let code = (error as NSError).code
             if code == 401 || code == 403 {
@@ -353,7 +352,6 @@ class APIClient {
             // Transient error (network, server 5xx, etc.) — don't log out
             throw error
         }
-        await MainActor.run { auth.save(baseURL: auth.baseURL, tokens: fresh) }
 
         let (retryData, retryStatus) = try await perform(path, method: method, body: body)
         guard retryStatus != 401 else {
@@ -393,9 +391,11 @@ class APIClient {
     }
 
     /// Coalesces concurrent refresh calls into one network request.
+    /// Saves the rotated tokens before releasing the coalescing lock so
+    /// subsequent callers never see a stale refresh token.
     private func refreshOnce() async throws -> TokenResponse {
         if let existing = refreshTask { return try await existing.value }
-        let task = Task<TokenResponse, Error> {
+        let task = Task<TokenResponse, Error> { [auth] in
             defer { refreshTask = nil }
             guard !auth.refreshToken.isEmpty else {
                 throw NSError(domain: "APIError", code: 401,
@@ -415,7 +415,9 @@ class APIClient {
                 throw NSError(domain: "APIError", code: http.statusCode,
                               userInfo: [NSLocalizedDescriptionKey: friendlyErrorMessage(statusCode: http.statusCode, data: data)])
             }
-            return try JSONDecoder.iso.decode(TokenResponse.self, from: data)
+            let fresh = try JSONDecoder.iso.decode(TokenResponse.self, from: data)
+            await MainActor.run { auth.save(baseURL: auth.baseURL, tokens: fresh) }
+            return fresh
         }
         refreshTask = task
         return try await task.value
@@ -467,9 +469,7 @@ class APIClient {
     }
 
     func refreshTokens() async throws -> TokenResponse {
-        let body = try JSONEncoder.iso.encode(TokenRefresh(refreshToken: auth.refreshToken))
-        let data = try await request("/v1/auth/refresh", method: "POST", body: body)
-        return try JSONDecoder.iso.decode(TokenResponse.self, from: data)
+        return try await refreshOnce()
     }
 
     /// Verify a 6-digit TOTP code. Requires a valid access token already set on auth.
