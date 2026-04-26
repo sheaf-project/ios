@@ -28,6 +28,8 @@ struct SettingsView: View {
     @State private var showCancelDeletion = false
     @State private var isCancellingDeletion = false
     @State private var newsletterOptIn = false
+    @State private var showChangePassword = false
+    @State private var showChangeEmail = false
 
     var body: some View {
         NavigationStack {
@@ -44,7 +46,7 @@ struct SettingsView: View {
                         .padding(.top, 16)
 
                     // Pending deletion banner
-                    if let me, let deletionDate = me.deletionRequestedAt {
+                    if let me, me.deletionRequestedAt != nil {
                         settingsSection(title: "") {
                             VStack(spacing: 12) {
                                 HStack(spacing: 10) {
@@ -54,15 +56,19 @@ struct SettingsView: View {
                                         Text("Account Deletion Pending")
                                             .font(.subheadline).fontWeight(.semibold)
                                             .foregroundColor(theme.danger)
-                                        if let days = authManager.deletionGraceDays {
-                                            let deletionDate2 = Calendar.current.date(byAdding: .day, value: days, to: deletionDate) ?? deletionDate
+                                        if let scheduledFor = me.deletionScheduledFor, scheduledFor > Date() {
+                                            Text("Your account will be permanently deleted in \(scheduledFor, style: .relative).")
+                                                .font(.footnote)
+                                                .foregroundColor(theme.textSecondary)
+                                        } else if let days = authManager.deletionGraceDays, let requestedAt = me.deletionRequestedAt {
+                                            let deletionDate2 = Calendar.current.date(byAdding: .day, value: days, to: requestedAt) ?? requestedAt
                                             if deletionDate2 > Date() {
                                                 Text("Your account will be permanently deleted in \(deletionDate2, style: .relative).")
                                                     .font(.footnote)
                                                     .foregroundColor(theme.textSecondary)
                                             }
-                                        } else {
-                                            Text("Requested \(deletionDate, style: .relative) ago")
+                                        } else if let requestedAt = me.deletionRequestedAt {
+                                            Text("Requested \(requestedAt, style: .relative) ago")
                                                 .font(.footnote)
                                                 .foregroundColor(theme.textSecondary)
                                         }
@@ -97,6 +103,22 @@ struct SettingsView: View {
                             infoRow(icon: "link", label: String(localized: "API URL"), value: authManager.baseURL)
                             Divider().background(theme.backgroundCard)
                             infoRow(icon: "envelope.fill", label: String(localized: "Email"), value: me?.email ?? "—")
+                            Divider().background(theme.backgroundCard)
+                            Button { showChangeEmail = true } label: {
+                                HStack {
+                                    Image(systemName: "envelope.badge.fill")
+                                        .foregroundColor(theme.accentLight)
+                                        .frame(width: 20)
+                                    Text("Change Email")
+                                        .font(.subheadline).fontWeight(.medium)
+                                        .foregroundColor(theme.accentLight)
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .font(.caption)
+                                        .foregroundColor(theme.textTertiary)
+                                }
+                                .padding(.horizontal, 16).padding(.vertical, 14)
+                            }
                         }
                     }
 
@@ -212,6 +234,49 @@ struct SettingsView: View {
                                 }
                                 .padding(.horizontal, 16).padding(.vertical, 14)
                             }
+
+                            Divider().background(theme.backgroundCard)
+
+                            // Change password
+                            Button { showChangePassword = true } label: {
+                                HStack {
+                                    Image(systemName: "key.fill")
+                                        .foregroundColor(theme.accentLight)
+                                        .frame(width: 20)
+                                    Text("Change Password")
+                                        .font(.subheadline).fontWeight(.medium)
+                                        .foregroundColor(theme.accentLight)
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .font(.caption)
+                                        .foregroundColor(theme.textTertiary)
+                                }
+                                .padding(.horizontal, 16).padding(.vertical, 14)
+                            }
+
+                            Divider().background(theme.backgroundCard)
+
+                            // Trusted devices
+                            NavigationLink {
+                                TrustedDevicesView()
+                                    .environmentObject(authManager)
+                                    .environmentObject(store)
+                            } label: {
+                                HStack {
+                                    Image(systemName: "checkmark.shield.fill")
+                                        .foregroundColor(theme.accentLight)
+                                        .frame(width: 20)
+                                    Text("Trusted Devices")
+                                        .font(.subheadline).fontWeight(.medium)
+                                        .foregroundColor(theme.textPrimary)
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .font(.caption)
+                                        .foregroundColor(theme.textTertiary)
+                                }
+                                .padding(.horizontal, 16).padding(.vertical, 14)
+                            }
+                            .buttonStyle(.plain)
                         }
                     }
 
@@ -632,6 +697,16 @@ struct SettingsView: View {
         }
         .sheet(isPresented: $showDeleteAccount, onDismiss: { Task { await loadMe() } }) {
             DeleteAccountSheet()
+                .environmentObject(authManager)
+                .environmentObject(store)
+        }
+        .sheet(isPresented: $showChangePassword) {
+            ChangePasswordSheet(totpEnabled: me?.totpEnabled == true)
+                .environmentObject(authManager)
+                .environmentObject(store)
+        }
+        .sheet(isPresented: $showChangeEmail, onDismiss: { Task { await loadMe() } }) {
+            ChangeEmailSheet(totpEnabled: me?.totpEnabled == true)
                 .environmentObject(authManager)
                 .environmentObject(store)
         }

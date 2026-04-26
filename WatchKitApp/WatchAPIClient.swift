@@ -63,36 +63,37 @@ class WatchAPIClient {
         return (data, http.statusCode)
     }
 
+    @MainActor
     private func refreshOnce() async throws -> TokenResponse {
         if let existing = refreshTask { return try await existing.value }
-        let task = Task<TokenResponse, Error> { [auth] in
-            defer { refreshTask = nil }
-            guard !auth.refreshToken.isEmpty else {
-                throw NSError(domain: "APIError", code: 401,
-                              userInfo: [NSLocalizedDescriptionKey: "No refresh token available."])
-            }
-            guard let url = URL(string: auth.baseURL + "/v1/auth/refresh") else { throw URLError(.badURL) }
-            var req = URLRequest(url: url)
-            req.httpMethod = "POST"
-            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            applyCFHeaders(to: &req)
-            req.httpBody = try JSONEncoder.iso.encode(TokenRefresh(refreshToken: auth.refreshToken))
+
+        guard !auth.refreshToken.isEmpty else {
+            throw NSError(domain: "APIError", code: 401,
+                          userInfo: [NSLocalizedDescriptionKey: "No refresh token available."])
+        }
+        guard let url = URL(string: auth.baseURL + "/v1/auth/refresh") else { throw URLError(.badURL) }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        applyCFHeaders(to: &req)
+        req.httpBody = try JSONEncoder.iso.encode(TokenRefresh(refreshToken: auth.refreshToken))
+
+        let task = Task<TokenResponse, Error> {
             let (data, response) = try await URLSession.shared.data(for: req)
             guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
             guard (200...299).contains(http.statusCode) else {
                 throw NSError(domain: "APIError", code: http.statusCode,
                               userInfo: [NSLocalizedDescriptionKey: "HTTP \(http.statusCode)"])
             }
-            let fresh = try JSONDecoder.iso.decode(TokenResponse.self, from: data)
-            await MainActor.run {
-                auth.save(baseURL: auth.baseURL,
-                          accessToken: fresh.accessToken,
-                          refreshToken: fresh.refreshToken)
-            }
-            return fresh
+            return try JSONDecoder.iso.decode(TokenResponse.self, from: data)
         }
         refreshTask = task
-        return try await task.value
+        defer { refreshTask = nil }
+        let fresh = try await task.value
+        auth.save(baseURL: auth.baseURL,
+                  accessToken: fresh.accessToken,
+                  refreshToken: fresh.refreshToken)
+        return fresh
     }
 
     func login(email: String, password: String) async throws -> TokenResponse {

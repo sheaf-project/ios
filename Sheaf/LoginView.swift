@@ -124,6 +124,7 @@ struct SignInForm: View {
     @State private var email    = ""
     @State private var password = ""
     @State private var totpCode = ""
+    @State private var rememberDevice = false
     @State private var error    = ""
     @State private var isLoading = false
     @State private var needsTOTP = false
@@ -141,6 +142,17 @@ struct SignInForm: View {
             if needsTOTP {
                 formField(icon: "lock.shield", label: "2FA Code", placeholder: "000000", value: $totpCode, field: .totp, keyboard: .numberPad)
                     .transition(.opacity.combined(with: .move(edge: .top)))
+
+                HStack(spacing: 8) {
+                    Toggle("", isOn: $rememberDevice)
+                        .labelsHidden()
+                        .tint(theme.accentLight)
+                    Text("Remember this device")
+                        .font(.subheadline)
+                        .foregroundColor(theme.textSecondary)
+                    Spacer()
+                }
+                .transition(.opacity)
             }
 
             if !error.isEmpty { errorLabel(error) }
@@ -207,7 +219,7 @@ struct SignInForm: View {
                     debugLog("Login: Altcha challenge solved")
                 }
                 debugLog("Login: Starting login request... (TOTP: \(totpCode.isEmpty ? "no" : "yes"))")
-                let tokens = try await api.login(email: email, password: password, totpCode: totpCode.isEmpty ? nil : totpCode, captcha: captchaPayload)
+                let tokens = try await api.login(email: email, password: password, totpCode: totpCode.isEmpty ? nil : totpCode, captcha: captchaPayload, rememberDevice: rememberDevice)
                 debugLog("Login: Login successful, got tokens")
                 
                 // Login succeeded, save credentials
@@ -230,6 +242,12 @@ struct SignInForm: View {
                     withAnimation { needsTOTP = true }
                     error = "Please enter your 6-digit authenticator code"
                     focused = .totp
+                    isLoading = false
+                }
+            } catch let lockError as APIClient.AccountLockedError {
+                debugLog("Login: Account locked")
+                await MainActor.run {
+                    self.error = lockError.message
                     isLoading = false
                 }
             } catch is CancellationError {

@@ -396,10 +396,12 @@ struct UserLogin: Codable {
     var password: String
     var totpCode: String?
     var captcha: String?
+    var rememberDevice: Bool?
 
     enum CodingKeys: String, CodingKey {
         case email, password, captcha
         case totpCode = "totp_code"
+        case rememberDevice = "remember_device"
     }
 }
 
@@ -431,6 +433,7 @@ struct UserRead: Codable {
     let createdAt: Date
     let lastLoginAt: Date?
     let deletionRequestedAt: Date?
+    let deletionScheduledFor: Date?
 
     enum CodingKeys: String, CodingKey {
         case id, email, tier
@@ -442,21 +445,23 @@ struct UserRead: Codable {
         case createdAt            = "created_at"
         case lastLoginAt          = "last_login_at"
         case deletionRequestedAt  = "deletion_requested_at"
+        case deletionScheduledFor = "deletion_scheduled_for"
     }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        id                  = try c.decode(String.self, forKey: .id)
-        email               = try c.decode(String.self, forKey: .email)
-        totpEnabled         = try c.decode(Bool.self, forKey: .totpEnabled)
-        isAdmin             = try c.decode(Bool.self, forKey: .isAdmin)
-        tier                = try c.decode(String.self, forKey: .tier)
-        accountStatus       = try c.decodeIfPresent(AccountStatus.self, forKey: .accountStatus) ?? .active
-        emailVerified       = try c.decodeIfPresent(Bool.self, forKey: .emailVerified) ?? true
-        newsletterOptIn     = try c.decodeIfPresent(Bool.self, forKey: .newsletterOptIn) ?? false
-        createdAt           = try c.decode(Date.self, forKey: .createdAt)
-        lastLoginAt         = try c.decodeIfPresent(Date.self, forKey: .lastLoginAt)
-        deletionRequestedAt = try c.decodeIfPresent(Date.self, forKey: .deletionRequestedAt)
+        id                   = try c.decode(String.self, forKey: .id)
+        email                = try c.decode(String.self, forKey: .email)
+        totpEnabled          = try c.decode(Bool.self, forKey: .totpEnabled)
+        isAdmin              = try c.decode(Bool.self, forKey: .isAdmin)
+        tier                 = try c.decode(String.self, forKey: .tier)
+        accountStatus        = try c.decodeIfPresent(AccountStatus.self, forKey: .accountStatus) ?? .active
+        emailVerified        = try c.decodeIfPresent(Bool.self, forKey: .emailVerified) ?? true
+        newsletterOptIn      = try c.decodeIfPresent(Bool.self, forKey: .newsletterOptIn) ?? false
+        createdAt            = try c.decode(Date.self, forKey: .createdAt)
+        lastLoginAt          = try c.decodeIfPresent(Date.self, forKey: .lastLoginAt)
+        deletionRequestedAt  = try c.decodeIfPresent(Date.self, forKey: .deletionRequestedAt)
+        deletionScheduledFor = try c.decodeIfPresent(Date.self, forKey: .deletionScheduledFor)
     }
 }
 
@@ -1023,4 +1028,58 @@ struct AnnouncementUpdate: Codable {
         case clearStartsAt = "clear_starts_at"
         case clearExpiresAt = "clear_expires_at"
     }
+}
+
+// MARK: - Change Password
+struct PasswordChange: Codable {
+    let currentPassword: String
+    let newPassword: String
+    let totpCode: String?
+
+    enum CodingKeys: String, CodingKey {
+        case currentPassword = "current_password"
+        case newPassword     = "new_password"
+        case totpCode        = "totp_code"
+    }
+}
+
+// MARK: - Change Email
+struct EmailChange: Codable {
+    let newEmail: String
+    let currentPassword: String
+    let totpCode: String?
+
+    enum CodingKeys: String, CodingKey {
+        case newEmail        = "new_email"
+        case currentPassword = "current_password"
+        case totpCode        = "totp_code"
+    }
+}
+
+// MARK: - Trusted Devices
+struct TrustedDevice: Identifiable, Codable {
+    let id: String
+    let nickname: String?
+    let userAgent: String?
+    let createdAt: Date
+    let createdIp: String?
+    let lastUsedAt: Date?
+    let lastUsedIp: String?
+    let expiresAt: Date
+    let isCurrent: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case id, nickname
+        case userAgent  = "user_agent"
+        case createdAt  = "created_at"
+        case createdIp  = "created_ip"
+        case lastUsedAt = "last_used_at"
+        case lastUsedIp = "last_used_ip"
+        case expiresAt  = "expires_at"
+        case isCurrent  = "is_current"
+    }
+}
+
+struct TrustedDeviceRename: Codable {
+    let nickname: String
 }

@@ -221,6 +221,7 @@ class APIClient {
         switch statusCode {
         case 400: return "Bad request. Please check your input."
         case 403: return "Access denied."
+        case 423: return "Account temporarily locked. Please wait a few minutes and try again."
         case 404: return "The requested resource was not found."
         case 409: return "Conflict — the resource may have been modified."
         case 413: return "The request is too large."
@@ -392,36 +393,43 @@ class APIClient {
     }
 
     /// Coalesces concurrent refresh calls into one network request.
-    /// Saves the rotated tokens before releasing the coalescing lock so
-    /// subsequent callers never see a stale refresh token.
+    /// Runs the check-then-set on @MainActor so concurrent callers from
+    /// different APIClient instances (or async-let children) cannot race
+    /// past the guard and fire duplicate refresh requests.
+    @MainActor
     private func refreshOnce() async throws -> TokenResponse {
         if let existing = auth.refreshTask { return try await existing.value }
-        let task = Task<TokenResponse, Error> { [auth] in
-            defer { auth.refreshTask = nil }
-            guard !auth.refreshToken.isEmpty else {
-                throw NSError(domain: "APIError", code: 401,
-                              userInfo: [NSLocalizedDescriptionKey: "No refresh token available."])
-            }
-            let body = try JSONEncoder.iso.encode(TokenRefresh(refreshToken: auth.refreshToken))
-            guard let url = URL(string: auth.baseURL + "/v1/auth/refresh") else { throw URLError(.badURL) }
-            var req = URLRequest(url: url)
-            req.httpMethod = "POST"
-            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            req.setValue("application/json", forHTTPHeaderField: "Accept")
-            applyCFHeaders(to: &req)
-            req.httpBody = body
-            let (data, response) = try await urlSession.data(for: req)
+
+        guard !auth.refreshToken.isEmpty else {
+            throw NSError(domain: "APIError", code: 401,
+                          userInfo: [NSLocalizedDescriptionKey: "No refresh token available."])
+        }
+        let body = try JSONEncoder.iso.encode(TokenRefresh(refreshToken: auth.refreshToken))
+        guard let url = URL(string: auth.baseURL + "/v1/auth/refresh") else { throw URLError(.badURL) }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue("application/json", forHTTPHeaderField: "Accept")
+        applyCFHeaders(to: &req)
+        req.httpBody = body
+        let session = urlSession
+
+        let task = Task<TokenResponse, Error> { [weak self] in
+            let (data, response) = try await session.data(for: req)
             guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
             guard (200...299).contains(http.statusCode) else {
+                let msg = self?.friendlyErrorMessage(statusCode: http.statusCode, data: data)
+                    ?? "HTTP \(http.statusCode)"
                 throw NSError(domain: "APIError", code: http.statusCode,
-                              userInfo: [NSLocalizedDescriptionKey: friendlyErrorMessage(statusCode: http.statusCode, data: data)])
+                              userInfo: [NSLocalizedDescriptionKey: msg])
             }
-            let fresh = try JSONDecoder.iso.decode(TokenResponse.self, from: data)
-            await MainActor.run { auth.save(baseURL: auth.baseURL, tokens: fresh) }
-            return fresh
+            return try JSONDecoder.iso.decode(TokenResponse.self, from: data)
         }
         auth.refreshTask = task
-        return try await task.value
+        defer { auth.refreshTask = nil }
+        let fresh = try await task.value
+        auth.save(baseURL: auth.baseURL, tokens: fresh)
+        return fresh
     }
 
     // MARK: - Auth
@@ -429,8 +437,12 @@ class APIClient {
     /// Error thrown when the server requires a TOTP code to complete login.
     struct TOTPRequiredError: Error {}
 
-    func login(email: String, password: String, totpCode: String? = nil, captcha: String? = nil) async throws -> TokenResponse {
-        let body = try JSONEncoder.iso.encode(UserLogin(email: email, password: password, totpCode: totpCode, captcha: captcha))
+    struct AccountLockedError: Error {
+        let message: String
+    }
+
+    func login(email: String, password: String, totpCode: String? = nil, captcha: String? = nil, rememberDevice: Bool = false) async throws -> TokenResponse {
+        let body = try JSONEncoder.iso.encode(UserLogin(email: email, password: password, totpCode: totpCode, captcha: captcha, rememberDevice: rememberDevice))
         // Don't use request() because login endpoints shouldn't trigger token refresh
         guard let url = URL(string: auth.baseURL + "/v1/auth/login") else { throw URLError(.badURL) }
         var req = URLRequest(url: url)
@@ -446,6 +458,12 @@ class APIClient {
         if http.statusCode == 401,
            http.value(forHTTPHeaderField: "X-Sheaf-2FA") == "required" {
             throw TOTPRequiredError()
+        }
+        // Check for account lockout
+        if http.statusCode == 423 {
+            let msg = parseJSONErrorMessage(from: data)
+                ?? "Account temporarily locked. Please wait a few minutes and try again."
+            throw AccountLockedError(message: msg)
         }
         // Detect Cloudflare Access interception (200 OK with HTML)
         if (200...299).contains(http.statusCode) {
@@ -670,6 +688,55 @@ class APIClient {
 
     func cancelDeletion() async throws {
         _ = try await request("/v1/auth/cancel-deletion", method: "POST")
+    }
+
+    // MARK: - Change Password
+
+    func changePassword(currentPassword: String, newPassword: String, totpCode: String? = nil) async throws -> Int {
+        let req = PasswordChange(currentPassword: currentPassword, newPassword: newPassword, totpCode: totpCode)
+        let body = try JSONEncoder.iso.encode(req)
+        let data = try await request("/v1/auth/change-password", method: "POST", body: body)
+        if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            return json["revoked_other_sessions"] as? Int ?? 0
+        }
+        return 0
+    }
+
+    // MARK: - Change Email
+
+    func changeEmail(newEmail: String, currentPassword: String, totpCode: String? = nil) async throws -> Int {
+        let req = EmailChange(newEmail: newEmail, currentPassword: currentPassword, totpCode: totpCode)
+        let body = try JSONEncoder.iso.encode(req)
+        let data = try await request("/v1/auth/change-email", method: "POST", body: body)
+        if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            return json["revoked_other_sessions"] as? Int ?? 0
+        }
+        return 0
+    }
+
+    // MARK: - Trusted Devices
+
+    func listTrustedDevices() async throws -> [TrustedDevice] {
+        let data = try await request("/v1/auth/trusted-devices")
+        return try JSONDecoder.iso.decode([TrustedDevice].self, from: data)
+    }
+
+    func renameTrustedDevice(id: String, nickname: String) async throws -> TrustedDevice {
+        let body = try JSONEncoder.iso.encode(TrustedDeviceRename(nickname: nickname))
+        let data = try await request("/v1/auth/trusted-devices/\(id)", method: "PATCH", body: body)
+        return try JSONDecoder.iso.decode(TrustedDevice.self, from: data)
+    }
+
+    func revokeTrustedDevice(id: String) async throws {
+        _ = try await request("/v1/auth/trusted-devices/\(id)", method: "DELETE")
+    }
+
+    func revokeAllTrustedDevices() async throws -> Int {
+        let data = try await request("/v1/auth/trusted-devices/revoke-all", method: "POST")
+        if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            return json["revoked"] as? Int ?? 0
+        }
+        return 0
     }
 
     // MARK: - Admin Approvals

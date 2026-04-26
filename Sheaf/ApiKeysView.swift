@@ -13,6 +13,7 @@ struct ApiKeysView: View {
     @State private var createdKey: ApiKeyCreated?
     @State private var showCreatedAlert = false
     @State private var copiedKey = false
+    @State private var keyToDelete: ApiKeyRead?
 
     var body: some View {
         ZStack {
@@ -43,12 +44,8 @@ struct ApiKeysView: View {
                             .listRowInsets(EdgeInsets(top: 5, leading: 24, bottom: 5, trailing: 24))
                     }
                     .onDelete { indexSet in
-                        Task {
-                            for index in indexSet {
-                                let key = keys[index]
-                                try? await store.api?.revokeApiKey(id: key.id)
-                            }
-                            keys.remove(atOffsets: indexSet)
+                        if let index = indexSet.first {
+                            keyToDelete = keys[index]
                         }
                     }
                 }
@@ -83,6 +80,27 @@ struct ApiKeysView: View {
         .sheet(isPresented: $showCreatedAlert) {
             if let created = createdKey {
                 apiKeyCreatedSheet(created)
+            }
+        }
+        .confirmationDialog(
+            "Revoke API Key",
+            isPresented: Binding(
+                get: { keyToDelete != nil },
+                set: { if !$0 { keyToDelete = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Revoke", role: .destructive) {
+                guard let key = keyToDelete else { return }
+                Task {
+                    try? await store.api?.revokeApiKey(id: key.id)
+                    keys.removeAll { $0.id == key.id }
+                }
+                keyToDelete = nil
+            }
+        } message: {
+            if let key = keyToDelete {
+                Text("Are you sure you want to revoke \"\(key.name)\"? Any applications using this key will lose access.")
             }
         }
     }
