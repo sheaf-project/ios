@@ -29,7 +29,10 @@ class WatchAPIClient {
                 let detail = (error as NSError).localizedDescription
                 if detail.localizedCaseInsensitiveContains("session revoked") {
                     await MainActor.run { auth.logout() }
-                    WatchConnectivityManager.shared.requestCredentials()
+                    // Force the phone to mint a fresh companion session —
+                    // the one we had is dead and reusing the cached one
+                    // would just loop us right back here.
+                    WatchConnectivityManager.shared.requestCredentials(force: true)
                     throw URLError(.userAuthenticationRequired)
                 }
                 // Retry refresh once more to handle rotation races
@@ -38,7 +41,9 @@ class WatchAPIClient {
                     _ = try await refreshOnce()
                 } catch {
                     await MainActor.run { auth.logout() }
-                    WatchConnectivityManager.shared.requestCredentials()
+                    // Both refreshes failed — credentials are clearly dead,
+                    // ask the phone for a fresh companion session.
+                    WatchConnectivityManager.shared.requestCredentials(force: true)
                     throw URLError(.userAuthenticationRequired)
                 }
             } else {
@@ -49,7 +54,9 @@ class WatchAPIClient {
         let (retryData, retryStatus) = try await perform(path, method: method, body: body)
         guard retryStatus != 401 else {
             await MainActor.run { auth.logout() }
-            WatchConnectivityManager.shared.requestCredentials()
+            // Refresh succeeded but the retried request still 401'd — the
+            // session is gone, force a fresh mint.
+            WatchConnectivityManager.shared.requestCredentials(force: true)
             throw URLError(.userAuthenticationRequired)
         }
         return retryData
