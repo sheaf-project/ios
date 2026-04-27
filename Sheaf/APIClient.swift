@@ -44,9 +44,29 @@ final class AuthManager: ObservableObject {
     /// even when multiple short-lived clients exist.
     var refreshTask: Task<TokenResponse, Error>?
 
+    /// Serializes calls to /v1/auth/sessions/secondary so simultaneous
+    /// triggers (login completion + watch state change firing back-to-back)
+    /// don't mint two parallel watch sessions.
+    private var watchProvisionTask: Task<Void, Error>?
+
     private let accessKey  = "sheaf_access_token"
     private let refreshKey = "sheaf_refresh_token"
     private let urlKey     = "sheaf_base_url"
+
+    // Watch-companion creds, kept distinct from the phone's primary
+    // credentials so the watch can rotate its own one-shot refresh JWT
+    // without colliding with the phone's rotation. Pushed to the watch
+    // via WatchConnectivity from PhoneConnectivityManager.
+    private let watchAccessKey   = "sheaf_watch_access_token"
+    private let watchRefreshKey  = "sheaf_watch_refresh_token"
+    private let watchSessionKey  = "sheaf_watch_session_id"
+
+    var watchAccessToken: String  { KeychainHelper.get(key: watchAccessKey)  ?? "" }
+    var watchRefreshToken: String { KeychainHelper.get(key: watchRefreshKey) ?? "" }
+    var watchSessionId: String    { KeychainHelper.get(key: watchSessionKey) ?? "" }
+    var hasWatchCredentials: Bool {
+        !watchAccessToken.isEmpty && !watchRefreshToken.isEmpty
+    }
 
     init() {
         // Load from iCloud Keychain (syncs to watch automatically)
@@ -54,13 +74,58 @@ final class AuthManager: ObservableObject {
         refreshToken = KeychainHelper.get(key: refreshKey) ?? ""
         baseURL      = KeychainHelper.get(key: urlKey) ?? ""
         isAuthenticated = !accessToken.isEmpty && !baseURL.isEmpty
-        
+
         debugLog("AuthManager: Loaded from Keychain - isAuthenticated: \(isAuthenticated)")
-        
+
         // Configure connectivity manager immediately
         #if os(iOS)
         PhoneConnectivityManager.shared.configure(auth: self)
         #endif
+    }
+
+    /// Mint a child session on the server and stash the resulting tokens
+    /// for the watch. Idempotent — if `hasWatchCredentials` is already true
+    /// returns immediately. Concurrent callers coalesce on the same Task so
+    /// we never mint two watch sessions for the same pair. Runs the
+    /// check-then-set on @MainActor so two callers can't both pass the
+    /// nil-task guard before either of them has stored their Task.
+    @MainActor
+    @discardableResult
+    func provisionWatchSession(force: Bool = false) async -> Bool {
+        if !force && hasWatchCredentials { return true }
+        guard isAuthenticated, !accessToken.isEmpty else { return false }
+        if let existing = watchProvisionTask {
+            do { try await existing.value; return hasWatchCredentials }
+            catch { return false }
+        }
+        let task = Task<Void, Error> {
+            let api = APIClient(auth: self)
+            let response = try await api.createSecondarySession(
+                clientName: "Sheaf watchOS"
+            )
+            try? KeychainHelper.save(key: watchAccessKey,  value: response.accessToken)
+            try? KeychainHelper.save(key: watchRefreshKey, value: response.refreshToken)
+            try? KeychainHelper.save(key: watchSessionKey, value: response.sessionId)
+            debugLog("AuthManager: Provisioned watch session \(response.sessionId)")
+        }
+        watchProvisionTask = task
+        defer { watchProvisionTask = nil }
+        do {
+            try await task.value
+            return true
+        } catch {
+            debugLog("AuthManager: Failed to provision watch session: \(error)")
+            return false
+        }
+    }
+
+    /// Wipe the locally stored watch credentials. The server-side cascade
+    /// from /logout already revokes the child session — this just clears
+    /// what's on this device so a re-login mints a fresh pair.
+    func clearWatchCredentials() {
+        KeychainHelper.delete(key: watchAccessKey)
+        KeychainHelper.delete(key: watchRefreshKey)
+        KeychainHelper.delete(key: watchSessionKey)
     }
 
     /// Call after a successful login when the account has TOTP enabled.
@@ -101,7 +166,13 @@ final class AuthManager: ObservableObject {
         self.refreshToken = tokens.refreshToken
         self.isAuthenticated = true
         needsTOTP = false
-        
+
+        // NOTE: don't touch watch credentials here — save() runs on every
+        // primary token rotation, and a refresh shouldn't invalidate the
+        // already-paired watch session. Watch creds get cleared by logout()
+        // and re-minted on demand by syncCredentials() / the WCSession
+        // credential reply path.
+
         // Save to iCloud Keychain (will sync to watch automatically)
         do {
             try KeychainHelper.save(key: urlKey, value: cleanURL)
@@ -110,10 +181,13 @@ final class AuthManager: ObservableObject {
         } catch {
             debugLog("AuthManager: Keychain save failed: \(error)")
         }
-        
+
         debugLog("AuthManager: Credentials saved to iCloud Keychain")
-        
-        // Still try WatchConnectivity as a backup for instant sync
+
+        // Push to the watch if one is paired. The connectivity manager
+        // will mint a server-side companion session on demand so the watch
+        // gets its own refresh JWT instead of sharing the phone's — that's
+        // what was killing the session under the new one-shot rotation.
         #if os(iOS)
         debugLog("AuthManager: Attempting to sync to watch via WatchConnectivity...")
         PhoneConnectivityManager.shared.syncCredentials()
@@ -121,7 +195,9 @@ final class AuthManager: ObservableObject {
     }
 
     func logout() {
-        // Server-side logout (best-effort, fire-and-forget)
+        // Server-side logout (best-effort, fire-and-forget). The cascade
+        // delete will also revoke the paired watch's session, so the
+        // watch refresh fails the next time it tries.
         if !accessToken.isEmpty, !baseURL.isEmpty {
             let api = APIClient(auth: self)
             Task { await api.logout() }
@@ -135,10 +211,11 @@ final class AuthManager: ObservableObject {
         pendingTokens  = nil
         accountStatus  = .active
         emailVerified  = true
-        
+
         // Delete from Keychain
         KeychainHelper.deleteAll()
-        
+        clearWatchCredentials()
+
         #if os(iOS)
         try? WCSession.default.updateApplicationContext(
             ["baseURL": "", "accessToken": "", "refreshToken": ""]
@@ -507,6 +584,20 @@ class APIClient {
 
     func refreshTokens() async throws -> TokenResponse {
         return try await refreshOnce()
+    }
+
+    /// Mint a child session for a paired companion device (e.g. the watch).
+    /// The returned tokens belong to a *separate* session bound to the
+    /// caller's session as a parent — so revoking this device on the
+    /// server cascades to the watch automatically.
+    func createSecondarySession(clientName: String) async throws -> SecondarySessionResponse {
+        let body = try JSONEncoder.iso.encode(
+            SecondarySessionRequest(clientName: clientName)
+        )
+        let data = try await request(
+            "/v1/auth/sessions/secondary", method: "POST", body: body
+        )
+        return try Self.decodeJSON(SecondarySessionResponse.self, from: data)
     }
 
     /// Verify a 6-digit TOTP code. Requires a valid access token already set on auth.

@@ -50,22 +50,34 @@ final class WatchConnectivityManager: NSObject, WCSessionDelegate, ObservableObj
 
     /// Actively request credentials from the iPhone (pull-based).
     /// Prefers sendMessage (live, fresh) over receivedApplicationContext (may be stale).
-    func requestCredentials() {
+    ///
+    /// `force` tells the phone to mint a brand-new companion session rather
+    /// than handing back what it already has cached — needed when our
+    /// previous session was revoked (cascade from phone logout, user
+    /// revoking the watch from /sessions, etc.) so we don't loop on dead
+    /// credentials.
+    func requestCredentials(force: Bool = false) {
         guard WCSession.default.activationState == .activated else {
             debugLog("WatchConnectivityManager: Cannot request credentials - session not activated")
             return
         }
 
+        var message: [String: Any] = ["request": "credentials"]
+        if force { message["force"] = true }
+
         // Prefer sendMessage — it gets live credentials from the iPhone,
         // rather than potentially stale receivedApplicationContext.
         if WCSession.default.isReachable {
-            debugLog("WatchConnectivityManager: Requesting credentials from iPhone via sendMessage...")
-            WCSession.default.sendMessage(["request": "credentials"], replyHandler: { [weak self] reply in
+            debugLog("WatchConnectivityManager: Requesting credentials from iPhone via sendMessage (force: \(force))...")
+            WCSession.default.sendMessage(message, replyHandler: { [weak self] reply in
                 debugLog("WatchConnectivityManager: Received credential reply from iPhone")
                 self?.applyContext(reply)
             }, errorHandler: { [weak self] error in
                 debugLog("WatchConnectivityManager: sendMessage failed: \(error.localizedDescription), falling back to application context")
-                // Fall back to application context if sendMessage fails
+                // Fall back to application context if sendMessage fails. Skip
+                // the fallback if we asked for a force re-mint — the cached
+                // context is exactly what we know is dead.
+                guard !force else { return }
                 let existing = WCSession.default.receivedApplicationContext
                 if !existing.isEmpty, existing["accessToken"] as? String != nil {
                     self?.applyContext(existing)

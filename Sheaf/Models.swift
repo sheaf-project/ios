@@ -507,6 +507,30 @@ struct TokenResponse: Codable {
     }
 }
 
+/// Returned by POST /v1/auth/sessions/secondary — same as TokenResponse but
+/// also carries the new session id so the phone can track its paired watch.
+struct SecondarySessionResponse: Codable {
+    let accessToken: String
+    let refreshToken: String
+    let tokenType: String
+    let sessionId: String
+
+    enum CodingKeys: String, CodingKey {
+        case accessToken  = "access_token"
+        case refreshToken = "refresh_token"
+        case tokenType    = "token_type"
+        case sessionId    = "session_id"
+    }
+}
+
+struct SecondarySessionRequest: Codable {
+    var clientName: String?
+
+    enum CodingKeys: String, CodingKey {
+        case clientName = "client_name"
+    }
+}
+
 struct TokenRefresh: Codable {
     var refreshToken: String
 

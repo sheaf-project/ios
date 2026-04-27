@@ -29,26 +29,54 @@ final class PhoneConnectivityManager: NSObject, WCSessionDelegate, ObservableObj
     // MARK: - Push to watch
 
     /// Call this after login, token refresh, or any credential change.
+    /// Pushes the *watch's* companion-session credentials (not the phone's)
+    /// so the watch can rotate its one-shot refresh JWT without colliding
+    /// with the phone's rotation. If no watch session has been minted yet,
+    /// kicks off the mint first.
     func syncCredentials() {
         guard let auth = authManager, !auth.accessToken.isEmpty else {
             debugLog("PhoneConnectivityManager: No credentials to sync (authManager: \(authManager != nil))")
             return
         }
 
+        guard WCSession.default.activationState == .activated else {
+            debugLog("PhoneConnectivityManager: Session not activated, can't sync")
+            return
+        }
+
+        // Don't mint a server-side watch session for users who don't have
+        // a watch paired — would just create unused sessions on the server.
+        guard WCSession.default.isWatchAppInstalled else {
+            debugLog("PhoneConnectivityManager: Watch app not installed, skipping sync")
+            return
+        }
+
+        Task { [weak self] in
+            guard let self = self else { return }
+            if !auth.hasWatchCredentials {
+                _ = await auth.provisionWatchSession()
+            }
+            await MainActor.run { self.pushWatchCredentialsToWatch() }
+        }
+    }
+
+    /// Build the watch payload and push via all three WCSession channels.
+    /// Must be called on the main thread (touches WCSession state).
+    private func pushWatchCredentialsToWatch() {
+        guard let auth = authManager, auth.hasWatchCredentials else {
+            debugLog("PhoneConnectivityManager: No watch credentials to push")
+            return
+        }
+
         var context: [String: Any] = [
             "baseURL":      auth.baseURL,
-            "accessToken":  auth.accessToken,
-            "refreshToken": auth.refreshToken,
+            "accessToken":  auth.watchAccessToken,
+            "refreshToken": auth.watchRefreshToken,
         ]
         if let cfId = KeychainHelper.get(key: "sheaf_cf_client_id"), !cfId.isEmpty,
            let cfSecret = KeychainHelper.get(key: "sheaf_cf_client_secret"), !cfSecret.isEmpty {
             context["cfClientId"] = cfId
             context["cfClientSecret"] = cfSecret
-        }
-
-        guard WCSession.default.activationState == .activated else {
-            debugLog("PhoneConnectivityManager: Session not activated, can't sync")
-            return
         }
 
         // 1. updateApplicationContext — persists until Watch reads it (survives reboots).
@@ -144,18 +172,34 @@ final class PhoneConnectivityManager: NSObject, WCSessionDelegate, ObservableObj
                 replyHandler(["error": "not_authenticated"])
                 return
             }
-            var credentials: [String: Any] = [
-                "baseURL":      auth.baseURL,
-                "accessToken":  auth.accessToken,
-                "refreshToken": auth.refreshToken,
-            ]
-            if let cfId = KeychainHelper.get(key: "sheaf_cf_client_id"), !cfId.isEmpty,
-               let cfSecret = KeychainHelper.get(key: "sheaf_cf_client_secret"), !cfSecret.isEmpty {
-                credentials["cfClientId"] = cfId
-                credentials["cfClientSecret"] = cfSecret
+            // Watch always gets its own companion session, never the
+            // phone's tokens. If the watch is asking because its session
+            // was revoked/expired, force a fresh mint so it gets a working
+            // pair instead of one tied to a dead session.
+            Task { [weak self] in
+                guard let self = self, let auth = self.authManager else {
+                    replyHandler(["error": "not_authenticated"])
+                    return
+                }
+                let force = (message["force"] as? Bool) ?? false
+                let ok = await auth.provisionWatchSession(force: force || !auth.hasWatchCredentials)
+                guard ok, auth.hasWatchCredentials else {
+                    replyHandler(["error": "not_authenticated"])
+                    return
+                }
+                var credentials: [String: Any] = [
+                    "baseURL":      auth.baseURL,
+                    "accessToken":  auth.watchAccessToken,
+                    "refreshToken": auth.watchRefreshToken,
+                ]
+                if let cfId = KeychainHelper.get(key: "sheaf_cf_client_id"), !cfId.isEmpty,
+                   let cfSecret = KeychainHelper.get(key: "sheaf_cf_client_secret"), !cfSecret.isEmpty {
+                    credentials["cfClientId"] = cfId
+                    credentials["cfClientSecret"] = cfSecret
+                }
+                debugLog("PhoneConnectivityManager: Sending watch credentials via reply")
+                replyHandler(credentials)
             }
-            debugLog("PhoneConnectivityManager: Sending credentials to Watch via reply")
-            replyHandler(credentials)
             return
         }
 
