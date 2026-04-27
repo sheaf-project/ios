@@ -70,14 +70,6 @@ struct ContentView: View {
             }
             .tint(theme.accentLight)
         }
-        .alert("Error", isPresented: Binding(
-            get: { systemStore.errorMessage != nil },
-            set: { if !$0 { systemStore.errorMessage = nil } }
-        )) {
-            Button("OK") { systemStore.errorMessage = nil }
-        } message: {
-            Text(systemStore.errorMessage ?? "")
-        }
     }
 
     // MARK: - Private

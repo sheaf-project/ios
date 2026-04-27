@@ -60,6 +60,14 @@ struct RootView: View {
         .environment(\.theme, resolvedTheme)
         .environment(\.apiBaseURL, authManager.baseURL)
         .environment(\.apiAccessToken, authManager.accessToken)
+        .alert("Error", isPresented: Binding(
+            get: { systemStore.errorMessage != nil },
+            set: { if !$0 { systemStore.errorMessage = nil } }
+        )) {
+            Button("OK") { systemStore.errorMessage = nil }
+        } message: {
+            Text(systemStore.errorMessage ?? "")
+        }
         .onAppear {
             // Configure PhoneConnectivityManager as soon as we have access to authManager
             PhoneConnectivityManager.shared.configure(auth: authManager)
