@@ -10,6 +10,8 @@ struct MembersView: View {
     @State private var memberToDelete: Member?
     @State private var showDeleteConfirm = false
     @State private var showDeleteAuthSheet = false
+    @State private var deleteQueuedInfo: DeleteQueued?
+    @State private var showDeleteQueued = false
 
 
     private func removeMemberFromFront(_ member: Member) async {
@@ -112,7 +114,13 @@ struct MembersView: View {
         }
         .alert("Delete this member?", isPresented: $showDeleteConfirm, presenting: memberToDelete) { member in
             Button("Delete", role: .destructive) {
-                Task { await store.deleteMember(id: member.id) }
+                Task {
+                    let queued = await store.deleteMember(id: member.id)
+                    if let queued {
+                        deleteQueuedInfo = queued
+                        showDeleteQueued = true
+                    }
+                }
             }
             Button("Cancel", role: .cancel) {}
         } message: { member in
@@ -120,8 +128,18 @@ struct MembersView: View {
         }
         .sheet(isPresented: $showDeleteAuthSheet) {
             if let member = memberToDelete {
-                MemberDeleteConfirmSheet(member: member)
-                    .environmentObject(store)
+                MemberDeleteConfirmSheet(member: member) { queued in
+                    deleteQueuedInfo = queued
+                    showDeleteQueued = true
+                }
+                .environmentObject(store)
+            }
+        }
+        .alert("Deletion Queued", isPresented: $showDeleteQueued) {
+            Button("OK", role: .cancel) { deleteQueuedInfo = nil }
+        } message: {
+            if let info = deleteQueuedInfo {
+                Text("This deletion has been queued and will finalize \(info.finalizeAfter, style: .relative). You can cancel it from System Safety settings.")
             }
         }
     }
@@ -879,6 +897,7 @@ struct MemberDeleteConfirmSheet: View {
     @EnvironmentObject var store: SystemStore
     @Environment(\.dismiss) var dismiss
     let member: Member
+    var onQueued: ((DeleteQueued) -> Void)?
 
     @State private var password = ""
     @State private var totpCode = ""
@@ -986,11 +1005,13 @@ struct MemberDeleteConfirmSheet: View {
             totpCode: needsTOTP ? totpCode : nil
         )
         Task {
-            await store.deleteMember(id: member.id, confirmation: confirmation)
+            let queued = await store.deleteMember(id: member.id, confirmation: confirmation)
             await MainActor.run {
                 isDeleting = false
-                // If the member was removed, the delete succeeded
-                if !store.members.contains(where: { $0.id == member.id }) {
+                if let queued {
+                    dismiss()
+                    onQueued?(queued)
+                } else if !store.members.contains(where: { $0.id == member.id }) {
                     dismiss()
                 } else {
                     errorMessage = "Deletion failed. Please check your credentials and try again."

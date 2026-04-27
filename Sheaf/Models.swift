@@ -1083,3 +1083,124 @@ struct TrustedDevice: Identifiable, Codable {
 struct TrustedDeviceRename: Codable {
     let nickname: String
 }
+
+// MARK: - System Safety
+
+struct SystemSafetySettings: Codable {
+    var gracePeriodDays: Int
+    var authTier: DeleteConfirmation
+    var appliesToMembers: Bool
+    var appliesToGroups: Bool
+    var appliesToTags: Bool
+    var appliesToFields: Bool
+    var appliesToFronts: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case gracePeriodDays = "grace_period_days"
+        case authTier = "auth_tier"
+        case appliesToMembers = "applies_to_members"
+        case appliesToGroups = "applies_to_groups"
+        case appliesToTags = "applies_to_tags"
+        case appliesToFields = "applies_to_fields"
+        case appliesToFronts = "applies_to_fronts"
+    }
+}
+
+struct SystemSafetyUpdate: Codable {
+    var gracePeriodDays: Int?
+    var authTier: DeleteConfirmation?
+    var appliesToMembers: Bool?
+    var appliesToGroups: Bool?
+    var appliesToTags: Bool?
+    var appliesToFields: Bool?
+    var appliesToFronts: Bool?
+    var password: String?
+    var totpCode: String?
+
+    enum CodingKeys: String, CodingKey {
+        case gracePeriodDays = "grace_period_days"
+        case authTier = "auth_tier"
+        case appliesToMembers = "applies_to_members"
+        case appliesToGroups = "applies_to_groups"
+        case appliesToTags = "applies_to_tags"
+        case appliesToFields = "applies_to_fields"
+        case appliesToFronts = "applies_to_fronts"
+        case password
+        case totpCode = "totp_code"
+    }
+}
+
+struct PendingAction: Identifiable, Codable {
+    let id: String
+    let actionType: String
+    let targetID: String
+    let targetLabel: String
+    let requestedAt: Date
+    let requestedByUserID: String?
+    let finalizeAfter: Date
+    let frontingMemberIDs: [String]
+    let frontingMemberNames: [String]
+    let status: String
+
+    enum CodingKeys: String, CodingKey {
+        case id, status
+        case actionType = "action_type"
+        case targetID = "target_id"
+        case targetLabel = "target_label"
+        case requestedAt = "requested_at"
+        case requestedByUserID = "requested_by_user_id"
+        case finalizeAfter = "finalize_after"
+        case frontingMemberIDs = "fronting_member_ids"
+        case frontingMemberNames = "fronting_member_names"
+    }
+}
+
+struct SafetyChangeRequest: Identifiable, Codable {
+    let id: String
+    let requestedAt: Date
+    let requestedByUserID: String?
+    let finalizeAfter: Date
+    let changes: [String: AnyCodable]
+    let status: String
+
+    enum CodingKeys: String, CodingKey {
+        case id, changes, status
+        case requestedAt = "requested_at"
+        case requestedByUserID = "requested_by_user_id"
+        case finalizeAfter = "finalize_after"
+    }
+}
+
+struct SystemSafetyResponse: Codable {
+    var settings: SystemSafetySettings
+    var pendingActions: [PendingAction]
+    var pendingChanges: [SafetyChangeRequest]
+
+    enum CodingKeys: String, CodingKey {
+        case settings
+        case pendingActions = "pending_actions"
+        case pendingChanges = "pending_changes"
+    }
+}
+
+struct SystemSafetyUpdateResponse: Codable {
+    let settings: SystemSafetySettings
+    let applied: [String]
+    let deferred: [String]
+    let pendingChange: SafetyChangeRequest?
+
+    enum CodingKeys: String, CodingKey {
+        case settings, applied, deferred
+        case pendingChange = "pending_change"
+    }
+}
+
+struct DeleteQueued: Codable {
+    let pendingActionID: String
+    let finalizeAfter: Date
+
+    enum CodingKeys: String, CodingKey {
+        case pendingActionID = "pending_action_id"
+        case finalizeAfter = "finalize_after"
+    }
+}

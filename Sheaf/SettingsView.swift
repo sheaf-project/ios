@@ -16,8 +16,6 @@ struct SettingsView: View {
     @State private var isExporting = false
     @State private var exportError: String?
     @State private var showExportSuccess = false
-    @State private var deleteConfirmLevel: DeleteConfirmation = .none
-    @State private var showDeleteConfirmSheet = false
     @State private var isLoadingFileUsage = false
     @State private var fileUsageDisplay = "—"
     @State private var showFileCleanupConfirm = false
@@ -209,30 +207,6 @@ struct SettingsView: View {
                                     }
                                     .padding(.horizontal, 16).padding(.vertical, 14)
                                 }
-                            }
-
-                            Divider().background(theme.backgroundCard)
-
-                            // Delete confirmation level
-                            Button { showDeleteConfirmSheet = true } label: {
-                                HStack(spacing: 12) {
-                                    Image(systemName: "trash.slash.fill")
-                                        .foregroundColor(theme.accentLight)
-                                        .frame(width: 20)
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text("Delete Confirmation")
-                                            .font(.subheadline).fontWeight(.medium)
-                                            .foregroundColor(theme.textPrimary)
-                                        Text(deleteConfirmLabel)
-                                            .font(.caption)
-                                            .foregroundColor(theme.textTertiary)
-                                    }
-                                    Spacer()
-                                    Image(systemName: "chevron.right")
-                                        .font(.caption)
-                                        .foregroundColor(theme.textTertiary)
-                                }
-                                .padding(.horizontal, 16).padding(.vertical, 14)
                             }
 
                             Divider().background(theme.backgroundCard)
@@ -476,6 +450,34 @@ struct SettingsView: View {
                             statRow(label: "Groups",             value: "\(store.groups.count)")
                             Divider().background(theme.backgroundCard)
                             statRow(label: "Currently Fronting", value: "\(store.frontingMembers.count)")
+
+                            Divider().background(theme.divider)
+
+                            NavigationLink {
+                                SystemSafetyView()
+                                    .environmentObject(authManager)
+                                    .environmentObject(store)
+                            } label: {
+                                HStack(spacing: 12) {
+                                    Image(systemName: "shield.lefthalf.filled.badge.checkmark")
+                                        .foregroundColor(theme.accentLight)
+                                        .frame(width: 20)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("System Safety")
+                                            .font(.subheadline).fontWeight(.medium)
+                                            .foregroundColor(theme.textPrimary)
+                                        Text("Grace periods & delete protection")
+                                            .font(.caption)
+                                            .foregroundColor(theme.textTertiary)
+                                    }
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .font(.caption)
+                                        .foregroundColor(theme.textTertiary)
+                                }
+                                .padding(.horizontal, 16).padding(.vertical, 14)
+                            }
+                            .buttonStyle(.plain)
                         }
                     }
 
@@ -676,13 +678,6 @@ struct SettingsView: View {
                 .environmentObject(authManager)
                 .environmentObject(store)
         }
-        .sheet(isPresented: $showDeleteConfirmSheet, onDismiss: { Task { await loadMe() } }) {
-            DeleteConfirmationSheet(currentLevel: deleteConfirmLevel, totpEnabled: me?.totpEnabled == true) { newLevel in
-                deleteConfirmLevel = newLevel
-            }
-            .environmentObject(authManager)
-            .environmentObject(store)
-        }
         .alert("Export Successful", isPresented: $showExportSuccess) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -745,12 +740,6 @@ struct SettingsView: View {
         me = try? await api.getMe()
         if let me {
             newsletterOptIn = me.newsletterOptIn
-        }
-        // Load delete confirmation level from system profile
-        if let profile = store.systemProfile {
-            deleteConfirmLevel = profile.deleteConfirmation
-        } else if let profile = try? await api.getMySystem() {
-            deleteConfirmLevel = profile.deleteConfirmation
         }
         // Fetch deletion grace period if not already known
         if authManager.deletionGraceDays == nil {
@@ -820,14 +809,6 @@ struct SettingsView: View {
         await loadFileUsage()
     }
 
-    private var deleteConfirmLabel: String {
-        switch deleteConfirmLevel {
-        case .none: return "No confirmation required"
-        case .password: return "Requires password"
-        case .totp: return "Requires 2FA code"
-        case .both: return "Requires password + 2FA"
-        }
-    }
 
     private func exportData() async {
         guard let api = store.api else { return }

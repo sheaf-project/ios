@@ -35,6 +35,8 @@ struct HistoryView: View {
     @State private var showAddEntry = false
     @State private var entryToDelete: FrontEntry?
     @State private var showDeleteConfirm = false
+    @State private var showDeleteQueued = false
+    @State private var deleteQueuedInfo: DeleteQueued?
     @State private var graphTimeRange: GraphTimeRange = .week
     @State private var showGraph = true
 
@@ -185,6 +187,13 @@ struct HistoryView: View {
                     } message: { _ in
                         Text("This will permanently delete this front history entry and cannot be undone.")
                     }
+                    .alert("Deletion Queued", isPresented: $showDeleteQueued) {
+                        Button("OK", role: .cancel) { deleteQueuedInfo = nil }
+                    } message: {
+                        if let info = deleteQueuedInfo {
+                            Text("This deletion has been queued and will finalize \(info.finalizeAfter, style: .relative). You can cancel it from System Safety settings.")
+                        }
+                    }
                 }
             }
         }
@@ -201,7 +210,11 @@ struct HistoryView: View {
 
 
     func deleteFrontEntry(_ entry: FrontEntry) async {
-        await store.deleteFront(id: entry.id)
+        let queued = await store.deleteFront(id: entry.id)
+        if let queued {
+            deleteQueuedInfo = queued
+            showDeleteQueued = true
+        }
     }
 
     func reload() async {

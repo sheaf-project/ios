@@ -26,11 +26,24 @@ class WatchAPIClient {
         } catch {
             let code = (error as NSError).code
             if code == 401 || code == 403 {
-                await MainActor.run { auth.logout() }
-                WatchConnectivityManager.shared.requestCredentials()
-                throw URLError(.userAuthenticationRequired)
+                let detail = (error as NSError).localizedDescription
+                if detail.localizedCaseInsensitiveContains("session revoked") {
+                    await MainActor.run { auth.logout() }
+                    WatchConnectivityManager.shared.requestCredentials()
+                    throw URLError(.userAuthenticationRequired)
+                }
+                // Retry refresh once more to handle rotation races
+                do {
+                    try await Task.sleep(nanoseconds: 500_000_000)
+                    _ = try await refreshOnce()
+                } catch {
+                    await MainActor.run { auth.logout() }
+                    WatchConnectivityManager.shared.requestCredentials()
+                    throw URLError(.userAuthenticationRequired)
+                }
+            } else {
+                throw error
             }
-            throw error
         }
 
         let (retryData, retryStatus) = try await perform(path, method: method, body: body)
@@ -82,8 +95,15 @@ class WatchAPIClient {
             let (data, response) = try await URLSession.shared.data(for: req)
             guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
             guard (200...299).contains(http.statusCode) else {
+                let detail: String
+                if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let msg = json["detail"] as? String, !msg.isEmpty {
+                    detail = msg
+                } else {
+                    detail = "HTTP \(http.statusCode)"
+                }
                 throw NSError(domain: "APIError", code: http.statusCode,
-                              userInfo: [NSLocalizedDescriptionKey: "HTTP \(http.statusCode)"])
+                              userInfo: [NSLocalizedDescriptionKey: detail])
             }
             return try JSONDecoder.iso.decode(TokenResponse.self, from: data)
         }
@@ -137,8 +157,12 @@ class WatchAPIClient {
         return try JSONDecoder.iso.decode(SystemGroup.self, from: data)
     }
 
-    func deleteGroup(id: String) async throws {
-        _ = try await request("/v1/groups/\(id)", method: "DELETE")
+    @discardableResult
+    func deleteGroup(id: String, confirmation: MemberDeleteConfirm? = nil) async throws -> DeleteQueued? {
+        let body = confirmation != nil ? try JSONEncoder.iso.encode(confirmation) : nil
+        let data = try await request("/v1/groups/\(id)", method: "DELETE", body: body)
+        guard !data.isEmpty else { return nil }
+        return try? JSONDecoder.iso.decode(DeleteQueued.self, from: data)
     }
 
     func getGroupMembers(groupID: String) async throws -> [Member] {

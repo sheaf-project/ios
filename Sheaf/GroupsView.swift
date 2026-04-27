@@ -7,6 +7,8 @@ struct GroupsView: View {
     @State private var selectedGroup: SystemGroup?
     @State private var groupToDelete: SystemGroup?
     @State private var showDeleteGroupConfirm = false
+    @State private var showDeleteQueued = false
+    @State private var deleteQueuedInfo: DeleteQueued?
 
     var body: some View {
         ZStack {
@@ -86,11 +88,24 @@ struct GroupsView: View {
         }
         .confirmationDialog("Delete this group?", isPresented: $showDeleteGroupConfirm, presenting: groupToDelete) { group in
             Button("Delete", role: .destructive) {
-                Task { await store.deleteGroup(id: group.id) }
+                Task {
+                    let queued = await store.deleteGroup(id: group.id)
+                    if let queued {
+                        deleteQueuedInfo = queued
+                        showDeleteQueued = true
+                    }
+                }
             }
             Button("Cancel", role: .cancel) {}
         } message: { group in
             Text("This will permanently delete \"\(group.name)\" and cannot be undone.")
+        }
+        .alert("Deletion Queued", isPresented: $showDeleteQueued) {
+            Button("OK", role: .cancel) { deleteQueuedInfo = nil }
+        } message: {
+            if let info = deleteQueuedInfo {
+                Text("This deletion has been queued and will finalize \(info.finalizeAfter, style: .relative). You can cancel it from System Safety settings.")
+            }
         }
     }
 }

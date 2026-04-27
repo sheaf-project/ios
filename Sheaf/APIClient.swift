@@ -346,18 +346,36 @@ class APIClient {
         } catch {
             let code = (error as NSError).code
             if code == 401 || code == 403 {
-                // Genuine auth rejection — session is dead
-                await MainActor.run { auth.logout() }
-                throw NSError(domain: "APIError", code: 401,
-                              userInfo: [NSLocalizedDescriptionKey: "Session expired. Please log in again."])
+                let detail = (error as NSError).localizedDescription
+                if detail.localizedCaseInsensitiveContains("session revoked") {
+                    await MainActor.run { auth.logout() }
+                    throw NSError(domain: "APIError", code: 401,
+                                  userInfo: [NSLocalizedDescriptionKey: "Your session has been revoked. Please log in again."])
+                }
+                // Token rejected but not explicitly revoked — retry refresh
+                // once more to handle rotation races (matches web client behavior)
+                do {
+                    try await Task.sleep(nanoseconds: 500_000_000)
+                    _ = try await refreshOnce()
+                } catch {
+                    await MainActor.run { auth.logout() }
+                    throw NSError(domain: "APIError", code: 401,
+                                  userInfo: [NSLocalizedDescriptionKey: "Session expired. Please log in again."])
+                }
+            } else {
+                // Transient error (network, server 5xx, etc.) — don't log out
+                throw error
             }
-            // Transient error (network, server 5xx, etc.) — don't log out
-            throw error
         }
 
         let (retryData, retryStatus) = try await perform(path, method: method, body: body)
         guard retryStatus != 401 else {
-            // Refresh token is also dead — force logout
+            let detail = friendlyErrorMessage(statusCode: retryStatus, data: retryData)
+            if detail.localizedCaseInsensitiveContains("session revoked") {
+                await MainActor.run { auth.logout() }
+                throw NSError(domain: "APIError", code: 401,
+                              userInfo: [NSLocalizedDescriptionKey: "Your session has been revoked. Please log in again."])
+            }
             await MainActor.run { auth.logout() }
             throw NSError(domain: "APIError", code: 401,
                           userInfo: [NSLocalizedDescriptionKey: "Session expired. Please log in again."])
@@ -657,12 +675,33 @@ class APIClient {
         return []
     }
 
-    // MARK: - Delete Confirmation
+    // MARK: - Delete Confirmation (legacy)
 
     func updateDeleteConfirmation(_ update: DeleteConfirmationUpdate) async throws -> SystemProfile {
         let body = try JSONEncoder.iso.encode(update)
         let data = try await request("/v1/systems/me/delete-confirmation", method: "PUT", body: body)
         return try JSONDecoder.iso.decode(SystemProfile.self, from: data)
+    }
+
+    // MARK: - System Safety
+
+    func getSystemSafety() async throws -> SystemSafetyResponse {
+        let data = try await request("/v1/system/safety")
+        return try JSONDecoder.iso.decode(SystemSafetyResponse.self, from: data)
+    }
+
+    func updateSystemSafety(_ update: SystemSafetyUpdate) async throws -> SystemSafetyUpdateResponse {
+        let body = try JSONEncoder.iso.encode(update)
+        let data = try await request("/v1/system/safety", method: "PATCH", body: body)
+        return try JSONDecoder.iso.decode(SystemSafetyUpdateResponse.self, from: data)
+    }
+
+    func cancelPendingAction(id: String) async throws {
+        _ = try await request("/v1/system/safety/pending-actions/\(id)", method: "DELETE")
+    }
+
+    func cancelPendingChange(id: String) async throws {
+        _ = try await request("/v1/system/safety/pending-changes/\(id)", method: "DELETE")
     }
 
     // MARK: - Email Verification
@@ -856,9 +895,12 @@ class APIClient {
         return try JSONDecoder.iso.decode(Member.self, from: data)
     }
 
-    func deleteMember(id: String, confirmation: MemberDeleteConfirm? = nil) async throws {
+    @discardableResult
+    func deleteMember(id: String, confirmation: MemberDeleteConfirm? = nil) async throws -> DeleteQueued? {
         let body = confirmation != nil ? try JSONEncoder.iso.encode(confirmation) : nil
-        _ = try await request("/v1/members/\(id)", method: "DELETE", body: body)
+        let data = try await request("/v1/members/\(id)", method: "DELETE", body: body)
+        guard !data.isEmpty else { return nil }
+        return try? JSONDecoder.iso.decode(DeleteQueued.self, from: data)
     }
 
     // MARK: - Fronts
@@ -886,8 +928,12 @@ class APIClient {
         return try JSONDecoder.iso.decode(FrontEntry.self, from: data)
     }
 
-    func deleteFront(id: String) async throws {
-        _ = try await request("/v1/fronts/\(id)", method: "DELETE")
+    @discardableResult
+    func deleteFront(id: String, confirmation: MemberDeleteConfirm? = nil) async throws -> DeleteQueued? {
+        let body = confirmation != nil ? try JSONEncoder.iso.encode(confirmation) : nil
+        let data = try await request("/v1/fronts/\(id)", method: "DELETE", body: body)
+        guard !data.isEmpty else { return nil }
+        return try? JSONDecoder.iso.decode(DeleteQueued.self, from: data)
     }
 
     // MARK: - Groups
@@ -909,8 +955,12 @@ class APIClient {
         return try JSONDecoder.iso.decode(SystemGroup.self, from: data)
     }
 
-    func deleteGroup(id: String) async throws {
-        _ = try await request("/v1/groups/\(id)", method: "DELETE")
+    @discardableResult
+    func deleteGroup(id: String, confirmation: MemberDeleteConfirm? = nil) async throws -> DeleteQueued? {
+        let body = confirmation != nil ? try JSONEncoder.iso.encode(confirmation) : nil
+        let data = try await request("/v1/groups/\(id)", method: "DELETE", body: body)
+        guard !data.isEmpty else { return nil }
+        return try? JSONDecoder.iso.decode(DeleteQueued.self, from: data)
     }
 
     func getGroupMembers(groupID: String) async throws -> [Member] {
@@ -943,12 +993,20 @@ class APIClient {
         return try JSONDecoder.iso.decode(Tag.self, from: data)
     }
 
-    func deleteTag(id: String) async throws {
-        _ = try await request("/v1/tags/\(id)", method: "DELETE")
+    @discardableResult
+    func deleteTag(id: String, confirmation: MemberDeleteConfirm? = nil) async throws -> DeleteQueued? {
+        let body = confirmation != nil ? try JSONEncoder.iso.encode(confirmation) : nil
+        let data = try await request("/v1/tags/\(id)", method: "DELETE", body: body)
+        guard !data.isEmpty else { return nil }
+        return try? JSONDecoder.iso.decode(DeleteQueued.self, from: data)
     }
 
-    func deleteField(id: String) async throws {
-        _ = try await request("/v1/fields/\(id)", method: "DELETE")
+    @discardableResult
+    func deleteField(id: String, confirmation: MemberDeleteConfirm? = nil) async throws -> DeleteQueued? {
+        let body = confirmation != nil ? try JSONEncoder.iso.encode(confirmation) : nil
+        let data = try await request("/v1/fields/\(id)", method: "DELETE", body: body)
+        guard !data.isEmpty else { return nil }
+        return try? JSONDecoder.iso.decode(DeleteQueued.self, from: data)
     }
 
     func updateField(id: String, update: CustomFieldUpdate) async throws -> CustomField {

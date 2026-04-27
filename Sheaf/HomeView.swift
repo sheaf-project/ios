@@ -79,6 +79,12 @@ struct HomeView: View {
                         .padding(.horizontal, 24)
                     }
 
+                    // System Safety pending items
+                    ForEach(safetyBannerItems) { item in
+                        SafetyPendingBanner(item: item)
+                            .padding(.horizontal, 24)
+                    }
+
                     // Fronting card(s)
                     if store.isLoading && store.currentFronts.isEmpty {
                         FrontingSkeletonView()
@@ -155,6 +161,29 @@ struct HomeView: View {
         }
     }
 
+
+    private var safetyBannerItems: [SafetyBannerItem] {
+        var items: [SafetyBannerItem] = []
+        if !store.pendingSafetyActions.isEmpty {
+            let earliest = store.pendingSafetyActions.map(\.finalizeAfter).min()!
+            items.append(SafetyBannerItem(
+                id: "actions",
+                count: store.pendingSafetyActions.count,
+                kind: .actions,
+                earliestFinalize: earliest
+            ))
+        }
+        if !store.pendingSafetyChanges.isEmpty {
+            let earliest = store.pendingSafetyChanges.map(\.finalizeAfter).min()!
+            items.append(SafetyBannerItem(
+                id: "changes",
+                count: store.pendingSafetyChanges.count,
+                kind: .changes,
+                earliestFinalize: earliest
+            ))
+        }
+        return items
+    }
 
     func loadHistoryForFrequency() async {
         // Load history in background to power the frequency sort —
@@ -366,6 +395,94 @@ struct AnnouncementBanner: View {
             RoundedRectangle(cornerRadius: 14)
                 .stroke(severityColor.opacity(0.3), lineWidth: 1)
         )
+    }
+}
+
+// MARK: - Safety Pending Banner
+
+enum SafetyBannerKind {
+    case actions
+    case changes
+}
+
+struct SafetyBannerItem: Identifiable {
+    let id: String
+    let count: Int
+    let kind: SafetyBannerKind
+    let earliestFinalize: Date
+}
+
+private func timeRemaining(until date: Date) -> String {
+    let seconds = date.timeIntervalSinceNow
+    if seconds <= 0 {
+        return String(localized: "any moment")
+    }
+    let hours = seconds / 3600
+    if hours < 24 {
+        let h = Int(hours.rounded(.up))
+        return String(localized: "in \(h)h")
+    }
+    let days = Int((seconds / 86400).rounded(.up))
+    return days == 1
+        ? String(localized: "in 1 day")
+        : String(localized: "in \(days) days")
+}
+
+struct SafetyPendingBanner: View {
+    @Environment(\.theme) var theme
+    let item: SafetyBannerItem
+
+    private var isCritical: Bool {
+        item.earliestFinalize.timeIntervalSinceNow < 24 * 3600
+    }
+
+    private var severityColor: Color {
+        isCritical ? theme.danger : theme.warning
+    }
+
+    private var severityIcon: String {
+        isCritical ? "exclamationmark.octagon.fill" : "exclamationmark.triangle.fill"
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Image(systemName: severityIcon)
+                    .foregroundColor(severityColor)
+                    .font(.subheadline)
+
+                Text(message)
+                    .font(.subheadline).fontWeight(.semibold)
+                    .foregroundColor(theme.textPrimary)
+
+                Spacer()
+            }
+        }
+        .padding(14)
+        .background(severityColor.opacity(0.12))
+        .cornerRadius(14)
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(severityColor.opacity(0.3), lineWidth: 1)
+        )
+    }
+
+    private var message: String {
+        let time = timeRemaining(until: item.earliestFinalize)
+        switch item.kind {
+        case .actions:
+            if item.count == 1 {
+                return String(localized: "1 pending destructive action finalizes \(time).")
+            } else {
+                return String(localized: "\(item.count) pending destructive actions — next finalizes \(time).")
+            }
+        case .changes:
+            if item.count == 1 {
+                return String(localized: "Safety settings change pending — finalizes \(time).")
+            } else {
+                return String(localized: "\(item.count) safety settings changes pending — next finalizes \(time).")
+            }
+        }
     }
 }
 

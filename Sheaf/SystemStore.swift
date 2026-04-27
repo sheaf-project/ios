@@ -133,6 +133,8 @@ class SystemStore: ObservableObject {
     @Published var isSyncing = false
     @Published var pendingOperationCount = 0
     @Published var announcements: [Announcement] = []
+    @Published var pendingSafetyActions: [PendingAction] = []
+    @Published var pendingSafetyChanges: [SafetyChangeRequest] = []
 
     var visibleAnnouncements: [Announcement] {
         let dismissed = dismissedAnnouncementIDs
@@ -297,6 +299,14 @@ class SystemStore: ObservableObject {
                 let pruned = dismissedAnnouncementIDs.intersection(activeIDs)
                 if pruned.count != dismissedAnnouncementIDs.count {
                     dismissedAnnouncementIDs = pruned
+                }
+            }
+
+            // System Safety pending items: non-fatal
+            if let api {
+                if let safety = try? await api.getSystemSafety() {
+                    pendingSafetyActions = safety.pendingActions
+                    pendingSafetyChanges = safety.pendingChanges
                 }
             }
 
@@ -581,21 +591,27 @@ class SystemStore: ObservableObject {
         }
     }
 
-    func deleteFront(id: String) async {
+    @discardableResult
+    func deleteFront(id: String, confirmation: MemberDeleteConfirm? = nil) async -> DeleteQueued? {
         if NetworkMonitor.shared.isOnline, let api {
             do {
-                try await api.deleteFront(id: id)
-                frontHistory.removeAll { $0.id == id }
-                currentFronts.removeAll { $0.id == id }
-                saveAllToCache()
+                let queued = try await api.deleteFront(id: id, confirmation: confirmation)
+                if queued == nil {
+                    frontHistory.removeAll { $0.id == id }
+                    currentFronts.removeAll { $0.id == id }
+                    saveAllToCache()
+                }
+                return queued
             } catch {
                 showError(error)
+                return nil
             }
         } else {
             enqueue(.deleteFront, resourceID: id)
             frontHistory.removeAll { $0.id == id }
             currentFronts.removeAll { $0.id == id }
             saveAllToCache()
+            return nil
         }
     }
 
@@ -711,17 +727,22 @@ class SystemStore: ObservableObject {
         }
     }
 
-    func deleteMember(id: String, confirmation: MemberDeleteConfirm? = nil) async {
+    @discardableResult
+    func deleteMember(id: String, confirmation: MemberDeleteConfirm? = nil) async -> DeleteQueued? {
         if NetworkMonitor.shared.isOnline, let api {
             do {
-                try await api.deleteMember(id: id, confirmation: confirmation)
-                members.removeAll { $0.id == id }
-                saveAllToCache()
-            } catch { showError(error) }
+                let queued = try await api.deleteMember(id: id, confirmation: confirmation)
+                if queued == nil {
+                    members.removeAll { $0.id == id }
+                    saveAllToCache()
+                }
+                return queued
+            } catch { showError(error); return nil }
         } else {
             enqueue(.deleteMember, resourceID: id)
             members.removeAll { $0.id == id }
             saveAllToCache()
+            return nil
         }
     }
 
@@ -784,17 +805,22 @@ class SystemStore: ObservableObject {
         }
     }
 
-    func deleteGroup(id: String) async {
+    @discardableResult
+    func deleteGroup(id: String, confirmation: MemberDeleteConfirm? = nil) async -> DeleteQueued? {
         if NetworkMonitor.shared.isOnline, let api {
             do {
-                try await api.deleteGroup(id: id)
-                groups.removeAll { $0.id == id }
-                saveAllToCache()
-            } catch { showError(error) }
+                let queued = try await api.deleteGroup(id: id, confirmation: confirmation)
+                if queued == nil {
+                    groups.removeAll { $0.id == id }
+                    saveAllToCache()
+                }
+                return queued
+            } catch { showError(error); return nil }
         } else {
             enqueue(.deleteGroup, resourceID: id)
             groups.removeAll { $0.id == id }
             saveAllToCache()
+            return nil
         }
     }
 
@@ -825,19 +851,25 @@ class SystemStore: ObservableObject {
 
     // MARK: - Custom Fields (consolidated for views)
 
-    func deleteField(id: String) async {
+    @discardableResult
+    func deleteField(id: String, confirmation: MemberDeleteConfirm? = nil) async -> DeleteQueued? {
         if NetworkMonitor.shared.isOnline, let api {
             do {
-                try await api.deleteField(id: id)
-                fields.removeAll { $0.id == id }
-                saveAllToCache()
+                let queued = try await api.deleteField(id: id, confirmation: confirmation)
+                if queued == nil {
+                    fields.removeAll { $0.id == id }
+                    saveAllToCache()
+                }
+                return queued
             } catch {
                 showError(error)
+                return nil
             }
         } else {
             enqueue(.deleteField, resourceID: id)
             fields.removeAll { $0.id == id }
             saveAllToCache()
+            return nil
         }
     }
 
@@ -930,19 +962,25 @@ class SystemStore: ObservableObject {
         }
     }
 
-    func deleteTag(id: String) async {
+    @discardableResult
+    func deleteTag(id: String, confirmation: MemberDeleteConfirm? = nil) async -> DeleteQueued? {
         if NetworkMonitor.shared.isOnline, let api {
             do {
-                try await api.deleteTag(id: id)
-                tags.removeAll { $0.id == id }
-                saveAllToCache()
+                let queued = try await api.deleteTag(id: id, confirmation: confirmation)
+                if queued == nil {
+                    tags.removeAll { $0.id == id }
+                    saveAllToCache()
+                }
+                return queued
             } catch {
                 showError(error)
+                return nil
             }
         } else {
             enqueue(.deleteTag, resourceID: id)
             tags.removeAll { $0.id == id }
             saveAllToCache()
+            return nil
         }
     }
 

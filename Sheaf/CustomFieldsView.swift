@@ -6,6 +6,8 @@ struct CustomFieldsView: View {
     @Environment(\.theme) var theme
     @State private var showAddField  = false
     @State private var fieldToEdit: CustomField?
+    @State private var showDeleteQueued = false
+    @State private var deleteQueuedInfo: DeleteQueued?
 
     var body: some View {
         List {
@@ -93,10 +95,21 @@ struct CustomFieldsView: View {
             EditCustomFieldSheet(field: field)
                 .environmentObject(store)
         }
+        .alert("Deletion Queued", isPresented: $showDeleteQueued) {
+            Button("OK", role: .cancel) { deleteQueuedInfo = nil }
+        } message: {
+            if let info = deleteQueuedInfo {
+                Text("This deletion has been queued and will finalize \(info.finalizeAfter, style: .relative). You can cancel it from System Safety settings.")
+            }
+        }
     }
 
     private func deleteField(_ field: CustomField) async {
-        await store.deleteField(id: field.id)
+        let queued = await store.deleteField(id: field.id)
+        if let queued {
+            deleteQueuedInfo = queued
+            showDeleteQueued = true
+        }
     }
 
     private func refreshFields() async {
