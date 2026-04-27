@@ -71,7 +71,10 @@ final class WatchConnectivityManager: NSObject, WCSessionDelegate, ObservableObj
             debugLog("WatchConnectivityManager: Requesting credentials from iPhone via sendMessage (force: \(force))...")
             WCSession.default.sendMessage(message, replyHandler: { [weak self] reply in
                 debugLog("WatchConnectivityManager: Received credential reply from iPhone")
-                self?.applyContext(reply)
+                // Live reply to a request we initiated — the phone's
+                // response is authoritative (especially in the force=true
+                // re-mint case), so bypass applyContext's regression check.
+                self?.applyContext(reply, pulled: true)
             }, errorHandler: { [weak self] error in
                 debugLog("WatchConnectivityManager: sendMessage failed: \(error.localizedDescription), falling back to application context")
                 // Fall back to application context if sendMessage fails. Skip
@@ -159,7 +162,7 @@ final class WatchConnectivityManager: NSObject, WCSessionDelegate, ObservableObj
             .appendingPathComponent("avatars")
     }
 
-    private func applyContext(_ context: [String: Any]) {
+    private func applyContext(_ context: [String: Any], pulled: Bool = false) {
         guard !context.isEmpty else { return }
 
         let baseURL = context["baseURL"] as? String
@@ -179,6 +182,29 @@ final class WatchConnectivityManager: NSObject, WCSessionDelegate, ObservableObj
         guard let authManager = authManager else {
             debugLog("WatchConnectivityManager: Auth manager not configured yet, stashing credentials")
             pendingContext = context
+            return
+        }
+
+        // Reject pushes that would regress our refresh token. The phone
+        // reads its sheaf_watch_* keychain entries from iCloud-synced
+        // storage, which lags the watch's own rotations. Whenever the
+        // phone fires an eager syncCredentials (post-primary-refresh,
+        // RootView.onAppear, MainView.task, WCSession activation, etc.)
+        // it can be holding a stale copy of our previous refresh JWT and
+        // shove it back at us — overwriting the freshly-rotated one. Our
+        // next refresh then uses the regressed jti, which the server has
+        // already consumed, and outside the 10s replay window the kill
+        // path runs and tears down the watch session.
+        //
+        // Only accept a differing refresh token when we explicitly pulled
+        // it (pulled=true means a live reply to our requestCredentials —
+        // we asked, so the phone's response is authoritative, including
+        // the force=true re-mint case where it's a brand-new session).
+        if !pulled,
+           !authManager.refreshToken.isEmpty,
+           refreshToken != authManager.refreshToken
+        {
+            debugLog("WatchConnectivityManager: Ignoring push that would regress refresh token (have non-empty, incoming differs, not a pull)")
             return
         }
 
