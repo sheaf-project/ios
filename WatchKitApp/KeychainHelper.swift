@@ -1,10 +1,13 @@
 import Foundation
 import Security
 
-/// Logs a message only in DEBUG builds.
 func debugLog(_ message: String) {
+    #if os(iOS)
+    AppLogger.shared.log(message)
+    #else
     #if DEBUG
     NSLog(message)
+    #endif
     #endif
 }
 
