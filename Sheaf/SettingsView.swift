@@ -561,6 +561,33 @@ struct SettingsView: View {
                         }
                     }
 
+                    // Debug
+                    settingsSection(title: String(localized: "Diagnostics")) {
+                        VStack(spacing: 0) {
+                            NavigationLink {
+                                DebugLogView()
+                            } label: {
+                                HStack {
+                                    Image(systemName: "ladybug.fill")
+                                        .foregroundColor(theme.accentLight)
+                                        .frame(width: 20)
+                                    Text("Debug Logs")
+                                        .font(.subheadline).fontWeight(.medium)
+                                        .foregroundColor(theme.textPrimary)
+                                    Spacer()
+                                    Text("\(AppLogger.shared.entries.count)")
+                                        .font(.subheadline)
+                                        .foregroundColor(theme.textTertiary)
+                                    Image(systemName: "chevron.right")
+                                        .font(.caption)
+                                        .foregroundColor(theme.textTertiary)
+                                }
+                                .padding(.horizontal, 16).padding(.vertical, 14)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+
                     // Account
                     settingsSection(title: "Account") {
                         VStack(spacing: 0) {

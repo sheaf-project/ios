@@ -479,6 +479,10 @@ class APIClient {
         if (200...299).contains(http.statusCode) {
             try detectCloudflareInterception(data)
         }
+        if http.statusCode == 403 {
+            let body = String(data: data, encoding: .utf8) ?? "(empty)"
+            debugLog("APIClient: 403 Forbidden on \(method) \(path) — \(body)")
+        }
         // Throw for all errors except 401 (which we handle via retry)
         if http.statusCode != 401 && !(200...299).contains(http.statusCode) {
             throw NSError(domain: "APIError", code: http.statusCode,
@@ -491,6 +495,14 @@ class APIClient {
     /// Runs the check-then-set on @MainActor so concurrent callers from
     /// different APIClient instances (or async-let children) cannot race
     /// past the guard and fire duplicate refresh requests.
+    ///
+    /// auth.save() runs *inside* the Task body, before the value is
+    /// returned, so every caller awaiting task.value observes the new
+    /// tokens by the time they resume. Doing it after `await task.value`
+    /// only updated auth.accessToken on the task owner's resume — joiners
+    /// could resume first and retry their request with the still-stale
+    /// access token, getting another 401 and eventually triggering the
+    /// auto-logout path.
     @MainActor
     private func refreshOnce() async throws -> TokenResponse {
         if let existing = auth.refreshTask { return try await existing.value }
@@ -508,23 +520,31 @@ class APIClient {
         applyCFHeaders(to: &req)
         req.httpBody = body
         let session = urlSession
+        let auth = self.auth
+        let baseURL = auth.baseURL
 
-        let task = Task<TokenResponse, Error> { [weak self] in
+        let task = Task<TokenResponse, Error> { [auth, baseURL, weak self] in
             let (data, response) = try await session.data(for: req)
             guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
             guard (200...299).contains(http.statusCode) else {
+                if http.statusCode == 403 {
+                    let body = String(data: data, encoding: .utf8) ?? "(empty)"
+                    debugLog("APIClient: 403 Forbidden on POST /v1/auth/refresh — \(body)")
+                }
                 let msg = self?.friendlyErrorMessage(statusCode: http.statusCode, data: data)
                     ?? "HTTP \(http.statusCode)"
                 throw NSError(domain: "APIError", code: http.statusCode,
                               userInfo: [NSLocalizedDescriptionKey: msg])
             }
-            return try JSONDecoder.iso.decode(TokenResponse.self, from: data)
+            let fresh = try JSONDecoder.iso.decode(TokenResponse.self, from: data)
+            // Persist before returning so joiners on task.value can't
+            // race past us and retry with the stale access token.
+            await MainActor.run { auth.save(baseURL: baseURL, tokens: fresh) }
+            return fresh
         }
         auth.refreshTask = task
         defer { auth.refreshTask = nil }
-        let fresh = try await task.value
-        auth.save(baseURL: auth.baseURL, tokens: fresh)
-        return fresh
+        return try await task.value
     }
 
     // MARK: - Auth
