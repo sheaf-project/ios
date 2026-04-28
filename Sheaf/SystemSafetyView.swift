@@ -151,6 +151,10 @@ struct SystemSafetyView: View {
                     categoryToggle(label: "Custom Fields", icon: "list.bullet.rectangle", keyPath: \.appliesToFields)
                     Divider().background(theme.divider).padding(.leading, 52)
                     categoryToggle(label: "Front Entries", icon: "clock.arrow.2.circlepath", keyPath: \.appliesToFronts)
+                    Divider().background(theme.divider).padding(.leading, 52)
+                    categoryToggle(label: "Journal Entries", icon: "book.fill", keyPath: \.appliesToJournals)
+                    Divider().background(theme.divider).padding(.leading, 52)
+                    categoryToggle(label: "Images", icon: "photo.fill", keyPath: \.appliesToImages)
                 }
             }
         }
@@ -403,6 +407,8 @@ struct SystemSafetyView: View {
         if current.appliesToTags != draft.appliesToTags { update.appliesToTags = draft.appliesToTags }
         if current.appliesToFields != draft.appliesToFields { update.appliesToFields = draft.appliesToFields }
         if current.appliesToFronts != draft.appliesToFronts { update.appliesToFronts = draft.appliesToFronts }
+        if current.appliesToJournals != draft.appliesToJournals { update.appliesToJournals = draft.appliesToJournals }
+        if current.appliesToImages != draft.appliesToImages { update.appliesToImages = draft.appliesToImages }
 
         if isLoosening(current: current, draft: draft) {
             if !password.isEmpty { update.password = password }
@@ -455,7 +461,9 @@ struct SystemSafetyView: View {
         current.appliesToGroups != draft.appliesToGroups ||
         current.appliesToTags != draft.appliesToTags ||
         current.appliesToFields != draft.appliesToFields ||
-        current.appliesToFronts != draft.appliesToFronts
+        current.appliesToFronts != draft.appliesToFronts ||
+        current.appliesToJournals != draft.appliesToJournals ||
+        current.appliesToImages != draft.appliesToImages
     }
 
     private func isLoosening(current: SystemSafetySettings, draft: SystemSafetySettings) -> Bool {
@@ -466,6 +474,8 @@ struct SystemSafetyView: View {
         if current.appliesToTags && !draft.appliesToTags { return true }
         if current.appliesToFields && !draft.appliesToFields { return true }
         if current.appliesToFronts && !draft.appliesToFronts { return true }
+        if current.appliesToJournals && !draft.appliesToJournals { return true }
+        if current.appliesToImages && !draft.appliesToImages { return true }
         return false
     }
 
@@ -484,6 +494,8 @@ struct SystemSafetyView: View {
         case "tag_delete": return String(localized: "Delete tag")
         case "field_delete": return String(localized: "Delete field")
         case "front_delete": return String(localized: "Delete front")
+        case "journal_delete": return String(localized: "Delete journal entry")
+        case "image_delete": return String(localized: "Delete image")
         default: return type
         }
     }

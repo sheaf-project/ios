@@ -837,6 +837,112 @@ struct TagUpdate: Codable {
     var color: String?
 }
 
+// MARK: - Journal Entry
+struct JournalEntry: Identifiable, Codable, Hashable {
+    let id: String
+    let systemID: String
+    var memberID: String?
+    var title: String?
+    var body: String
+    var visibility: String
+    var authorUserID: String?
+    var authorMemberIDs: [String]
+    var authorMemberNames: [String]
+    let createdAt: Date
+    let updatedAt: Date
+    var revisionCount: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case id, title, body, visibility
+        case systemID          = "system_id"
+        case memberID          = "member_id"
+        case authorUserID      = "author_user_id"
+        case authorMemberIDs   = "author_member_ids"
+        case authorMemberNames = "author_member_names"
+        case createdAt         = "created_at"
+        case updatedAt         = "updated_at"
+        case revisionCount     = "revision_count"
+    }
+}
+
+// MARK: - JournalEntryCreate
+struct JournalEntryCreate: Codable {
+    var memberID: String?
+    var title: String?
+    var body: String
+    var visibility: String = "system"
+    var authorMemberIDs: [String]?
+
+    enum CodingKeys: String, CodingKey {
+        case title, body, visibility
+        case memberID        = "member_id"
+        case authorMemberIDs = "author_member_ids"
+    }
+}
+
+// MARK: - JournalEntryUpdate
+struct JournalEntryUpdate: Codable {
+    var title: String?
+    var body: String?
+    var visibility: String?
+    var authorMemberIDs: [String]?
+
+    enum CodingKeys: String, CodingKey {
+        case title, body, visibility
+        case authorMemberIDs = "author_member_ids"
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(title, forKey: .title)
+        try c.encode(body, forKey: .body)
+        try c.encode(visibility, forKey: .visibility)
+        try c.encode(authorMemberIDs, forKey: .authorMemberIDs)
+    }
+}
+
+// MARK: - JournalListResponse
+struct JournalListResponse: Codable {
+    let items: [JournalEntry]
+    let nextCursor: Date?
+
+    enum CodingKeys: String, CodingKey {
+        case items
+        case nextCursor = "next_cursor"
+    }
+}
+
+// MARK: - Content Revision
+struct ContentRevision: Identifiable, Codable {
+    let id: String
+    let targetType: String
+    let targetID: String
+    var userID: String?
+    var editorMemberIDs: [String]
+    var editorMemberNames: [String]
+    var title: String?
+    var body: String
+    let createdAt: Date
+
+    enum CodingKeys: String, CodingKey {
+        case id, title, body
+        case targetType = "target_type"
+        case targetID = "target_id"
+        case userID = "user_id"
+        case editorMemberIDs = "editor_member_ids"
+        case editorMemberNames = "editor_member_names"
+        case createdAt = "created_at"
+    }
+}
+
+struct RestoreRevisionRequest: Codable {
+    let revisionID: String
+
+    enum CodingKeys: String, CodingKey {
+        case revisionID = "revision_id"
+    }
+}
+
 // MARK: - Custom Field Update
 struct CustomFieldUpdate: Codable {
     var name: String?
@@ -1118,6 +1224,8 @@ struct SystemSafetySettings: Codable {
     var appliesToTags: Bool
     var appliesToFields: Bool
     var appliesToFronts: Bool
+    var appliesToJournals: Bool
+    var appliesToImages: Bool
 
     enum CodingKeys: String, CodingKey {
         case gracePeriodDays = "grace_period_days"
@@ -1127,6 +1235,8 @@ struct SystemSafetySettings: Codable {
         case appliesToTags = "applies_to_tags"
         case appliesToFields = "applies_to_fields"
         case appliesToFronts = "applies_to_fronts"
+        case appliesToJournals = "applies_to_journals"
+        case appliesToImages = "applies_to_images"
     }
 }
 
@@ -1138,6 +1248,8 @@ struct SystemSafetyUpdate: Codable {
     var appliesToTags: Bool?
     var appliesToFields: Bool?
     var appliesToFronts: Bool?
+    var appliesToJournals: Bool?
+    var appliesToImages: Bool?
     var password: String?
     var totpCode: String?
 
@@ -1149,6 +1261,8 @@ struct SystemSafetyUpdate: Codable {
         case appliesToTags = "applies_to_tags"
         case appliesToFields = "applies_to_fields"
         case appliesToFronts = "applies_to_fronts"
+        case appliesToJournals = "applies_to_journals"
+        case appliesToImages = "applies_to_images"
         case password
         case totpCode = "totp_code"
     }

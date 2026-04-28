@@ -47,20 +47,20 @@ struct ContentView: View {
                     .tabItem {
                         Label("Home", systemImage: "house.fill")
                     }
-                MembersView()
+                MembersTabView()
                     .tag(1)
                     .tabItem {
                         Label("Members", systemImage: "person.2.fill")
                     }
-                GroupsView()
+                HistoryView()
                     .tag(2)
                     .tabItem {
-                        Label("Groups", systemImage: "square.grid.2x2.fill")
+                        Label("History", systemImage: "clock.fill")
                     }
-                HistoryView()
+                JournalsView()
                     .tag(3)
                     .tabItem {
-                        Label("History", systemImage: "clock.fill")
+                        Label("Journal", systemImage: "book.fill")
                     }
                 SettingsView()
                     .tag(4)
@@ -75,4 +75,51 @@ struct ContentView: View {
     // MARK: - Private
 
     @Binding var selectedTab: Int
+}
+
+// MARK: - Members + Groups
+
+struct MembersTabView: View {
+    @Environment(\.theme) var theme
+    @State private var section = 0
+    @State private var showAddMember = false
+    @State private var showAddGroup = false
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                MembersView(showAddMember: $showAddMember)
+                    .opacity(section == 0 ? 1 : 0)
+                    .allowsHitTesting(section == 0)
+                GroupsView(showAddGroup: $showAddGroup)
+                    .opacity(section == 1 ? 1 : 0)
+                    .allowsHitTesting(section == 1)
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Picker("", selection: $section) {
+                        Text("Members").tag(0)
+                        Text("Groups").tag(1)
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: 200)
+                }
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        if section == 0 {
+                            showAddMember = true
+                        } else {
+                            showAddGroup = true
+                        }
+                    } label: {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.title3)
+                            .foregroundColor(theme.accentLight)
+                    }
+                    .accessibilityLabel(section == 0 ? "Add member" : "Add group")
+                }
+            }
+        }
+    }
 }

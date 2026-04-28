@@ -5,7 +5,7 @@ struct MembersView: View {
     @EnvironmentObject var store: SystemStore
     @Environment(\.theme) var theme
     @State private var searchText = ""
-    @State private var showAddMember = false
+    @Binding var showAddMember: Bool
     @State private var selectedMember: Member?
     @State private var memberToDelete: Member?
     @State private var showDeleteConfirm = false
@@ -34,76 +34,82 @@ struct MembersView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            Group {
-                if store.isLoading && store.members.isEmpty {
-                    ProgressView()
-                        .tint(theme.accentLight)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    List {
-                        ForEach(filtered) { member in
-                            MemberRow(member: member, isFronting: store.frontingMembers.contains(where: { $0.id == member.id })) {
-                                selectedMember = member
-                            } onDelete: {
-                                requestDelete(member)
+        Group {
+            if store.isLoading && store.members.isEmpty {
+                ProgressView()
+                    .tint(theme.accentLight)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                List {
+                    HStack(spacing: 8) {
+                        Image(systemName: "magnifyingglass")
+                            .foregroundColor(theme.textTertiary)
+                        TextField("Search members", text: $searchText)
+                            .foregroundColor(theme.textPrimary)
+                            .autocorrectionDisabled()
+                        if !searchText.isEmpty {
+                            Button {
+                                searchText = ""
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundColor(theme.textTertiary)
                             }
-                            .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                                let isFronting = store.frontingMembers.contains(where: { $0.id == member.id })
-                                if isFronting {
-                                    Button {
-                                        Task { await removeMemberFromFront(member) }
-                                    } label: {
-                                        Label("Remove Front", systemImage: "person.fill.xmark")
-                                    }
-                                    .tint(.orange)
-                                } else {
-                                    Button {
-                                        Task { await store.switchFronting(to: store.frontingMembers.map { $0.id } + [member.id]) }
-                                    } label: {
-                                        Label("Add to Front", systemImage: "person.fill.checkmark")
-                                    }
-                                    .tint(theme.accentLight)
-                                }
-                            }
-                            .swipeActions(edge: .trailing) {
-                                Button(role: .destructive) {
-                                    requestDelete(member)
-                                } label: {
-                                    Label("Delete", systemImage: "trash")
-                                }
-                            }
-                            .listRowBackground(Color.clear)
-                            .listRowSeparator(.hidden)
-                            .listRowInsets(EdgeInsets(top: 5, leading: 24, bottom: 5, trailing: 24))
+                            .buttonStyle(.plain)
                         }
                     }
-                    .listStyle(.plain)
-                    .background(theme.backgroundPrimary)
-                    .scrollContentBackground(.hidden)
-                    .refreshable {
-                        store.loadAll()
-                        try? await Task.sleep(nanoseconds: 500_000_000)
+                    .padding(10)
+                    .background(theme.backgroundCard)
+                    .cornerRadius(12)
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+                    .listRowInsets(EdgeInsets(top: 0, leading: 24, bottom: 4, trailing: 24))
+
+                    ForEach(filtered) { member in
+                        MemberRow(member: member, isFronting: store.frontingMembers.contains(where: { $0.id == member.id })) {
+                            selectedMember = member
+                        } onDelete: {
+                            requestDelete(member)
+                        }
+                        .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                            let isFronting = store.frontingMembers.contains(where: { $0.id == member.id })
+                            if isFronting {
+                                Button {
+                                    Task { await removeMemberFromFront(member) }
+                                } label: {
+                                    Label("Remove Front", systemImage: "person.fill.xmark")
+                                }
+                                .tint(.orange)
+                            } else {
+                                Button {
+                                    Task { await store.switchFronting(to: store.frontingMembers.map { $0.id } + [member.id]) }
+                                } label: {
+                                    Label("Add to Front", systemImage: "person.fill.checkmark")
+                                }
+                                .tint(theme.accentLight)
+                            }
+                        }
+                        .swipeActions(edge: .trailing) {
+                            Button(role: .destructive) {
+                                requestDelete(member)
+                            } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
+                        }
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                        .listRowInsets(EdgeInsets(top: 5, leading: 24, bottom: 5, trailing: 24))
                     }
                 }
-            }
-            .background(theme.backgroundPrimary.ignoresSafeArea())
-            .navigationTitle("Members")
-            .navigationBarTitleDisplayMode(.large)
-            .searchable(text: $searchText, placement: .automatic, prompt: "Search members")
-            .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        showAddMember = true
-                    } label: {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.title3)
-                            .foregroundColor(theme.accentLight)
-                    }
-                    .accessibilityLabel("Add member")
+                .listStyle(.plain)
+                .background(theme.backgroundPrimary)
+                .scrollContentBackground(.hidden)
+                .refreshable {
+                    store.loadAll()
+                    try? await Task.sleep(nanoseconds: 500_000_000)
                 }
             }
         }
+        .background(theme.backgroundPrimary.ignoresSafeArea())
         .sheet(isPresented: $showAddMember) {
             MemberEditSheet(member: nil)
                 .environmentObject(store)

@@ -3,7 +3,7 @@ import SwiftUI
 struct GroupsView: View {
     @EnvironmentObject var store: SystemStore
     @Environment(\.theme) var theme
-    @State private var showAddGroup = false
+    @Binding var showAddGroup: Bool
     @State private var selectedGroup: SystemGroup?
     @State private var groupToDelete: SystemGroup?
     @State private var showDeleteGroupConfirm = false
@@ -11,73 +11,53 @@ struct GroupsView: View {
     @State private var deleteQueuedInfo: DeleteQueued?
 
     var body: some View {
-        ZStack {
-            theme.backgroundPrimary.ignoresSafeArea()
-
-            VStack(spacing: 0) {
-                HStack {
-                    Text("Groups")
-                        .font(.title2).fontWeight(.bold).fontDesign(.rounded)
-                        .foregroundColor(theme.textPrimary)
-                    Spacer()
-                    Button {
-                        showAddGroup = true
-                    } label: {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.title2)
-                            .foregroundColor(theme.accentLight)
-                    }
-                    .accessibilityLabel("Add group")
+        VStack(spacing: 0) {
+            if store.isLoading && store.groups.isEmpty {
+                Spacer()
+                ProgressView().tint(theme.accentLight)
+                Spacer()
+            } else if store.groups.isEmpty {
+                Spacer()
+                VStack(spacing: 12) {
+                    Image(systemName: "square.grid.2x2")
+                        .font(.largeTitle)
+                        .foregroundColor(theme.textTertiary)
+                    Text("No groups yet")
+                        .font(.body).fontWeight(.medium).fontDesign(.rounded)
+                        .foregroundColor(theme.textTertiary)
+                    Text("Tap + to create your first group")
+                        .font(.footnote)
+                        .foregroundColor(theme.textTertiary)
                 }
-                .padding(.horizontal, 24)
-                .padding(.top, 16)
-                .padding(.bottom, 20)
-
-                if store.isLoading && store.groups.isEmpty {
-                    Spacer()
-                    ProgressView().tint(theme.accentLight)
-                    Spacer()
-                } else if store.groups.isEmpty {
-                    Spacer()
-                    VStack(spacing: 12) {
-                        Image(systemName: "square.grid.2x2")
-                            .font(.largeTitle)
-                            .foregroundColor(theme.textTertiary)
-                        Text("No groups yet")
-                            .font(.body).fontWeight(.medium).fontDesign(.rounded)
-                            .foregroundColor(theme.textTertiary)
-                        Text("Tap + to create your first group")
-                            .font(.footnote)
-                            .foregroundColor(theme.textTertiary)
-                    }
-                    Spacer()
-                } else {
-                    ScrollView {
-                        LazyVStack(spacing: 12) {
-                            ForEach(store.groups) { group in
-                                GroupCard(group: group, members: store.membersIn(group: group)) {
-                                    selectedGroup = group
-                                }
-                                .swipeActions(edge: .trailing) {
-                                    Button(role: .destructive) {
-                                        groupToDelete = group
-                                        showDeleteGroupConfirm = true
-                                    } label: {
-                                        Label("Delete", systemImage: "trash")
-                                    }
+                Spacer()
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 12) {
+                        ForEach(store.groups) { group in
+                            GroupCard(group: group, members: store.membersIn(group: group)) {
+                                selectedGroup = group
+                            }
+                            .swipeActions(edge: .trailing) {
+                                Button(role: .destructive) {
+                                    groupToDelete = group
+                                    showDeleteGroupConfirm = true
+                                } label: {
+                                    Label("Delete", systemImage: "trash")
                                 }
                             }
                         }
-                        .padding(.horizontal, 24)
-                        .padding(.bottom, 100)
                     }
-                    .refreshable {
-                        store.loadAll()
-                        try? await Task.sleep(nanoseconds: 500_000_000)
-                    }
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 100)
+                }
+                .refreshable {
+                    store.loadAll()
+                    try? await Task.sleep(nanoseconds: 500_000_000)
                 }
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(theme.backgroundPrimary.ignoresSafeArea())
         .sheet(isPresented: $showAddGroup) {
             GroupEditSheet(group: nil)
                 .environmentObject(store)

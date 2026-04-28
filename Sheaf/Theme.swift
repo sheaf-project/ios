@@ -134,8 +134,7 @@ extension EnvironmentValues {
 }
 
 // MARK: - Markdown Text
-/// Renders a markdown string with inline styling (bold, italic, links, code).
-/// Falls back to plain text if parsing fails.
+
 struct MarkdownText: View {
     let markdown: String
     let color: Color
@@ -146,15 +145,122 @@ struct MarkdownText: View {
     }
 
     var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ForEach(Array(parseBlocks().enumerated()), id: \.offset) { _, block in
+                renderBlock(block)
+            }
+        }
+    }
+
+    private enum Block {
+        case heading(String, Int)
+        case quote(String)
+        case codeBlock(String)
+        case listItem(String, Bool)
+        case paragraph(String)
+    }
+
+    private func parseBlocks() -> [Block] {
+        var blocks: [Block] = []
+        let lines = markdown.components(separatedBy: "\n")
+        var inCodeBlock = false
+        var codeLines: [String] = []
+
+        for line in lines {
+            if line.hasPrefix("```") {
+                if inCodeBlock {
+                    blocks.append(.codeBlock(codeLines.joined(separator: "\n")))
+                    codeLines = []
+                    inCodeBlock = false
+                } else {
+                    inCodeBlock = true
+                }
+                continue
+            }
+
+            if inCodeBlock {
+                codeLines.append(line)
+                continue
+            }
+
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.isEmpty {
+                continue
+            } else if trimmed.hasPrefix("### ") {
+                blocks.append(.heading(String(trimmed.dropFirst(4)), 3))
+            } else if trimmed.hasPrefix("## ") {
+                blocks.append(.heading(String(trimmed.dropFirst(3)), 2))
+            } else if trimmed.hasPrefix("# ") {
+                blocks.append(.heading(String(trimmed.dropFirst(2)), 1))
+            } else if trimmed.hasPrefix("> ") {
+                blocks.append(.quote(String(trimmed.dropFirst(2))))
+            } else if trimmed.hasPrefix("- ") || trimmed.hasPrefix("* ") {
+                blocks.append(.listItem(String(trimmed.dropFirst(2)), false))
+            } else if let match = trimmed.range(of: #"^\d+\.\s"#, options: .regularExpression) {
+                blocks.append(.listItem(String(trimmed[match.upperBound...]), true))
+            } else {
+                blocks.append(.paragraph(trimmed))
+            }
+        }
+
+        if inCodeBlock && !codeLines.isEmpty {
+            blocks.append(.codeBlock(codeLines.joined(separator: "\n")))
+        }
+
+        return blocks
+    }
+
+    @ViewBuilder
+    private func renderBlock(_ block: Block) -> some View {
+        switch block {
+        case .heading(let text, let level):
+            inlineText(text)
+                .font(level == 1 ? .title3.bold() : level == 2 ? .headline : .subheadline.bold())
+
+        case .quote(let text):
+            HStack(spacing: 10) {
+                RoundedRectangle(cornerRadius: 1.5)
+                    .fill(color.opacity(0.3))
+                    .frame(width: 3)
+                inlineText(text)
+                    .italic()
+                    .opacity(0.8)
+            }
+
+        case .codeBlock(let code):
+            Text(code)
+                .font(.system(.caption, design: .monospaced))
+                .foregroundColor(color)
+                .padding(10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(color.opacity(0.08))
+                .cornerRadius(8)
+
+        case .listItem(let text, let ordered):
+            HStack(alignment: .top, spacing: 8) {
+                if ordered {
+                    Text("•")
+                        .foregroundColor(color.opacity(0.5))
+                } else {
+                    Text("•")
+                        .foregroundColor(color.opacity(0.5))
+                }
+                inlineText(text)
+            }
+
+        case .paragraph(let text):
+            inlineText(text)
+        }
+    }
+
+    private func inlineText(_ text: String) -> Text {
         if let attributed = try? AttributedString(
-            markdown: markdown,
+            markdown: text,
             options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)
         ) {
-            Text(applyColor(attributed))
-        } else {
-            Text(markdown)
-                .foregroundColor(color)
+            return Text(applyColor(attributed))
         }
+        return Text(text).foregroundColor(color)
     }
 
     private func applyColor(_ string: AttributedString) -> AttributedString {

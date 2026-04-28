@@ -82,7 +82,7 @@ actor CacheManager {
     }
 
     func clearAll() {
-        let keys = ["members", "groups", "tags", "fields", "currentFronts", "frontHistory", "systemProfile"]
+        let keys = ["members", "groups", "tags", "fields", "currentFronts", "frontHistory", "systemProfile", "journalEntries"]
         for key in keys {
             let url = container.appendingPathComponent("\(key).json")
             try? FileManager.default.removeItem(at: url)
@@ -102,6 +102,7 @@ enum OperationType: String, Codable {
     case createTag, deleteTag
     case createField, updateField, deleteField
     case setMemberFieldValues
+    case createJournal, updateJournal, deleteJournal
 }
 
 struct OfflineOperation: Codable, Identifiable {
@@ -133,6 +134,9 @@ class SystemStore: ObservableObject {
     @Published var isSyncing = false
     @Published var pendingOperationCount = 0
     @Published var announcements: [Announcement] = []
+    @Published var journalEntries: [JournalEntry] = []
+    @Published var hasMoreJournals = true
+    private var journalCursor: Date?
     @Published var pendingSafetyActions: [PendingAction] = []
     @Published var pendingSafetyChanges: [SafetyChangeRequest] = []
 
@@ -216,6 +220,9 @@ class SystemStore: ObservableObject {
         if let cached = await cache.load(key: "systemProfile", as: SystemProfile.self), systemProfile == nil {
             systemProfile = cached
         }
+        if let cached = await cache.load(key: "journalEntries", as: [JournalEntry].self), journalEntries.isEmpty {
+            journalEntries = cached
+        }
     }
 
     private func saveAllToCache() {
@@ -229,6 +236,7 @@ class SystemStore: ObservableObject {
             if let systemProfile {
                 await cache.save(systemProfile, key: "systemProfile")
             }
+            await cache.save(journalEntries, key: "journalEntries")
         }
     }
 
@@ -455,6 +463,21 @@ class SystemStore: ObservableObject {
                     if let rid = resolveID(op.resourceID) {
                         let values = try JSONDecoder.iso.decode([CustomFieldValueSet].self, from: op.bodyData)
                         _ = try await api.setMemberFieldValues(memberID: rid, values: values)
+                    }
+                case .createJournal:
+                    let create = try JSONDecoder.iso.decode(JournalEntryCreate.self, from: op.bodyData)
+                    let created = try await api.createJournal(create)
+                    if let tempID = op.tempID {
+                        tempIDMap[tempID] = created.id
+                    }
+                case .updateJournal:
+                    if let rid = resolveID(op.resourceID) {
+                        let update = try JSONDecoder.iso.decode(JournalEntryUpdate.self, from: op.bodyData)
+                        _ = try await api.updateJournal(id: rid, update: update)
+                    }
+                case .deleteJournal:
+                    if let rid = resolveID(op.resourceID) {
+                        try await api.deleteJournal(id: rid)
                     }
                 }
 
@@ -979,6 +1002,111 @@ class SystemStore: ObservableObject {
         } else {
             enqueue(.deleteTag, resourceID: id)
             tags.removeAll { $0.id == id }
+            saveAllToCache()
+            return nil
+        }
+    }
+
+    // MARK: - Journals
+
+    func loadJournals() async {
+        if NetworkMonitor.shared.isOnline, let api {
+            do {
+                journalCursor = nil
+                let response = try await api.getJournals()
+                journalEntries = response.items
+                journalCursor = response.nextCursor
+                hasMoreJournals = response.nextCursor != nil
+                await cache.save(journalEntries, key: "journalEntries")
+            } catch {
+                showError(error)
+            }
+        }
+    }
+
+    func loadMoreJournals() async {
+        guard hasMoreJournals, let cursor = journalCursor, NetworkMonitor.shared.isOnline, let api else { return }
+        do {
+            let response = try await api.getJournals(before: cursor)
+            journalEntries.append(contentsOf: response.items)
+            journalCursor = response.nextCursor
+            hasMoreJournals = response.nextCursor != nil
+            await cache.save(journalEntries, key: "journalEntries")
+        } catch {
+            showError(error)
+        }
+    }
+
+    func createJournal(_ create: JournalEntryCreate) async -> JournalEntry? {
+        if NetworkMonitor.shared.isOnline, let api {
+            do {
+                let created = try await api.createJournal(create)
+                journalEntries.insert(created, at: 0)
+                saveAllToCache()
+                return created
+            } catch {
+                showError(error)
+                return nil
+            }
+        } else {
+            let tempID = UUID().uuidString
+            if let body = try? JSONEncoder.iso.encode(create) {
+                enqueue(.createJournal, tempID: tempID, body: body)
+            }
+            let optimistic = JournalEntry(
+                id: tempID, systemID: systemProfile?.id ?? "",
+                memberID: create.memberID, title: create.title, body: create.body,
+                visibility: create.visibility, authorUserID: nil,
+                authorMemberIDs: create.authorMemberIDs ?? [],
+                authorMemberNames: [],
+                createdAt: Date(), updatedAt: Date()
+            )
+            journalEntries.insert(optimistic, at: 0)
+            saveAllToCache()
+            return optimistic
+        }
+    }
+
+    func updateJournal(id: String, update: JournalEntryUpdate) async {
+        if NetworkMonitor.shared.isOnline, let api {
+            do {
+                let updated = try await api.updateJournal(id: id, update: update)
+                if let idx = journalEntries.firstIndex(where: { $0.id == id }) {
+                    journalEntries[idx] = updated
+                }
+                saveAllToCache()
+            } catch {
+                showError(error)
+            }
+        } else {
+            if let body = try? JSONEncoder.iso.encode(update) {
+                enqueue(.updateJournal, resourceID: id, body: body)
+            }
+            if let idx = journalEntries.firstIndex(where: { $0.id == id }) {
+                if let title = update.title { journalEntries[idx].title = title }
+                if let body = update.body { journalEntries[idx].body = body }
+            }
+            saveAllToCache()
+        }
+    }
+
+    @discardableResult
+    func deleteJournal(id: String, confirmation: MemberDeleteConfirm? = nil) async -> DeleteQueued? {
+        if NetworkMonitor.shared.isOnline, let api {
+            do {
+                let queued = try await api.deleteJournal(id: id, confirmation: confirmation)
+                if queued == nil {
+                    journalEntries.removeAll { $0.id == id }
+                    saveAllToCache()
+                }
+                return queued
+            } catch {
+                showError(error)
+                return nil
+            }
+        } else {
+            enqueue(.deleteJournal, resourceID: id)
+            journalEntries.removeAll { $0.id == id }
             saveAllToCache()
             return nil
         }

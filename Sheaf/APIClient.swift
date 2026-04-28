@@ -1112,6 +1112,58 @@ class APIClient {
         return try? JSONDecoder.iso.decode(DeleteQueued.self, from: data)
     }
 
+    // MARK: - Journals
+
+    func getJournals(before: Date? = nil, limit: Int = 50, memberID: String? = nil) async throws -> JournalListResponse {
+        var path = "/v1/journals?limit=\(limit)"
+        if let before {
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            path += "&before=\(formatter.string(from: before))"
+        }
+        if let memberID {
+            path += "&member_id=\(memberID)"
+        }
+        let data = try await request(path)
+        return try JSONDecoder.iso.decode(JournalListResponse.self, from: data)
+    }
+
+    func createJournal(_ create: JournalEntryCreate) async throws -> JournalEntry {
+        let body = try JSONEncoder.iso.encode(create)
+        let data = try await request("/v1/journals", method: "POST", body: body)
+        return try JSONDecoder.iso.decode(JournalEntry.self, from: data)
+    }
+
+    func getJournal(id: String) async throws -> JournalEntry {
+        let data = try await request("/v1/journals/\(id)")
+        return try JSONDecoder.iso.decode(JournalEntry.self, from: data)
+    }
+
+    func updateJournal(id: String, update: JournalEntryUpdate) async throws -> JournalEntry {
+        let body = try JSONEncoder.iso.encode(update)
+        let data = try await request("/v1/journals/\(id)", method: "PATCH", body: body)
+        return try JSONDecoder.iso.decode(JournalEntry.self, from: data)
+    }
+
+    @discardableResult
+    func deleteJournal(id: String, confirmation: MemberDeleteConfirm? = nil) async throws -> DeleteQueued? {
+        let body = confirmation != nil ? try JSONEncoder.iso.encode(confirmation) : nil
+        let data = try await request("/v1/journals/\(id)", method: "DELETE", body: body)
+        guard !data.isEmpty else { return nil }
+        return try? JSONDecoder.iso.decode(DeleteQueued.self, from: data)
+    }
+
+    func getJournalRevisions(entryID: String) async throws -> [ContentRevision] {
+        let data = try await request("/v1/journals/\(entryID)/revisions")
+        return try JSONDecoder.iso.decode([ContentRevision].self, from: data)
+    }
+
+    func restoreJournalRevision(entryID: String, revisionID: String) async throws -> JournalEntry {
+        let body = try JSONEncoder.iso.encode(RestoreRevisionRequest(revisionID: revisionID))
+        let data = try await request("/v1/journals/\(entryID)/restore-revision", method: "POST", body: body)
+        return try JSONDecoder.iso.decode(JournalEntry.self, from: data)
+    }
+
     @discardableResult
     func deleteField(id: String, confirmation: MemberDeleteConfirm? = nil) async throws -> DeleteQueued? {
         let body = confirmation != nil ? try JSONEncoder.iso.encode(confirmation) : nil
