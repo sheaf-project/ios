@@ -1164,6 +1164,17 @@ class APIClient {
         return try JSONDecoder.iso.decode(JournalEntry.self, from: data)
     }
 
+    func getMemberBioRevisions(memberID: String) async throws -> [ContentRevision] {
+        let data = try await request("/v1/members/\(memberID)/revisions")
+        return try JSONDecoder.iso.decode([ContentRevision].self, from: data)
+    }
+
+    func restoreMemberBioRevision(memberID: String, revisionID: String) async throws -> Member {
+        let body = try JSONEncoder.iso.encode(RestoreRevisionRequest(revisionID: revisionID))
+        let data = try await request("/v1/members/\(memberID)/restore-revision", method: "POST", body: body)
+        return try JSONDecoder.iso.decode(Member.self, from: data)
+    }
+
     @discardableResult
     func deleteField(id: String, confirmation: MemberDeleteConfirm? = nil) async throws -> DeleteQueued? {
         let body = confirmation != nil ? try JSONEncoder.iso.encode(confirmation) : nil

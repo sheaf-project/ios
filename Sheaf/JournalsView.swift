@@ -504,10 +504,10 @@ struct RevisionRow: View {
                         .foregroundColor(theme.textPrimary)
                         .lineLimit(1)
                 } else {
-                    Text("Untitled")
+                    Text(String(revision.body.prefix(60)))
                         .font(.subheadline).fontWeight(.semibold)
-                        .foregroundColor(theme.textTertiary)
-                        .italic()
+                        .foregroundColor(theme.textPrimary)
+                        .lineLimit(1)
                 }
                 Spacer()
                 Text(revision.createdAt, format: .dateTime.month(.abbreviated).day().hour().minute())
@@ -515,10 +515,21 @@ struct RevisionRow: View {
                     .foregroundColor(theme.textTertiary)
             }
 
-            Text(revision.body.prefix(120))
-                .font(.caption)
-                .foregroundColor(theme.textSecondary)
-                .lineLimit(2)
+            if revision.title != nil && !revision.title!.isEmpty {
+                Text(revision.body.prefix(120))
+                    .font(.caption)
+                    .foregroundColor(theme.textSecondary)
+                    .lineLimit(2)
+            } else {
+                let lines = revision.body.components(separatedBy: .newlines).dropFirst()
+                let remaining = lines.joined(separator: " ").trimmingCharacters(in: .whitespaces)
+                if !remaining.isEmpty {
+                    Text(remaining.prefix(120))
+                        .font(.caption)
+                        .foregroundColor(theme.textSecondary)
+                        .lineLimit(2)
+                }
+            }
 
             HStack(spacing: 6) {
                 Image(systemName: "person.fill")

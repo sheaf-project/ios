@@ -42,6 +42,7 @@ struct AddFrontEntrySheet: View {
                             }
                         }
                         .buttonStyle(.plain)
+                        .listRowBackground(theme.backgroundCard)
                     }
 
                     if allMembers.count > 5 {
@@ -61,6 +62,7 @@ struct AddFrontEntrySheet: View {
                             }
                         }
                         .buttonStyle(.plain)
+                        .listRowBackground(theme.backgroundCard)
                     }
                 }
 
@@ -68,19 +70,21 @@ struct AddFrontEntrySheet: View {
                 Section("When") {
                     DatePicker("Started", selection: $startedAt, displayedComponents: [.date, .hourAndMinute])
                         .foregroundColor(theme.textPrimary)
+                        .listRowBackground(theme.backgroundCard)
                         .onChange(of: startedAt) { _, new in
-                            // Keep end after start
                             if endedAt < new { endedAt = new.addingTimeInterval(3600) }
                         }
 
                     Toggle("Still ongoing", isOn: $isOngoing)
                         .tint(theme.accentLight)
+                        .listRowBackground(theme.backgroundCard)
 
                     if !isOngoing {
                         DatePicker("Ended", selection: $endedAt,
                                    in: startedAt...,
                                    displayedComponents: [.date, .hourAndMinute])
                             .foregroundColor(theme.textPrimary)
+                            .listRowBackground(theme.backgroundCard)
                     }
                 }
 
@@ -90,6 +94,7 @@ struct AddFrontEntrySheet: View {
                             .foregroundColor(theme.danger)
                             .font(.footnote)
                     }
+                    .listRowBackground(theme.backgroundCard)
                 }
             }
             .scrollContentBackground(.hidden)

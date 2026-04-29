@@ -262,141 +262,154 @@ struct MemberDetailSheet: View {
     @Environment(\.dismiss) var dismiss
     let member: Member
     @State private var showEdit = false
+    @State private var showBioRevisions = false
     @State private var fieldValues: [CustomFieldValue] = []
     @State private var loadingFields = false
 
     var body: some View {
-        ZStack {
-            theme.backgroundPrimary.ignoresSafeArea()
-
-            VStack(spacing: 0) {
-                HStack {
-                    Button("Close") { dismiss() }
-                        .foregroundColor(theme.textSecondary)
-                    Spacer()
-                    Button("Edit") { showEdit = true }
-                        .foregroundColor(theme.accentLight)
-                        .font(.subheadline).fontWeight(.semibold)
-                }
-                .padding(.horizontal, 24)
-                .padding(.top, 16)
-
-                ScrollView {
-                    VStack(spacing: 24) {
-                        // Avatar + name
-                        VStack(spacing: 12) {
-                            AvatarView(member: member, size: 96)
-                            Text(member.displayName ?? member.name)
-                                .font(.title2).fontWeight(.bold).fontDesign(.rounded)
-                                .foregroundColor(theme.textPrimary)
-                            if let p = member.pronouns, !p.isEmpty {
-                                Text(p)
-                                    .padding(.horizontal, 14).padding(.vertical, 5)
-                                    .background(member.displayColor.opacity(0.15))
-                                    .cornerRadius(10)
-                                    .foregroundColor(member.displayColor)
-                                    .font(.subheadline)
-                            }
-                        }
-                        .padding(.top, 20)
-
-                        // Fronting status
-                        if store.frontingMembers.contains(where: { $0.id == member.id }) {
-                            Label("Currently Fronting", systemImage: "checkmark.seal.fill")
-                                .font(.subheadline).fontWeight(.semibold)
-                                .foregroundColor(theme.success)
-                                .padding(.horizontal, 16).padding(.vertical, 8)
-                                .background(theme.success.opacity(0.1))
-                                .cornerRadius(12)
-                        }
-
-                        // Description
-                        if let desc = member.description, !desc.isEmpty {
-                            MarkdownText(desc, color: theme.textSecondary)
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 24) {
+                    // Avatar + name
+                    VStack(spacing: 12) {
+                        AvatarView(member: member, size: 96)
+                        Text(member.displayName ?? member.name)
+                            .font(.title2).fontWeight(.bold).fontDesign(.rounded)
+                            .foregroundColor(theme.textPrimary)
+                        if let p = member.pronouns, !p.isEmpty {
+                            Text(p)
+                                .padding(.horizontal, 14).padding(.vertical, 5)
+                                .background(member.displayColor.opacity(0.15))
+                                .cornerRadius(10)
+                                .foregroundColor(member.displayColor)
                                 .font(.subheadline)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(16)
-                                .background(theme.backgroundCard)
-                                .cornerRadius(14)
                         }
+                    }
+                    .padding(.top, 20)
 
+                    // Fronting status
+                    if store.frontingMembers.contains(where: { $0.id == member.id }) {
+                        Label("Currently Fronting", systemImage: "checkmark.seal.fill")
+                            .font(.subheadline).fontWeight(.semibold)
+                            .foregroundColor(theme.success)
+                            .padding(.horizontal, 16).padding(.vertical, 8)
+                            .background(theme.success.opacity(0.1))
+                            .cornerRadius(12)
+                    }
 
-
-                        // Birthday
-                        if let bday = member.birthday, !bday.isEmpty {
-                            HStack {
-                                Label("Birthday", systemImage: "gift")
-                                    .font(.subheadline).fontWeight(.medium)
-                                    .foregroundColor(theme.textSecondary)
-                                Spacer()
-                                Text(bday)
-                                    .font(.subheadline)
-                                    .foregroundColor(theme.textPrimary)
-                            }
+                    // Description
+                    if let desc = member.description, !desc.isEmpty {
+                        MarkdownText(desc, color: theme.textSecondary)
+                            .font(.subheadline)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(16)
                             .background(theme.backgroundCard)
                             .cornerRadius(14)
+                    }
+
+                    // Birthday
+                    if let bday = member.birthday, !bday.isEmpty {
+                        HStack {
+                            Label("Birthday", systemImage: "gift")
+                                .font(.subheadline).fontWeight(.medium)
+                                .foregroundColor(theme.textSecondary)
+                            Spacer()
+                            Text(bday)
+                                .font(.subheadline)
+                                .foregroundColor(theme.textPrimary)
                         }
+                        .padding(16)
+                        .background(theme.backgroundCard)
+                        .cornerRadius(14)
+                    }
 
-                        // Custom fields
-                        if !fieldValues.isEmpty {
-                            VStack(alignment: .leading, spacing: 10) {
-                                Text("Custom Fields")
-                                    .font(.footnote).fontWeight(.semibold)
-                                    .foregroundColor(theme.textSecondary)
-                                    .textCase(.uppercase)
-                                    .kerning(0.8)
+                    // Custom fields
+                    if !fieldValues.isEmpty {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("Custom Fields")
+                                .font(.footnote).fontWeight(.semibold)
+                                .foregroundColor(theme.textSecondary)
+                                .textCase(.uppercase)
+                                .kerning(0.8)
 
-                                VStack(spacing: 0) {
-                                    ForEach(Array(fieldValues.enumerated()), id: \.offset) { i, fv in
-                                        if let field = store.fields.first(where: { $0.id == fv.fieldID }) {
-                                            HStack(alignment: .top, spacing: 12) {
-                                                Text(field.name)
-                                                    .font(.subheadline)
-                                                    .foregroundColor(theme.textSecondary)
-                                                    .frame(width: 100, alignment: .leading)
-                                                MarkdownText(displayValue(fv.value, field: field), color: theme.textPrimary)
-                                                    .font(.subheadline).fontWeight(.medium)
-                                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                            }
-                                            .padding(.horizontal, 16)
-                                            .padding(.vertical, 10)
-                                            if i < fieldValues.count - 1 {
-                                                Divider().background(theme.divider).padding(.leading, 16)
-                                            }
+                            VStack(spacing: 0) {
+                                ForEach(Array(fieldValues.enumerated()), id: \.offset) { i, fv in
+                                    if let field = store.fields.first(where: { $0.id == fv.fieldID }) {
+                                        HStack(alignment: .top, spacing: 12) {
+                                            Text(field.name)
+                                                .font(.subheadline)
+                                                .foregroundColor(theme.textSecondary)
+                                                .frame(width: 100, alignment: .leading)
+                                            MarkdownText(displayValue(fv.value, field: field), color: theme.textPrimary)
+                                                .font(.subheadline).fontWeight(.medium)
+                                                .frame(maxWidth: .infinity, alignment: .leading)
+                                        }
+                                        .padding(.horizontal, 16)
+                                        .padding(.vertical, 10)
+                                        if i < fieldValues.count - 1 {
+                                            Divider().background(theme.divider).padding(.leading, 16)
                                         }
                                     }
                                 }
-                                .background(theme.backgroundCard)
-                                .cornerRadius(14)
-                                .overlay(RoundedRectangle(cornerRadius: 14).stroke(theme.border, lineWidth: 1))
                             }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        } else if loadingFields {
-                            ProgressView().tint(theme.accentLight)
+                            .background(theme.backgroundCard)
+                            .cornerRadius(14)
+                            .overlay(RoundedRectangle(cornerRadius: 14).stroke(theme.border, lineWidth: 1))
                         }
-
-                        // Switch to button
-                        Button {
-                            Task {
-                                await store.switchFronting(to: [member.id])
-                                dismiss()
-                            }
-                        } label: {
-                            Label("Switch to \(member.displayName ?? member.name)", systemImage: "arrow.left.arrow.right")
-                                .frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.large)
-                        .tint(theme.accentLight)
-                        .padding(.bottom, 40)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    } else if loadingFields {
+                        ProgressView().tint(theme.accentLight)
                     }
-                    .padding(.horizontal, 24)
+
+                    // Switch to button
+                    Button {
+                        Task {
+                            await store.switchFronting(to: [member.id])
+                            dismiss()
+                        }
+                    } label: {
+                        Label("Switch to \(member.displayName ?? member.name)", systemImage: "arrow.left.arrow.right")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    .tint(theme.accentLight)
+                    .padding(.bottom, 40)
+                }
+                .padding(.horizontal, 24)
+            }
+            .background(theme.backgroundPrimary)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Close") { dismiss() }
+                        .foregroundColor(theme.accentLight)
+                }
+                ToolbarItemGroup(placement: .primaryAction) {
+                    Button {
+                        showBioRevisions = true
+                    } label: {
+                        Image(systemName: "clock.arrow.circlepath")
+                            .foregroundColor(theme.accentLight)
+                    }
+                    .accessibilityLabel("Bio History")
+
+                    Button {
+                        showEdit = true
+                    } label: {
+                        Image(systemName: "pencil")
+                            .foregroundColor(theme.accentLight)
+                    }
+                    .accessibilityLabel("Edit")
                 }
             }
         }
         .sheet(isPresented: $showEdit) {
             MemberEditSheet(member: member)
+                .environmentObject(store)
+        }
+        .sheet(isPresented: $showBioRevisions) {
+            MemberBioRevisionsView(member: member)
                 .environmentObject(store)
         }
         .presentationDragIndicator(.visible)
@@ -462,137 +475,137 @@ struct MemberEditSheet: View {
     var isNew: Bool { member == nil }
 
     var body: some View {
-        ZStack {
-            theme.backgroundPrimary.ignoresSafeArea()
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 16) {
+                    formField("Name *", value: $name, placeholder: "member-name")
+                    formField("Display Name", value: $displayName, placeholder: "Shown to others")
+                    formField("Pronouns", value: $pronouns, placeholder: "e.g. she/her")
+                    formField("Description", value: $description, placeholder: "Brief description", multiline: true)
 
-            VStack(spacing: 0) {
-                HStack {
-                    Button("Cancel") { dismiss() }.foregroundColor(theme.textSecondary)
-                    Spacer()
-                    Text(isNew ? "Add Member" : "Edit Member")
-                        .font(.headline).foregroundColor(theme.textPrimary)
-                    Spacer()
-                    Button(isSaving ? "" : "Save") {
-                        save()
-                    }
-                    .foregroundColor(theme.accentLight)
-                    .font(.subheadline).fontWeight(.semibold)
-                    .overlay(isSaving ? AnyView(ProgressView().tint(theme.accentLight)) : AnyView(EmptyView()))
-                    .disabled(name.isEmpty || isSaving)
-                }
-                .padding(.horizontal, 24).padding(.top, 16).padding(.bottom, 8)
-
-                ScrollView {
-                    VStack(spacing: 16) {
-                        formField("Name *", value: $name, placeholder: "member-name")
-                        formField("Display Name", value: $displayName, placeholder: "Shown to others")
-                        formField("Pronouns", value: $pronouns, placeholder: "e.g. she/her")
-                        formField("Description", value: $description, placeholder: "Brief description", multiline: true)
-
-                        // Birthday
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("Birthday")
-                                .font(.footnote).fontWeight(.semibold)
-                                .foregroundColor(theme.textSecondary)
-                            HStack {
-                                DatePicker(
-                                    "",
-                                    selection: Binding(
-                                        get: {
-                                            let fmt = DateFormatter()
-                                            fmt.dateFormat = "yyyy-MM-dd"
-                                            return fmt.date(from: birthday) ?? Date()
-                                        },
-                                        set: {
-                                            let fmt = DateFormatter()
-                                            fmt.dateFormat = "yyyy-MM-dd"
-                                            birthday = fmt.string(from: $0)
-                                        }
-                                    ),
-                                    displayedComponents: .date
-                                )
-                                .datePickerStyle(.compact)
-                                .tint(theme.accentLight)
-                                .labelsHidden()
-                                .disabled(birthday.isEmpty)
-                                .opacity(birthday.isEmpty ? 0.4 : 1)
-
-                                Spacer()
-
-                                if birthday.isEmpty {
-                                    Button("Set") {
+                    // Birthday
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Birthday")
+                            .font(.footnote).fontWeight(.semibold)
+                            .foregroundColor(theme.textSecondary)
+                        HStack {
+                            DatePicker(
+                                "",
+                                selection: Binding(
+                                    get: {
                                         let fmt = DateFormatter()
                                         fmt.dateFormat = "yyyy-MM-dd"
-                                        birthday = fmt.string(from: Date())
+                                        return fmt.date(from: birthday) ?? Date()
+                                    },
+                                    set: {
+                                        let fmt = DateFormatter()
+                                        fmt.dateFormat = "yyyy-MM-dd"
+                                        birthday = fmt.string(from: $0)
                                     }
-                                    .font(.subheadline).fontWeight(.medium)
-                                    .foregroundColor(theme.accentLight)
-                                } else {
-                                    Button("Clear") {
-                                        birthday = ""
-                                    }
-                                    .font(.subheadline).fontWeight(.medium)
-                                    .foregroundColor(theme.textSecondary)
+                                ),
+                                displayedComponents: .date
+                            )
+                            .datePickerStyle(.compact)
+                            .tint(theme.accentLight)
+                            .labelsHidden()
+                            .disabled(birthday.isEmpty)
+                            .opacity(birthday.isEmpty ? 0.4 : 1)
+
+                            Spacer()
+
+                            if birthday.isEmpty {
+                                Button("Set") {
+                                    let fmt = DateFormatter()
+                                    fmt.dateFormat = "yyyy-MM-dd"
+                                    birthday = fmt.string(from: Date())
                                 }
-                            }
-                            .padding(12)
-                            .background(theme.backgroundCard)
-                            .cornerRadius(12)
-                        }
-
-                        // Avatar section
-                        AvatarInputSection(
-                            avatarURL: $avatarURL,
-                            mode: $avatarMode,
-                            selectedPhoto: $selectedPhoto,
-                            isUploading: $isUploadingAvatar,
-                            api: store.api
-                        )
-
-                        // Color picker
-                        HStack {
-                            Text("Color")
+                                .font(.subheadline).fontWeight(.medium)
+                                .foregroundColor(theme.accentLight)
+                            } else {
+                                Button("Clear") {
+                                    birthday = ""
+                                }
                                 .font(.subheadline).fontWeight(.medium)
                                 .foregroundColor(theme.textSecondary)
-                            Spacer()
-                            ColorPicker("", selection: Binding(
-                                get: { Color(hex: colorHex) ?? .purple },
-                                set: { colorHex = $0.toHex() }
-                            ))
-                            .labelsHidden()
+                            }
                         }
-                        .padding(14)
+                        .padding(12)
                         .background(theme.backgroundCard)
                         .cornerRadius(12)
+                    }
 
-                        // Privacy picker
+                    // Avatar section
+                    AvatarInputSection(
+                        avatarURL: $avatarURL,
+                        mode: $avatarMode,
+                        selectedPhoto: $selectedPhoto,
+                        isUploading: $isUploadingAvatar,
+                        api: store.api
+                    )
+
+                    // Color picker
+                    HStack {
+                        Text("Color")
+                            .font(.subheadline).fontWeight(.medium)
+                            .foregroundColor(theme.textSecondary)
+                        Spacer()
+                        ColorPicker("", selection: Binding(
+                            get: { Color(hex: colorHex) ?? .purple },
+                            set: { colorHex = $0.toHex() }
+                        ))
+                        .labelsHidden()
+                    }
+                    .padding(14)
+                    .background(theme.backgroundCard)
+                    .cornerRadius(12)
+
+                    // Privacy picker
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Privacy")
+                            .font(.footnote).fontWeight(.semibold)
+                            .foregroundColor(theme.textSecondary)
+                        Picker("Privacy", selection: $privacy) {
+                            ForEach(PrivacyLevel.allCases, id: \.self) { level in
+                                Text(level.rawValue.capitalized).tag(level)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                    }
+
+                    // Custom fields
+                    if !store.fields.isEmpty {
                         VStack(alignment: .leading, spacing: 6) {
-                            Text("Privacy")
+                            Text("Custom Fields")
                                 .font(.footnote).fontWeight(.semibold)
                                 .foregroundColor(theme.textSecondary)
-                            Picker("Privacy", selection: $privacy) {
-                                ForEach(PrivacyLevel.allCases, id: \.self) { level in
-                                    Text(level.rawValue.capitalized).tag(level)
-                                }
-                            }
-                            .pickerStyle(.segmented)
-                        }
-
-                        // Custom fields
-                        if !store.fields.isEmpty {
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text("Custom Fields")
-                                    .font(.footnote).fontWeight(.semibold)
-                                    .foregroundColor(theme.textSecondary)
-                                ForEach(store.fields) { field in
-                                    customFieldEditor(field)
-                                }
+                            ForEach(store.fields) { field in
+                                customFieldEditor(field)
                             }
                         }
                     }
-                    .padding(.horizontal, 24)
-                    .padding(.top, 12)
-                    .padding(.bottom, 80)
+                }
+                .padding(.horizontal, 24)
+                .padding(.top, 12)
+                .padding(.bottom, 80)
+            }
+            .background(theme.backgroundPrimary)
+            .navigationTitle(isNew ? "Add Member" : "Edit Member")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                        .foregroundColor(theme.accentLight)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(action: save) {
+                        if isSaving { ProgressView().tint(theme.accentLight) }
+                        else {
+                            Text("Save")
+                                .fontWeight(.semibold)
+                                .foregroundColor(name.isEmpty ? theme.textTertiary : theme.accentLight)
+                        }
+                    }
+                    .disabled(name.isEmpty || isSaving)
                 }
             }
         }
@@ -927,21 +940,8 @@ struct MemberDeleteConfirmSheet: View {
     }
 
     var body: some View {
-        ZStack {
-            theme.backgroundPrimary.ignoresSafeArea()
-            VStack(spacing: 0) {
-                Capsule().fill(theme.inputBorder).frame(width: 40, height: 4).padding(.top, 12)
-
-                HStack {
-                    Button("Cancel") { dismiss() }.foregroundColor(theme.textSecondary)
-                    Spacer()
-                    Text("Confirm Deletion").font(.headline).foregroundColor(theme.textPrimary)
-                    Spacer()
-                    // Spacer to balance the Cancel button
-                    Text("Cancel").foregroundColor(.clear)
-                }
-                .padding(.horizontal, 24).padding(.top, 16)
-
+        NavigationStack {
+            ScrollView {
                 VStack(spacing: 16) {
                     Text("Deleting \(member.displayName ?? member.name)")
                         .font(.subheadline).fontWeight(.medium)
@@ -998,7 +998,15 @@ struct MemberDeleteConfirmSheet: View {
                     .disabled(!canSubmit || isDeleting)
                 }
                 .padding(.horizontal, 24).padding(.top, 24)
-                Spacer()
+            }
+            .background(theme.backgroundPrimary)
+            .navigationTitle("Confirm Deletion")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                        .foregroundColor(theme.accentLight)
+                }
             }
         }
     }
@@ -1023,6 +1031,178 @@ struct MemberDeleteConfirmSheet: View {
                     errorMessage = "Deletion failed. Please check your credentials and try again."
                 }
             }
+        }
+    }
+}
+
+// MARK: - Member Bio Revisions View
+
+struct MemberBioRevisionsView: View {
+    @Environment(\.theme) var theme
+    @EnvironmentObject var store: SystemStore
+    @Environment(\.dismiss) var dismiss
+    let member: Member
+    @State private var revisions: [ContentRevision] = []
+    @State private var isLoading = true
+    @State private var selectedRevision: ContentRevision?
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if isLoading {
+                    ProgressView().tint(theme.accentLight)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if revisions.isEmpty {
+                    VStack(spacing: 12) {
+                        Image(systemName: "clock.arrow.circlepath")
+                            .font(.largeTitle)
+                            .foregroundColor(theme.textTertiary)
+                        Text("No revisions")
+                            .font(.body).fontWeight(.medium).fontDesign(.rounded)
+                            .foregroundColor(theme.textTertiary)
+                        Text("Revisions are created when the bio is edited.")
+                            .font(.footnote)
+                            .foregroundColor(theme.textTertiary)
+                            .multilineTextAlignment(.center)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    List {
+                        ForEach(revisions) { revision in
+                            Button {
+                                selectedRevision = revision
+                            } label: {
+                                RevisionRow(revision: revision)
+                            }
+                            .buttonStyle(.plain)
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
+                            .listRowInsets(EdgeInsets(top: 5, leading: 24, bottom: 5, trailing: 24))
+                        }
+                    }
+                    .listStyle(.plain)
+                    .scrollContentBackground(.hidden)
+                }
+            }
+            .background(theme.backgroundPrimary)
+            .navigationTitle("Bio History")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Close") { dismiss() }
+                        .foregroundColor(theme.accentLight)
+                }
+            }
+        }
+        .sheet(item: $selectedRevision) { revision in
+            MemberBioRevisionDetailView(member: member, revision: revision) {
+                dismiss()
+            }
+            .environmentObject(store)
+        }
+        .task { await loadRevisions() }
+    }
+
+    func loadRevisions() async {
+        isLoading = true
+        if let fetched = try? await store.api?.getMemberBioRevisions(memberID: member.id) {
+            revisions = fetched
+        }
+        isLoading = false
+    }
+}
+
+// MARK: - Member Bio Revision Detail View
+
+struct MemberBioRevisionDetailView: View {
+    @Environment(\.theme) var theme
+    @EnvironmentObject var store: SystemStore
+    @Environment(\.dismiss) var dismiss
+    let member: Member
+    let revision: ContentRevision
+    var onRestored: (() -> Void)?
+    @State private var showRestoreConfirm = false
+    @State private var isRestoring = false
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "calendar")
+                                .font(.caption)
+                                .foregroundColor(theme.textTertiary)
+                            Text(revision.createdAt, format: .dateTime.month(.wide).day().year().hour().minute())
+                                .font(.subheadline)
+                                .foregroundColor(theme.textSecondary)
+                        }
+                        if !revision.editorMemberNames.isEmpty {
+                            HStack(spacing: 8) {
+                                Image(systemName: "person.fill")
+                                    .font(.caption)
+                                    .foregroundColor(theme.textTertiary)
+                                Text(revision.editorMemberNames.joined(separator: ", "))
+                                    .font(.subheadline)
+                                    .foregroundColor(theme.textSecondary)
+                            }
+                        }
+                    }
+                    .padding(14)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(theme.backgroundCard)
+                    .cornerRadius(14)
+
+                    MarkdownText(revision.body, color: theme.textPrimary)
+                        .font(.body)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                    Button {
+                        showRestoreConfirm = true
+                    } label: {
+                        HStack {
+                            if isRestoring {
+                                ProgressView().tint(.white).scaleEffect(0.8)
+                            }
+                            Label("Restore this version", systemImage: "arrow.uturn.backward")
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    .tint(theme.accentLight)
+                    .disabled(isRestoring)
+                    .padding(.top, 8)
+                }
+                .padding(.horizontal, 24)
+                .padding(.top, 16)
+                .padding(.bottom, 40)
+            }
+            .background(theme.backgroundPrimary)
+            .navigationTitle("Revision")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Close") { dismiss() }
+                        .foregroundColor(theme.accentLight)
+                }
+            }
+        }
+        .confirmationDialog("Restore this version?", isPresented: $showRestoreConfirm) {
+            Button("Restore") {
+                Task {
+                    isRestoring = true
+                    if let updated = try? await store.api?.restoreMemberBioRevision(memberID: member.id, revisionID: revision.id) {
+                        store.refreshMember(updated)
+                    }
+                    isRestoring = false
+                    dismiss()
+                    onRestored?()
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("The current bio will be saved as a revision, and this version will become the current bio.")
         }
     }
 }

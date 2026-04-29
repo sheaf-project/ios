@@ -750,6 +750,13 @@ class SystemStore: ObservableObject {
         }
     }
 
+    func refreshMember(_ updated: Member) {
+        if let idx = members.firstIndex(where: { $0.id == updated.id }) {
+            members[idx] = updated
+            saveAllToCache()
+        }
+    }
+
     @discardableResult
     func deleteMember(id: String, confirmation: MemberDeleteConfirm? = nil) async -> DeleteQueued? {
         if NetworkMonitor.shared.isOnline, let api {
