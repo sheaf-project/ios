@@ -416,6 +416,13 @@ struct JournalRevisionsView: View {
     @State private var showRestoreConfirm = false
     @State private var isRestoring = false
 
+    private var sortedRevisions: [ContentRevision] {
+        revisions.sorted { a, b in
+            if a.isPinned != b.isPinned { return a.isPinned }
+            return a.createdAt > b.createdAt
+        }
+    }
+
     var body: some View {
         NavigationStack {
             Group {
@@ -438,7 +445,7 @@ struct JournalRevisionsView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     List {
-                        ForEach(revisions) { revision in
+                        ForEach(sortedRevisions) { revision in
                             Button {
                                 selectedRevision = revision
                             } label: {
@@ -465,7 +472,11 @@ struct JournalRevisionsView: View {
             }
         }
         .sheet(item: $selectedRevision) { revision in
-            RevisionDetailView(entry: entry, revision: revision) {
+            RevisionDetailView(entry: entry, revision: revision, onPinChanged: { updated in
+                if let idx = revisions.firstIndex(where: { $0.id == updated.id }) {
+                    revisions[idx] = updated
+                }
+            }) {
                 dismiss()
             }
             .environmentObject(store)
@@ -498,6 +509,11 @@ struct RevisionRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
+                if revision.isPinned {
+                    Image(systemName: "pin.fill")
+                        .font(.system(size: 11))
+                        .foregroundColor(theme.accentLight)
+                }
                 if let title = revision.title, !title.isEmpty {
                     Text(title)
                         .font(.subheadline).fontWeight(.semibold)
@@ -554,15 +570,21 @@ struct RevisionDetailView: View {
     @Environment(\.dismiss) var dismiss
     let entry: JournalEntry
     let revision: ContentRevision
+    var onPinChanged: ((ContentRevision) -> Void)?
     var onRestored: (() -> Void)?
     @State private var showRestoreConfirm = false
     @State private var isRestoring = false
+    @State private var isPinned: Bool = false
+    @State private var isPinLoading = false
+    @State private var pinError: String?
+    @State private var showUnpinConfirm = false
+    @State private var showUnpinAuth = false
+    @State private var unpinQueued: DeleteQueued?
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    // Revision metadata
                     VStack(alignment: .leading, spacing: 8) {
                         HStack(spacing: 8) {
                             Image(systemName: "calendar")
@@ -582,40 +604,97 @@ struct RevisionDetailView: View {
                                     .foregroundColor(theme.textSecondary)
                             }
                         }
+                        if isPinned {
+                            HStack(spacing: 8) {
+                                Image(systemName: "pin.fill")
+                                    .font(.caption)
+                                    .foregroundColor(theme.accentLight)
+                                Text("Pinned")
+                                    .font(.subheadline).fontWeight(.medium)
+                                    .foregroundColor(theme.accentLight)
+                            }
+                        }
                     }
                     .padding(14)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(theme.backgroundCard)
                     .cornerRadius(14)
 
-                    // Title
                     if let title = revision.title, !title.isEmpty {
                         Text(title)
                             .font(.title3).fontWeight(.bold)
                             .foregroundColor(theme.textPrimary)
                     }
 
-                    // Body
                     MarkdownText(revision.body, color: theme.textPrimary)
                         .font(.body)
                         .frame(maxWidth: .infinity, alignment: .leading)
 
-                    // Restore button
-                    Button {
-                        showRestoreConfirm = true
-                    } label: {
-                        HStack {
-                            if isRestoring {
-                                ProgressView().tint(.white).scaleEffect(0.8)
-                            }
-                            Label("Restore this version", systemImage: "arrow.uturn.backward")
-                        }
-                        .frame(maxWidth: .infinity)
+                    if let error = pinError {
+                        Text(error)
+                            .font(.footnote)
+                            .foregroundColor(.red)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
-                    .tint(theme.accentLight)
-                    .disabled(isRestoring)
+
+                    if let info = unpinQueued {
+                        Label("Unpin queued — finalizes \(info.finalizeAfter, style: .relative). Cancel from System Safety settings.", systemImage: "clock")
+                            .font(.footnote)
+                            .foregroundColor(theme.textSecondary)
+                    }
+
+                    HStack(spacing: 12) {
+                        Button {
+                            if isPinned {
+                                Task { await requestUnpin() }
+                            } else {
+                                Task { await togglePin() }
+                            }
+                        } label: {
+                            HStack {
+                                if isPinLoading {
+                                    ProgressView().tint(isPinned ? .white : theme.accentLight).scaleEffect(0.8)
+                                }
+                                Label(isPinned ? "Unpin" : "Pin", systemImage: isPinned ? "pin.slash" : "pin")
+                            }
+                            .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.large)
+                        .tint(theme.accentLight)
+                        .disabled(isPinLoading)
+                        .confirmationDialog("Unpin this revision?", isPresented: $showUnpinConfirm) {
+                            Button("Unpin", role: .destructive) {
+                                Task { await performUnpin() }
+                            }
+                            Button("Cancel", role: .cancel) {}
+                        } message: {
+                            Text("Unpinned revisions may be removed by automatic retention cleanup.")
+                        }
+                        .sheet(isPresented: $showUnpinAuth) {
+                            UnpinRevisionSheet(onUnpin: { password, totpCode in
+                                try await store.api?.unpinJournalRevision(entryID: entry.id, revisionID: revision.id, password: password, totpCode: totpCode)
+                            }, onSuccess: { response in
+                                handleUnpinResponse(response)
+                            })
+                            .environmentObject(store)
+                        }
+
+                        Button {
+                            showRestoreConfirm = true
+                        } label: {
+                            HStack {
+                                if isRestoring {
+                                    ProgressView().tint(.white).scaleEffect(0.8)
+                                }
+                                Label("Restore", systemImage: "arrow.uturn.backward")
+                            }
+                            .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.large)
+                        .tint(theme.accentLight)
+                        .disabled(isRestoring)
+                    }
                     .padding(.top, 8)
                 }
                 .padding(.horizontal, 24)
@@ -632,6 +711,7 @@ struct RevisionDetailView: View {
                 }
             }
         }
+        .onAppear { isPinned = revision.isPinned }
         .confirmationDialog("Restore this version?", isPresented: $showRestoreConfirm) {
             Button("Restore") {
                 Task {
@@ -646,6 +726,53 @@ struct RevisionDetailView: View {
         } message: {
             Text("The current entry content will be saved as a revision, and this version will become the current content.")
         }
+    }
+
+    private func requestUnpin() async {
+        if let safety = try? await store.api?.getSystemSafety(),
+           safety.settings.appliesToRevisions,
+           safety.settings.authTier != .none {
+            showUnpinAuth = true
+        } else {
+            showUnpinConfirm = true
+        }
+    }
+
+    private func performUnpin() async {
+        isPinLoading = true
+        pinError = nil
+        do {
+            let response = try await store.api?.unpinJournalRevision(entryID: entry.id, revisionID: revision.id)
+            handleUnpinResponse(response)
+        } catch {
+            pinError = error.localizedDescription
+        }
+        isPinLoading = false
+    }
+
+    private func handleUnpinResponse(_ response: UnpinRevisionResponse?) {
+        if let actionID = response?.pendingActionID, let after = response?.finalizeAfter {
+            unpinQueued = DeleteQueued(pendingActionID: actionID, finalizeAfter: after)
+        } else {
+            isPinned = false
+            var updated = revision
+            updated.pinnedAt = nil
+            onPinChanged?(updated)
+        }
+    }
+
+    func togglePin() async {
+        isPinLoading = true
+        pinError = nil
+        unpinQueued = nil
+        do {
+            let updated = try await store.api?.pinJournalRevision(entryID: entry.id, revisionID: revision.id)
+            isPinned = true
+            if let updated { onPinChanged?(updated) }
+        } catch {
+            pinError = error.localizedDescription
+        }
+        isPinLoading = false
     }
 }
 

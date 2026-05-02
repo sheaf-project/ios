@@ -473,6 +473,7 @@ struct RegisterForm: View {
                 )
                 await MainActor.run {
                     authManager.save(baseURL: cleanURL, tokens: tokens)
+                    authManager.needsOnboarding = true
                 }
                 // Check account status after registration
                 let authedAPI = APIClient(auth: authManager)

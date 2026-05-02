@@ -5,6 +5,7 @@ struct SettingsView: View {
     @EnvironmentObject var authManager: AuthManager
     @EnvironmentObject var store: SystemStore
     @EnvironmentObject var themeManager: ThemeManager
+    @ObservedObject private var lockManager = AppLockManager.shared
     @Environment(\.theme) var theme
     @State private var showLogoutConfirm = false
     @State private var showEditSystem = false
@@ -28,6 +29,7 @@ struct SettingsView: View {
     @State private var newsletterOptIn = false
     @State private var showChangePassword = false
     @State private var showChangeEmail = false
+    @State private var showPasscodeAlert = false
 
     var body: some View {
         NavigationStack {
@@ -148,6 +150,37 @@ struct SettingsView: View {
                         }
                     }
 
+                    // Notifications
+                    settingsSection(title: "Notifications") {
+                        VStack(spacing: 0) {
+                            NavigationLink {
+                                NotificationChannelsView()
+                                    .environmentObject(authManager)
+                                    .environmentObject(store)
+                            } label: {
+                                HStack(spacing: 12) {
+                                    Image(systemName: "bell.badge.fill")
+                                        .foregroundColor(theme.accentLight)
+                                        .frame(width: 20)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("Notification Channels")
+                                            .font(.subheadline).fontWeight(.medium)
+                                            .foregroundColor(theme.textPrimary)
+                                        Text("ntfy, Pushover, webhooks")
+                                            .font(.caption)
+                                            .foregroundColor(theme.textTertiary)
+                                    }
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .font(.caption)
+                                        .foregroundColor(theme.textTertiary)
+                                }
+                                .padding(.horizontal, 16).padding(.vertical, 14)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+
                     // Security
                     settingsSection(title: String(localized: "Security")) {
                         VStack(spacing: 0) {
@@ -251,6 +284,11 @@ struct SettingsView: View {
                                 .padding(.horizontal, 16).padding(.vertical, 14)
                             }
                             .buttonStyle(.plain)
+
+                            Divider().background(theme.backgroundCard)
+
+                            // App Lock
+                            AppLockRow(lockManager: lockManager, showPasscodeAlert: $showPasscodeAlert)
                         }
                     }
 
@@ -588,6 +626,33 @@ struct SettingsView: View {
                         }
                     }
 
+                    #if DEBUG
+                    settingsSection(title: "Debug") {
+                        VStack(spacing: 0) {
+                            NavigationLink {
+                                DebugMenuView()
+                                    .environmentObject(authManager)
+                                    .environmentObject(store)
+                            } label: {
+                                HStack {
+                                    Image(systemName: "ant.fill")
+                                        .foregroundColor(theme.accentLight)
+                                        .frame(width: 20)
+                                    Text("Debug Menu")
+                                        .font(.subheadline).fontWeight(.medium)
+                                        .foregroundColor(theme.textPrimary)
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .font(.caption)
+                                        .foregroundColor(theme.textTertiary)
+                                }
+                                .padding(.horizontal, 16).padding(.vertical, 14)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    #endif
+
                     // Account
                     settingsSection(title: "Account") {
                         VStack(spacing: 0) {
@@ -759,6 +824,11 @@ struct SettingsView: View {
         } message: {
             Text(fileCleanupResult ?? "")
         }
+        .alert("Passcode Required", isPresented: $showPasscodeAlert) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("To use App Lock, set up a passcode in your device Settings first.")
+        }
         } // NavigationStack
     }
 
@@ -908,8 +978,8 @@ struct SettingsView: View {
 
 
 
-    func settingsSection<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+    func settingsSection<Content: View>(title: String, @ViewBuilder content: () -> Content) -> AnyView {
+        AnyView(VStack(alignment: .leading, spacing: 10) {
             Text(title)
                 .font(.caption).fontWeight(.semibold)
                 .foregroundColor(theme.textSecondary)
@@ -921,7 +991,7 @@ struct SettingsView: View {
                 .cornerRadius(16)
                 .overlay(RoundedRectangle(cornerRadius: 16).stroke(theme.backgroundCard, lineWidth: 1))
                 .padding(.horizontal, 24)
-        }
+        })
     }
 
     func infoRow(icon: String, label: String, value: String) -> some View {

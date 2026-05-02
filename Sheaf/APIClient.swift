@@ -35,6 +35,7 @@ final class AuthManager: ObservableObject {
     @Published var emailVerified: Bool = true
     @Published var deletionGraceDays: Int?
     @Published var deletionRequestedAt: Date?
+    @Published var needsOnboarding = false
 
     // Held during TOTP step so we can finalize after verification
     private(set) var pendingTokens: TokenResponse?
@@ -1164,6 +1165,22 @@ class APIClient {
         return try JSONDecoder.iso.decode(JournalEntry.self, from: data)
     }
 
+    func pinJournalRevision(entryID: String, revisionID: String) async throws -> ContentRevision {
+        let body = try JSONEncoder.iso.encode(PinRevisionRequest(revisionID: revisionID))
+        let data = try await request("/v1/journals/\(entryID)/pin-revision", method: "POST", body: body)
+        return try JSONDecoder.iso.decode(ContentRevision.self, from: data)
+    }
+
+    func unpinJournalRevision(entryID: String, revisionID: String, password: String? = nil, totpCode: String? = nil) async throws -> UnpinRevisionResponse {
+        let body = try JSONEncoder.iso.encode(UnpinRevisionRequest(revisionID: revisionID, password: password, totpCode: totpCode))
+        let (data, status) = try await perform("/v1/journals/\(entryID)/unpin-revision", method: "POST", body: body)
+        guard (200...299).contains(status) else {
+            throw NSError(domain: "APIError", code: status,
+                          userInfo: [NSLocalizedDescriptionKey: friendlyErrorMessage(statusCode: status, data: data)])
+        }
+        return try JSONDecoder.iso.decode(UnpinRevisionResponse.self, from: data)
+    }
+
     func getMemberBioRevisions(memberID: String) async throws -> [ContentRevision] {
         let data = try await request("/v1/members/\(memberID)/revisions")
         return try JSONDecoder.iso.decode([ContentRevision].self, from: data)
@@ -1173,6 +1190,22 @@ class APIClient {
         let body = try JSONEncoder.iso.encode(RestoreRevisionRequest(revisionID: revisionID))
         let data = try await request("/v1/members/\(memberID)/restore-revision", method: "POST", body: body)
         return try JSONDecoder.iso.decode(Member.self, from: data)
+    }
+
+    func pinMemberBioRevision(memberID: String, revisionID: String) async throws -> ContentRevision {
+        let body = try JSONEncoder.iso.encode(PinRevisionRequest(revisionID: revisionID))
+        let data = try await request("/v1/members/\(memberID)/pin-revision", method: "POST", body: body)
+        return try JSONDecoder.iso.decode(ContentRevision.self, from: data)
+    }
+
+    func unpinMemberBioRevision(memberID: String, revisionID: String, password: String? = nil, totpCode: String? = nil) async throws -> UnpinRevisionResponse {
+        let body = try JSONEncoder.iso.encode(UnpinRevisionRequest(revisionID: revisionID, password: password, totpCode: totpCode))
+        let (data, status) = try await perform("/v1/members/\(memberID)/unpin-revision", method: "POST", body: body)
+        guard (200...299).contains(status) else {
+            throw NSError(domain: "APIError", code: status,
+                          userInfo: [NSLocalizedDescriptionKey: friendlyErrorMessage(statusCode: status, data: data)])
+        }
+        return try JSONDecoder.iso.decode(UnpinRevisionResponse.self, from: data)
     }
 
     @discardableResult
@@ -1563,6 +1596,75 @@ class APIClient {
             return urlStr
         }
         return ""
+    }
+
+    // MARK: - Watch Tokens
+
+    func listWatchTokens(systemID: String) async throws -> [WatchToken] {
+        let data = try await request("/v1/systems/\(systemID)/watch-tokens")
+        return try JSONDecoder.iso.decode([WatchToken].self, from: data)
+    }
+
+    func createWatchToken(systemID: String, label: String? = nil) async throws -> WatchToken {
+        let body = try JSONEncoder.iso.encode(WatchTokenCreate(label: label))
+        let data = try await request("/v1/systems/\(systemID)/watch-tokens", method: "POST", body: body)
+        return try JSONDecoder.iso.decode(WatchToken.self, from: data)
+    }
+
+    func updateWatchToken(id: String, label: String?) async throws -> WatchToken {
+        let body = try JSONEncoder.iso.encode(WatchTokenUpdate(label: label))
+        let data = try await request("/v1/watch-tokens/\(id)", method: "PATCH", body: body)
+        return try JSONDecoder.iso.decode(WatchToken.self, from: data)
+    }
+
+    @discardableResult
+    func deleteWatchToken(id: String, confirmation: MemberDeleteConfirm? = nil) async throws -> DeleteQueued? {
+        let body = confirmation != nil ? try JSONEncoder.iso.encode(confirmation) : nil
+        let data = try await request("/v1/watch-tokens/\(id)", method: "DELETE", body: body)
+        guard !data.isEmpty else { return nil }
+        return try? JSONDecoder.iso.decode(DeleteQueued.self, from: data)
+    }
+
+    // MARK: - Notification Channels
+
+    func listChannels(watchTokenID: String) async throws -> [NotificationChannel] {
+        let data = try await request("/v1/watch-tokens/\(watchTokenID)/channels")
+        return try JSONDecoder.iso.decode([NotificationChannel].self, from: data)
+    }
+
+    func createChannel(watchTokenID: String, create: NotificationChannelCreate) async throws -> ChannelCreateResponse {
+        let body = try JSONEncoder.iso.encode(create)
+        let data = try await request("/v1/watch-tokens/\(watchTokenID)/channels", method: "POST", body: body)
+        return try JSONDecoder.iso.decode(ChannelCreateResponse.self, from: data)
+    }
+
+    func updateChannel(id: String, update: NotificationChannelUpdate) async throws -> NotificationChannel {
+        let body = try JSONEncoder.iso.encode(update)
+        let data = try await request("/v1/channels/\(id)", method: "PATCH", body: body)
+        return try JSONDecoder.iso.decode(NotificationChannel.self, from: data)
+    }
+
+    @discardableResult
+    func deleteChannel(id: String, confirmation: MemberDeleteConfirm? = nil) async throws -> DeleteQueued? {
+        let body = confirmation != nil ? try JSONEncoder.iso.encode(confirmation) : nil
+        let data = try await request("/v1/channels/\(id)", method: "DELETE", body: body)
+        guard !data.isEmpty else { return nil }
+        return try? JSONDecoder.iso.decode(DeleteQueued.self, from: data)
+    }
+
+    func enableChannel(id: String) async throws -> NotificationChannel {
+        let data = try await request("/v1/channels/\(id)/enable", method: "POST")
+        return try JSONDecoder.iso.decode(NotificationChannel.self, from: data)
+    }
+
+    func disableChannel(id: String) async throws -> NotificationChannel {
+        let data = try await request("/v1/channels/\(id)/disable", method: "POST")
+        return try JSONDecoder.iso.decode(NotificationChannel.self, from: data)
+    }
+
+    func testChannel(id: String) async throws -> TestDispatchResponse {
+        let data = try await request("/v1/channels/\(id)/test", method: "POST")
+        return try JSONDecoder.iso.decode(TestDispatchResponse.self, from: data)
     }
 
     /// Decodes JSON, detecting Cloudflare Access interception and giving a clear error.

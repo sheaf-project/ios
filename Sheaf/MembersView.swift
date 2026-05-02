@@ -1046,6 +1046,13 @@ struct MemberBioRevisionsView: View {
     @State private var isLoading = true
     @State private var selectedRevision: ContentRevision?
 
+    private var sortedRevisions: [ContentRevision] {
+        revisions.sorted { a, b in
+            if a.isPinned != b.isPinned { return a.isPinned }
+            return a.createdAt > b.createdAt
+        }
+    }
+
     var body: some View {
         NavigationStack {
             Group {
@@ -1068,7 +1075,7 @@ struct MemberBioRevisionsView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     List {
-                        ForEach(revisions) { revision in
+                        ForEach(sortedRevisions) { revision in
                             Button {
                                 selectedRevision = revision
                             } label: {
@@ -1095,7 +1102,11 @@ struct MemberBioRevisionsView: View {
             }
         }
         .sheet(item: $selectedRevision) { revision in
-            MemberBioRevisionDetailView(member: member, revision: revision) {
+            MemberBioRevisionDetailView(member: member, revision: revision, onPinChanged: { updated in
+                if let idx = revisions.firstIndex(where: { $0.id == updated.id }) {
+                    revisions[idx] = updated
+                }
+            }) {
                 dismiss()
             }
             .environmentObject(store)
@@ -1120,9 +1131,16 @@ struct MemberBioRevisionDetailView: View {
     @Environment(\.dismiss) var dismiss
     let member: Member
     let revision: ContentRevision
+    var onPinChanged: ((ContentRevision) -> Void)?
     var onRestored: (() -> Void)?
     @State private var showRestoreConfirm = false
     @State private var isRestoring = false
+    @State private var isPinned: Bool = false
+    @State private var isPinLoading = false
+    @State private var pinError: String?
+    @State private var showUnpinConfirm = false
+    @State private var showUnpinAuth = false
+    @State private var unpinQueued: DeleteQueued?
 
     var body: some View {
         NavigationStack {
@@ -1147,6 +1165,16 @@ struct MemberBioRevisionDetailView: View {
                                     .foregroundColor(theme.textSecondary)
                             }
                         }
+                        if isPinned {
+                            HStack(spacing: 8) {
+                                Image(systemName: "pin.fill")
+                                    .font(.caption)
+                                    .foregroundColor(theme.accentLight)
+                                Text("Pinned")
+                                    .font(.subheadline).fontWeight(.medium)
+                                    .foregroundColor(theme.accentLight)
+                            }
+                        }
                     }
                     .padding(14)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -1157,21 +1185,71 @@ struct MemberBioRevisionDetailView: View {
                         .font(.body)
                         .frame(maxWidth: .infinity, alignment: .leading)
 
-                    Button {
-                        showRestoreConfirm = true
-                    } label: {
-                        HStack {
-                            if isRestoring {
-                                ProgressView().tint(.white).scaleEffect(0.8)
-                            }
-                            Label("Restore this version", systemImage: "arrow.uturn.backward")
-                        }
-                        .frame(maxWidth: .infinity)
+                    if let error = pinError {
+                        Text(error)
+                            .font(.footnote)
+                            .foregroundColor(.red)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
-                    .tint(theme.accentLight)
-                    .disabled(isRestoring)
+
+                    if let info = unpinQueued {
+                        Label("Unpin queued — finalizes \(info.finalizeAfter, style: .relative). Cancel from System Safety settings.", systemImage: "clock")
+                            .font(.footnote)
+                            .foregroundColor(theme.textSecondary)
+                    }
+
+                    HStack(spacing: 12) {
+                        Button {
+                            if isPinned {
+                                Task { await requestUnpin() }
+                            } else {
+                                Task { await togglePin() }
+                            }
+                        } label: {
+                            HStack {
+                                if isPinLoading {
+                                    ProgressView().tint(isPinned ? .white : theme.accentLight).scaleEffect(0.8)
+                                }
+                                Label(isPinned ? "Unpin" : "Pin", systemImage: isPinned ? "pin.slash" : "pin")
+                            }
+                            .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.large)
+                        .tint(theme.accentLight)
+                        .disabled(isPinLoading)
+                        .confirmationDialog("Unpin this revision?", isPresented: $showUnpinConfirm) {
+                            Button("Unpin", role: .destructive) {
+                                Task { await performUnpin() }
+                            }
+                            Button("Cancel", role: .cancel) {}
+                        } message: {
+                            Text("Unpinned revisions may be removed by automatic retention cleanup.")
+                        }
+                        .sheet(isPresented: $showUnpinAuth) {
+                            UnpinRevisionSheet(onUnpin: { password, totpCode in
+                                try await store.api?.unpinMemberBioRevision(memberID: member.id, revisionID: revision.id, password: password, totpCode: totpCode)
+                            }, onSuccess: { response in
+                                handleUnpinResponse(response)
+                            })
+                            .environmentObject(store)
+                        }
+
+                        Button {
+                            showRestoreConfirm = true
+                        } label: {
+                            HStack {
+                                if isRestoring {
+                                    ProgressView().tint(.white).scaleEffect(0.8)
+                                }
+                                Label("Restore", systemImage: "arrow.uturn.backward")
+                            }
+                            .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.large)
+                        .tint(theme.accentLight)
+                        .disabled(isRestoring)
+                    }
                     .padding(.top, 8)
                 }
                 .padding(.horizontal, 24)
@@ -1188,6 +1266,7 @@ struct MemberBioRevisionDetailView: View {
                 }
             }
         }
+        .onAppear { isPinned = revision.isPinned }
         .confirmationDialog("Restore this version?", isPresented: $showRestoreConfirm) {
             Button("Restore") {
                 Task {
@@ -1204,6 +1283,53 @@ struct MemberBioRevisionDetailView: View {
         } message: {
             Text("The current bio will be saved as a revision, and this version will become the current bio.")
         }
+    }
+
+    private func requestUnpin() async {
+        if let safety = try? await store.api?.getSystemSafety(),
+           safety.settings.appliesToRevisions,
+           safety.settings.authTier != .none {
+            showUnpinAuth = true
+        } else {
+            showUnpinConfirm = true
+        }
+    }
+
+    private func performUnpin() async {
+        isPinLoading = true
+        pinError = nil
+        do {
+            let response = try await store.api?.unpinMemberBioRevision(memberID: member.id, revisionID: revision.id)
+            handleUnpinResponse(response)
+        } catch {
+            pinError = error.localizedDescription
+        }
+        isPinLoading = false
+    }
+
+    private func handleUnpinResponse(_ response: UnpinRevisionResponse?) {
+        if let actionID = response?.pendingActionID, let after = response?.finalizeAfter {
+            unpinQueued = DeleteQueued(pendingActionID: actionID, finalizeAfter: after)
+        } else {
+            isPinned = false
+            var updated = revision
+            updated.pinnedAt = nil
+            onPinChanged?(updated)
+        }
+    }
+
+    func togglePin() async {
+        isPinLoading = true
+        pinError = nil
+        unpinQueued = nil
+        do {
+            let updated = try await store.api?.pinMemberBioRevision(memberID: member.id, revisionID: revision.id)
+            isPinned = true
+            if let updated { onPinChanged?(updated) }
+        } catch {
+            pinError = error.localizedDescription
+        }
+        isPinLoading = false
     }
 }
 

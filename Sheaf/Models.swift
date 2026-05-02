@@ -923,6 +923,9 @@ struct ContentRevision: Identifiable, Codable {
     var title: String?
     var body: String
     let createdAt: Date
+    var pinnedAt: Date?
+
+    var isPinned: Bool { pinnedAt != nil }
 
     enum CodingKeys: String, CodingKey {
         case id, title, body
@@ -932,6 +935,7 @@ struct ContentRevision: Identifiable, Codable {
         case editorMemberIDs = "editor_member_ids"
         case editorMemberNames = "editor_member_names"
         case createdAt = "created_at"
+        case pinnedAt = "pinned_at"
     }
 }
 
@@ -940,6 +944,38 @@ struct RestoreRevisionRequest: Codable {
 
     enum CodingKeys: String, CodingKey {
         case revisionID = "revision_id"
+    }
+}
+
+struct PinRevisionRequest: Codable {
+    let revisionID: String
+
+    enum CodingKeys: String, CodingKey {
+        case revisionID = "revision_id"
+    }
+}
+
+struct UnpinRevisionRequest: Codable {
+    let revisionID: String
+    var password: String?
+    var totpCode: String?
+
+    enum CodingKeys: String, CodingKey {
+        case revisionID = "revision_id"
+        case password
+        case totpCode = "totp_code"
+    }
+}
+
+struct UnpinRevisionResponse: Codable {
+    var revision: ContentRevision?
+    var pendingActionID: String?
+    var finalizeAfter: Date?
+
+    enum CodingKeys: String, CodingKey {
+        case revision
+        case pendingActionID = "pending_action_id"
+        case finalizeAfter = "finalize_after"
     }
 }
 
@@ -1226,6 +1262,7 @@ struct SystemSafetySettings: Codable {
     var appliesToFronts: Bool
     var appliesToJournals: Bool
     var appliesToImages: Bool
+    var appliesToRevisions: Bool
 
     enum CodingKeys: String, CodingKey {
         case gracePeriodDays = "grace_period_days"
@@ -1237,6 +1274,7 @@ struct SystemSafetySettings: Codable {
         case appliesToFronts = "applies_to_fronts"
         case appliesToJournals = "applies_to_journals"
         case appliesToImages = "applies_to_images"
+        case appliesToRevisions = "applies_to_revisions"
     }
 }
 
@@ -1250,6 +1288,7 @@ struct SystemSafetyUpdate: Codable {
     var appliesToFronts: Bool?
     var appliesToJournals: Bool?
     var appliesToImages: Bool?
+    var appliesToRevisions: Bool?
     var password: String?
     var totpCode: String?
 
@@ -1263,6 +1302,7 @@ struct SystemSafetyUpdate: Codable {
         case appliesToFronts = "applies_to_fronts"
         case appliesToJournals = "applies_to_journals"
         case appliesToImages = "applies_to_images"
+        case appliesToRevisions = "applies_to_revisions"
         case password
         case totpCode = "totp_code"
     }
@@ -1341,4 +1381,282 @@ struct DeleteQueued: Codable {
         case pendingActionID = "pending_action_id"
         case finalizeAfter = "finalize_after"
     }
+}
+
+// MARK: - Notification Channels
+
+enum DestinationType: String, Codable, CaseIterable {
+    case webhook = "webhook"
+    case ntfy = "ntfy"
+    case pushover = "pushover"
+    case webPush = "web_push"
+    case unknown
+
+    init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = DestinationType(rawValue: raw) ?? .unknown
+    }
+
+    var label: String {
+        switch self {
+        case .webhook: return "Webhook"
+        case .ntfy: return "ntfy"
+        case .pushover: return "Pushover"
+        case .webPush: return "Web Push"
+        case .unknown: return "Unknown"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .webhook: return "link"
+        case .ntfy: return "bell.badge"
+        case .pushover: return "iphone.radiowaves.left.and.right"
+        case .webPush: return "globe"
+        case .unknown: return "questionmark.circle"
+        }
+    }
+
+    static var creatableTypes: [DestinationType] {
+        [.ntfy, .pushover, .webhook]
+    }
+}
+
+enum DestinationState: String, Codable {
+    case pendingRegistration = "pending_registration"
+    case active = "active"
+    case disabled = "disabled"
+    case unknown
+
+    init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = DestinationState(rawValue: raw) ?? .unknown
+    }
+
+    var label: String {
+        switch self {
+        case .pendingRegistration: return "Pending"
+        case .active: return "Active"
+        case .disabled: return "Disabled"
+        case .unknown: return "Unknown"
+        }
+    }
+}
+
+enum WebhookFormat: String, Codable, CaseIterable {
+    case json = "json"
+    case discord = "discord"
+    case slack = "slack"
+    case plaintext = "plaintext"
+
+    var label: String {
+        switch self {
+        case .json: return "JSON (Sheaf)"
+        case .discord: return "Discord"
+        case .slack: return "Slack"
+        case .plaintext: return "Plain Text"
+        }
+    }
+
+    var supportsSignature: Bool {
+        self == .json || self == .plaintext
+    }
+}
+
+enum CofrontRedaction: String, Codable, CaseIterable {
+    case count = "count"
+    case someone = "someone"
+    case suppress = "suppress"
+
+    var label: String {
+        switch self {
+        case .count: return "Show count"
+        case .someone: return "Say \"someone\""
+        case .suppress: return "Suppress entirely"
+        }
+    }
+}
+
+enum PayloadSensitivity: String, Codable, CaseIterable {
+    case full = "full"
+    case minimal = "minimal"
+    case bare = "bare"
+
+    var label: String {
+        switch self {
+        case .full: return "Full"
+        case .minimal: return "Minimal"
+        case .bare: return "Bare"
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .full: return "Names and details"
+        case .minimal: return "Counts only, no names"
+        case .bare: return "\"A front changed.\""
+        }
+    }
+}
+
+struct WatchToken: Identifiable, Codable {
+    let id: String
+    let systemID: String
+    var label: String?
+    var revokedAt: Date?
+    let createdAt: Date
+    let updatedAt: Date
+    var channelCount: Int
+
+    enum CodingKeys: String, CodingKey {
+        case id, label
+        case systemID     = "system_id"
+        case revokedAt    = "revoked_at"
+        case createdAt    = "created_at"
+        case updatedAt    = "updated_at"
+        case channelCount = "channel_count"
+    }
+}
+
+struct WatchTokenCreate: Codable {
+    var label: String?
+}
+
+struct WatchTokenUpdate: Codable {
+    var label: String?
+}
+
+struct NotificationChannel: Identifiable, Codable {
+    let id: String
+    let watchTokenID: String
+    var name: String
+    var destinationType: DestinationType
+    var destinationState: DestinationState
+    var destinationConfig: [String: String]
+    var triggerOnStart: Bool
+    var triggerOnStop: Bool
+    var triggerOnCofrontChange: Bool
+    var cofrontRedaction: CofrontRedaction
+    var payloadSensitivity: PayloadSensitivity
+    var debounceSeconds: Int
+    var baseAllMembers: Bool
+    var baseIncludePrivate: Bool
+    var lastDeliveredAt: Date?
+    let createdAt: Date
+    let updatedAt: Date
+
+    enum CodingKeys: String, CodingKey {
+        case id, name
+        case watchTokenID          = "watch_token_id"
+        case destinationType       = "destination_type"
+        case destinationState      = "destination_state"
+        case destinationConfig     = "destination_config"
+        case triggerOnStart        = "trigger_on_start"
+        case triggerOnStop         = "trigger_on_stop"
+        case triggerOnCofrontChange = "trigger_on_cofront_change"
+        case cofrontRedaction      = "cofront_redaction"
+        case payloadSensitivity    = "payload_sensitivity"
+        case debounceSeconds       = "debounce_seconds"
+        case baseAllMembers        = "base_all_members"
+        case baseIncludePrivate    = "base_include_private"
+        case lastDeliveredAt       = "last_delivered_at"
+        case createdAt             = "created_at"
+        case updatedAt             = "updated_at"
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id                  = try c.decode(String.self, forKey: .id)
+        watchTokenID        = try c.decode(String.self, forKey: .watchTokenID)
+        name                = try c.decode(String.self, forKey: .name)
+        destinationType     = try c.decode(DestinationType.self, forKey: .destinationType)
+        destinationState    = try c.decode(DestinationState.self, forKey: .destinationState)
+        destinationConfig   = (try? c.decode([String: String].self, forKey: .destinationConfig)) ?? [:]
+        triggerOnStart      = try c.decode(Bool.self, forKey: .triggerOnStart)
+        triggerOnStop       = try c.decode(Bool.self, forKey: .triggerOnStop)
+        triggerOnCofrontChange = try c.decode(Bool.self, forKey: .triggerOnCofrontChange)
+        cofrontRedaction    = try c.decode(CofrontRedaction.self, forKey: .cofrontRedaction)
+        payloadSensitivity  = try c.decode(PayloadSensitivity.self, forKey: .payloadSensitivity)
+        debounceSeconds     = try c.decode(Int.self, forKey: .debounceSeconds)
+        baseAllMembers      = try c.decode(Bool.self, forKey: .baseAllMembers)
+        baseIncludePrivate  = try c.decode(Bool.self, forKey: .baseIncludePrivate)
+        lastDeliveredAt     = try c.decodeIfPresent(Date.self, forKey: .lastDeliveredAt)
+        createdAt           = try c.decode(Date.self, forKey: .createdAt)
+        updatedAt           = try c.decode(Date.self, forKey: .updatedAt)
+    }
+}
+
+struct NotificationChannelCreate: Codable {
+    var name: String
+    var destinationType: DestinationType
+    var destinationConfig: [String: String]?
+    var webhookSecret: String?
+    var triggerOnStart: Bool = true
+    var triggerOnStop: Bool = false
+    var triggerOnCofrontChange: Bool = false
+    var cofrontRedaction: CofrontRedaction = .count
+    var payloadSensitivity: PayloadSensitivity = .full
+    var debounceSeconds: Int = 30
+    var baseAllMembers: Bool = true
+    var baseIncludePrivate: Bool = false
+
+    enum CodingKeys: String, CodingKey {
+        case name
+        case destinationType       = "destination_type"
+        case destinationConfig     = "destination_config"
+        case webhookSecret         = "webhook_secret"
+        case triggerOnStart        = "trigger_on_start"
+        case triggerOnStop         = "trigger_on_stop"
+        case triggerOnCofrontChange = "trigger_on_cofront_change"
+        case cofrontRedaction      = "cofront_redaction"
+        case payloadSensitivity    = "payload_sensitivity"
+        case debounceSeconds       = "debounce_seconds"
+        case baseAllMembers        = "base_all_members"
+        case baseIncludePrivate    = "base_include_private"
+    }
+}
+
+struct NotificationChannelUpdate: Codable {
+    var name: String?
+    var destinationConfig: [String: String]?
+    var webhookSecret: String?
+    var triggerOnStart: Bool?
+    var triggerOnStop: Bool?
+    var triggerOnCofrontChange: Bool?
+    var cofrontRedaction: CofrontRedaction?
+    var payloadSensitivity: PayloadSensitivity?
+    var debounceSeconds: Int?
+    var baseAllMembers: Bool?
+    var baseIncludePrivate: Bool?
+
+    enum CodingKeys: String, CodingKey {
+        case name
+        case destinationConfig     = "destination_config"
+        case webhookSecret         = "webhook_secret"
+        case triggerOnStart        = "trigger_on_start"
+        case triggerOnStop         = "trigger_on_stop"
+        case triggerOnCofrontChange = "trigger_on_cofront_change"
+        case cofrontRedaction      = "cofront_redaction"
+        case payloadSensitivity    = "payload_sensitivity"
+        case debounceSeconds       = "debounce_seconds"
+        case baseAllMembers        = "base_all_members"
+        case baseIncludePrivate    = "base_include_private"
+    }
+}
+
+struct ChannelCreateResponse: Codable {
+    let channel: NotificationChannel
+    var activationURL: String?
+    var activationExpiresAt: Date?
+
+    enum CodingKeys: String, CodingKey {
+        case channel
+        case activationURL       = "activation_url"
+        case activationExpiresAt = "activation_expires_at"
+    }
+}
+
+struct TestDispatchResponse: Codable {
+    let delivered: Bool
+    var error: String?
 }

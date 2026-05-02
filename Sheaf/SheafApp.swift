@@ -36,25 +36,35 @@ struct RootView: View {
     @EnvironmentObject var authManager:  AuthManager
     @EnvironmentObject var systemStore:  SystemStore
     @EnvironmentObject var themeManager: ThemeManager
+    @ObservedObject var lockManager = AppLockManager.shared
     @EnvironmentObject var quickActions: QuickActionHandler
     @Environment(\.colorScheme) private var systemScheme
     @Binding var selectedTab: Int
 
     var body: some View {
-        Group {
-            if !authManager.isAuthenticated && !authManager.needsTOTP {
-                LoginView()
-                    .onAppear { selectedTab = 0 }
-            } else if authManager.needsTOTP {
-                TOTPView()
-            } else if !authManager.emailVerified {
-                EmailVerificationGateView()
-            } else if authManager.accountStatus == .pendingApproval {
-                AccountPendingGateView()
-            } else if authManager.accountStatus == .banned || authManager.accountStatus == .suspended {
-                AccountRejectedGateView()
-            } else {
-                MainView(selectedTab: $selectedTab)
+        ZStack {
+            Group {
+                if !authManager.isAuthenticated && !authManager.needsTOTP {
+                    LoginView()
+                        .onAppear { selectedTab = 0 }
+                } else if authManager.needsTOTP {
+                    TOTPView()
+                } else if !authManager.emailVerified {
+                    EmailVerificationGateView()
+                } else if authManager.accountStatus == .pendingApproval {
+                    AccountPendingGateView()
+                } else if authManager.accountStatus == .banned || authManager.accountStatus == .suspended {
+                    AccountRejectedGateView()
+                } else if authManager.needsOnboarding {
+                    OnboardingView()
+                } else {
+                    MainView(selectedTab: $selectedTab)
+                }
+            }
+
+            if lockManager.isLocked && authManager.isAuthenticated {
+                AppLockView()
+                    .transition(.opacity)
             }
         }
         .environment(\.theme, resolvedTheme)
@@ -71,12 +81,15 @@ struct RootView: View {
         .onAppear {
             // Configure PhoneConnectivityManager as soon as we have access to authManager
             PhoneConnectivityManager.shared.configure(auth: authManager)
-            
+
             // Sync credentials to watch if already authenticated
             if authManager.isAuthenticated {
                 debugLog("RootView: User already authenticated, syncing to watch")
                 PhoneConnectivityManager.shared.syncCredentials()
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)) { _ in
+            lockManager.lockIfEnabled()
         }
     }
 
@@ -116,6 +129,7 @@ struct MainView: View {
                 // Configure and sync credentials with watch
                 PhoneConnectivityManager.shared.configure(auth: authManager)
                 PhoneConnectivityManager.shared.syncCredentials()
+                ShortcutsDataStore.shared.configure(auth: authManager)
                 SheafShortcuts.updateAppShortcutParameters()
                 donateQuickActions()
                 // Check account status before loading data — if the

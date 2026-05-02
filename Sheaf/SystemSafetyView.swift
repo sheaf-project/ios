@@ -155,6 +155,8 @@ struct SystemSafetyView: View {
                     categoryToggle(label: "Journal Entries", icon: "book.fill", keyPath: \.appliesToJournals)
                     Divider().background(theme.divider).padding(.leading, 52)
                     categoryToggle(label: "Images", icon: "photo.fill", keyPath: \.appliesToImages)
+                    Divider().background(theme.divider).padding(.leading, 52)
+                    categoryToggle(label: "Pinned Revisions", icon: "pin.fill", keyPath: \.appliesToRevisions)
                 }
             }
         }
@@ -409,6 +411,7 @@ struct SystemSafetyView: View {
         if current.appliesToFronts != draft.appliesToFronts { update.appliesToFronts = draft.appliesToFronts }
         if current.appliesToJournals != draft.appliesToJournals { update.appliesToJournals = draft.appliesToJournals }
         if current.appliesToImages != draft.appliesToImages { update.appliesToImages = draft.appliesToImages }
+        if current.appliesToRevisions != draft.appliesToRevisions { update.appliesToRevisions = draft.appliesToRevisions }
 
         if isLoosening(current: current, draft: draft) {
             if !password.isEmpty { update.password = password }
@@ -463,7 +466,8 @@ struct SystemSafetyView: View {
         current.appliesToFields != draft.appliesToFields ||
         current.appliesToFronts != draft.appliesToFronts ||
         current.appliesToJournals != draft.appliesToJournals ||
-        current.appliesToImages != draft.appliesToImages
+        current.appliesToImages != draft.appliesToImages ||
+        current.appliesToRevisions != draft.appliesToRevisions
     }
 
     private func isLoosening(current: SystemSafetySettings, draft: SystemSafetySettings) -> Bool {
@@ -476,6 +480,7 @@ struct SystemSafetyView: View {
         if current.appliesToFronts && !draft.appliesToFronts { return true }
         if current.appliesToJournals && !draft.appliesToJournals { return true }
         if current.appliesToImages && !draft.appliesToImages { return true }
+        if current.appliesToRevisions && !draft.appliesToRevisions { return true }
         return false
     }
 
@@ -515,5 +520,141 @@ struct SystemSafetyView: View {
             }
         }
         return parts.joined(separator: ", ")
+    }
+}
+
+// MARK: - Unpin Revision Sheet
+
+struct UnpinRevisionSheet: View {
+    @Environment(\.theme) var theme
+    @EnvironmentObject var store: SystemStore
+    @Environment(\.dismiss) var dismiss
+
+    let onUnpin: (_ password: String?, _ totpCode: String?) async throws -> UnpinRevisionResponse?
+    let onSuccess: (UnpinRevisionResponse?) -> Void
+
+    @State private var password = ""
+    @State private var totpCode = ""
+    @State private var authTier: DeleteConfirmation = .none
+    @State private var totpEnabled = false
+    @State private var isLoading = true
+    @State private var isUnpinning = false
+    @State private var errorMessage: String?
+
+    private var needsPassword: Bool {
+        authTier == .password || authTier == .both
+    }
+
+    private var needsTotp: Bool {
+        (authTier == .totp || authTier == .both) && totpEnabled
+    }
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 20) {
+                if isLoading {
+                    ProgressView().tint(theme.accentLight)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Label("Unpinned revisions may be removed by automatic retention cleanup.", systemImage: "exclamationmark.triangle")
+                            .font(.footnote)
+                            .foregroundColor(theme.textSecondary)
+
+                        if needsPassword {
+                            HStack {
+                                Image(systemName: "key.fill")
+                                    .foregroundColor(theme.textTertiary)
+                                    .frame(width: 20)
+                                SecureField("Password", text: $password)
+                                    .font(.subheadline)
+                                    .textContentType(.password)
+                            }
+                            .padding(.horizontal, 16).padding(.vertical, 12)
+                            .background(theme.backgroundCard)
+                            .cornerRadius(12)
+                        }
+
+                        if needsTotp {
+                            HStack {
+                                Image(systemName: "lock.shield.fill")
+                                    .foregroundColor(theme.textTertiary)
+                                    .frame(width: 20)
+                                TextField("6-digit code", text: $totpCode)
+                                    .font(.subheadline)
+                                    .textContentType(.oneTimeCode)
+                                    .keyboardType(.numberPad)
+                            }
+                            .padding(.horizontal, 16).padding(.vertical, 12)
+                            .background(theme.backgroundCard)
+                            .cornerRadius(12)
+                        }
+
+                        if let errorMessage {
+                            Text(errorMessage)
+                                .font(.footnote)
+                                .foregroundColor(.red)
+                        }
+                    }
+
+                    Spacer()
+
+                    Button {
+                        Task { await performUnpin() }
+                    } label: {
+                        HStack {
+                            if isUnpinning { ProgressView().tint(.white) }
+                            Text(isUnpinning ? "Unpinning…" : "Unpin Revision")
+                                .font(.subheadline).fontWeight(.semibold)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(theme.danger)
+                        .foregroundColor(.white)
+                        .cornerRadius(12)
+                    }
+                    .disabled(isUnpinning || (needsPassword && password.isEmpty) || (needsTotp && totpCode.isEmpty))
+                }
+            }
+            .padding(24)
+            .background(theme.backgroundPrimary)
+            .navigationTitle("Unpin Revision")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                        .foregroundColor(theme.accentLight)
+                }
+            }
+        }
+        .presentationDetents([.medium])
+        .task { await loadAuthRequirements() }
+    }
+
+    private func loadAuthRequirements() async {
+        if let safety = try? await store.api?.getSystemSafety() {
+            if safety.settings.appliesToRevisions {
+                authTier = safety.settings.authTier
+            }
+        }
+        if let me = try? await store.api?.getMe() {
+            totpEnabled = me.totpEnabled
+        }
+        isLoading = false
+    }
+
+    private func performUnpin() async {
+        isUnpinning = true
+        errorMessage = nil
+        do {
+            let pw = needsPassword ? password : nil
+            let totp = needsTotp ? totpCode : nil
+            let response = try await onUnpin(pw, totp)
+            onSuccess(response)
+            dismiss()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        isUnpinning = false
     }
 }

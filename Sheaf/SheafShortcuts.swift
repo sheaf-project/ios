@@ -253,12 +253,19 @@ private func formatNameList(_ names: [String]) -> String {
 final class ShortcutsDataStore {
     static let shared = ShortcutsDataStore()
 
-    private let authManager = AuthManager()
-    private lazy var api = APIClient(auth: authManager)
+    private var authManager: AuthManager?
+    private var api: APIClient?
+
+    func configure(auth: AuthManager) {
+        self.authManager = auth
+        self.api = APIClient(auth: auth)
+    }
+
+    private var isReady: Bool { authManager?.isAuthenticated == true && api != nil }
 
     var currentFrontingIDs: [String] {
         get async {
-            guard authManager.isAuthenticated else { return [] }
+            guard isReady, let api else { return [] }
             do {
                 let fronts = try await api.getCurrentFronts()
                 return Array(Set(fronts.flatMap { $0.memberIDs }))
@@ -270,7 +277,7 @@ final class ShortcutsDataStore {
 
     var frontingMemberNames: [String] {
         get async {
-            guard authManager.isAuthenticated else { return [] }
+            guard isReady, let api else { return [] }
             do {
                 async let frontsTask   = api.getCurrentFronts()
                 async let membersTask  = api.getMembers()
@@ -288,13 +295,13 @@ final class ShortcutsDataStore {
 
     var members: [Member] {
         get async {
-            guard authManager.isAuthenticated else { return [] }
+            guard isReady, let api else { return [] }
             return (try? await api.getMembers()) ?? []
         }
     }
 
     func switchFronting(to memberIDs: [String]) async throws {
-        guard authManager.isAuthenticated else {
+        guard isReady, let api else {
             throw ShortcutError.notAuthenticated
         }
         let currentFronts = (try? await api.getCurrentFronts()) ?? []
