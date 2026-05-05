@@ -97,8 +97,10 @@ class WatchAPIClient {
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         applyCFHeaders(to: &req)
         req.httpBody = try JSONEncoder.iso.encode(TokenRefresh(refreshToken: auth.refreshToken))
+        let auth = self.auth
+        let baseURL = auth.baseURL
 
-        let task = Task<TokenResponse, Error> {
+        let task = Task<TokenResponse, Error> { [auth, baseURL] in
             let (data, response) = try await URLSession.shared.data(for: req)
             guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
             guard (200...299).contains(http.statusCode) else {
@@ -112,15 +114,17 @@ class WatchAPIClient {
                 throw NSError(domain: "APIError", code: http.statusCode,
                               userInfo: [NSLocalizedDescriptionKey: detail])
             }
-            return try JSONDecoder.iso.decode(TokenResponse.self, from: data)
+            let fresh = try JSONDecoder.iso.decode(TokenResponse.self, from: data)
+            await MainActor.run {
+                auth.save(baseURL: baseURL,
+                          accessToken: fresh.accessToken,
+                          refreshToken: fresh.refreshToken)
+            }
+            return fresh
         }
         refreshTask = task
         defer { refreshTask = nil }
-        let fresh = try await task.value
-        auth.save(baseURL: auth.baseURL,
-                  accessToken: fresh.accessToken,
-                  refreshToken: fresh.refreshToken)
-        return fresh
+        return try await task.value
     }
 
     func login(email: String, password: String) async throws -> TokenResponse {
