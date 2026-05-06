@@ -125,7 +125,7 @@ class WatchStore: ObservableObject {
     // MARK: - Complication Support
     
     private func updateComplicationData() {
-        guard let sharedDefaults = UserDefaults(suiteName: "group.systems.lupine.sheaf") else {
+        guard let sharedDefaults = UserDefaults(suiteName: "group.systems.lupine.sheaf.shared") else {
             return
         }
         

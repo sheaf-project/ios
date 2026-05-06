@@ -22,7 +22,7 @@ struct FrontingProvider: TimelineProvider {
     }
 
     private func getCurrentFrontingEntry() -> FrontingEntry {
-        guard let sharedData = UserDefaults(suiteName: "group.systems.lupine.sheaf") else {
+        guard let sharedData = UserDefaults(suiteName: "group.systems.lupine.sheaf.shared") else {
             return FrontingEntry(date: Date(), members: [])
         }
 

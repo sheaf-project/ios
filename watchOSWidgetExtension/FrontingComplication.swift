@@ -27,7 +27,7 @@ struct FrontingComplicationProvider: TimelineProvider {
     
     private func getCurrentFrontingEntry() async -> FrontingEntry {
         // Try to get current fronting info from shared data
-        guard let sharedData = UserDefaults(suiteName: "group.systems.lupine.sheaf") else {
+        guard let sharedData = UserDefaults(suiteName: "group.systems.lupine.sheaf.shared") else {
             print("⚠️ Widget: Unable to access App Group - check entitlements")
             return FrontingEntry(date: Date(), members: [])
         }

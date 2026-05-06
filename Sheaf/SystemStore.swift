@@ -1189,7 +1189,7 @@ class SystemStore: ObservableObject {
     // MARK: - Watch Complication Support
 
     private func updateWatchComplication() {
-        guard let sharedDefaults = UserDefaults(suiteName: "group.systems.lupine.sheaf") else { return }
+        guard let sharedDefaults = UserDefaults(suiteName: "group.systems.lupine.sheaf.shared") else { return }
 
         let allSharedMembers = frontingMembers.map { member in
             let memberFrontStart = currentFronts
