@@ -35,6 +35,7 @@ struct Member: Identifiable, Codable, Hashable {
     var color: String?
     var birthday: String?
     var emoji: String?
+    var pluralkitID: String?
     var isCustomFront: Bool
     var privacy: PrivacyLevel
     let createdAt: Date
@@ -51,6 +52,7 @@ struct Member: Identifiable, Codable, Hashable {
         case color
         case birthday
         case emoji
+        case pluralkitID   = "pluralkit_id"
         case isCustomFront = "is_custom_front"
         case privacy
         case createdAt     = "created_at"
@@ -69,6 +71,7 @@ struct Member: Identifiable, Codable, Hashable {
         color         = try c.decodeIfPresent(String.self, forKey: .color)
         birthday      = try c.decodeIfPresent(String.self, forKey: .birthday)
         emoji         = try c.decodeIfPresent(String.self, forKey: .emoji)
+        pluralkitID   = try c.decodeIfPresent(String.self, forKey: .pluralkitID)
         isCustomFront = try c.decodeIfPresent(Bool.self, forKey: .isCustomFront) ?? false
         privacy       = try c.decode(PrivacyLevel.self, forKey: .privacy)
         createdAt     = try c.decode(Date.self, forKey: .createdAt)
@@ -78,7 +81,8 @@ struct Member: Identifiable, Codable, Hashable {
     init(id: String, systemID: String, name: String, displayName: String? = nil,
          description: String? = nil, pronouns: String? = nil, avatarURL: String? = nil,
          color: String? = nil, birthday: String? = nil, emoji: String? = nil,
-         isCustomFront: Bool = false, privacy: PrivacyLevel, createdAt: Date, updatedAt: Date) {
+         pluralkitID: String? = nil, isCustomFront: Bool = false,
+         privacy: PrivacyLevel, createdAt: Date, updatedAt: Date) {
         self.id = id
         self.systemID = systemID
         self.name = name
@@ -89,6 +93,7 @@ struct Member: Identifiable, Codable, Hashable {
         self.color = color
         self.birthday = birthday
         self.emoji = emoji
+        self.pluralkitID = pluralkitID
         self.isCustomFront = isCustomFront
         self.privacy = privacy
         self.createdAt = createdAt

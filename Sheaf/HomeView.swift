@@ -232,6 +232,10 @@ struct FrontingMemberCard: View {
                     Text(member.displayName ?? member.name)
                         .font(.title3).fontWeight(.bold).fontDesign(.rounded)
                         .foregroundColor(theme.textPrimary)
+                    if let emoji = member.emoji, !emoji.isEmpty {
+                        Text(emoji)
+                            .font(.callout)
+                    }
                     if member.isCustomFront {
                         Text("CF")
                             .font(.caption2).fontWeight(.bold)
@@ -349,11 +353,16 @@ struct QuickSwitchChip: View {
         Button(action: onTap) {
             VStack(spacing: 6) {
                 AvatarView(member: member, size: 52)
-                Text(member.displayName ?? member.name)
-                    .font(.caption2).fontWeight(.medium)
-                    .foregroundColor(theme.textSecondary)
-                    .lineLimit(1)
-                    .frame(width: 64)
+                HStack(spacing: 2) {
+                    if let emoji = member.emoji, !emoji.isEmpty {
+                        Text(emoji).font(.caption2)
+                    }
+                    Text(member.displayName ?? member.name)
+                        .font(.caption2).fontWeight(.medium)
+                        .foregroundColor(theme.textSecondary)
+                        .lineLimit(1)
+                }
+                .frame(width: 64)
             }
         }
         .buttonStyle(ScaleButtonStyle())
@@ -637,8 +646,13 @@ struct SwitchFrontingSheet: View {
                 AvatarView(member: member, size: 40)
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(member.displayName ?? member.name)
-                        .font(.subheadline).fontWeight(.medium)
+                    HStack(spacing: 4) {
+                        Text(member.displayName ?? member.name)
+                            .font(.subheadline).fontWeight(.medium)
+                        if let emoji = member.emoji, !emoji.isEmpty {
+                            Text(emoji).font(.caption)
+                        }
+                    }
                     if let p = member.pronouns, !p.isEmpty {
                         Text(p)
                             .font(.caption)

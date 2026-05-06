@@ -29,11 +29,16 @@ struct WatchSwitchView: View {
                         HStack(spacing: 8) {
                             AvatarView(member: member, size: 28)
 
-                            Text(member.displayName ?? member.name)
-                                .font(.footnote)
-                                .fontWeight(.semibold)
-                                .foregroundColor(.primary)
-                                .lineLimit(1)
+                            HStack(spacing: 3) {
+                                Text(member.displayName ?? member.name)
+                                    .font(.footnote)
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(.primary)
+                                    .lineLimit(1)
+                                if let emoji = member.emoji, !emoji.isEmpty {
+                                    Text(emoji).font(.caption2)
+                                }
+                            }
 
                             Spacer()
 

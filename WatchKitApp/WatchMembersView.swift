@@ -128,10 +128,15 @@ struct WatchMemberDetailView: View {
 
                 // Name + pronouns
                 VStack(spacing: 4) {
-                    Text(member.displayName ?? member.name)
-                        .font(.headline)
-                        .fontDesign(.rounded)
-                        .multilineTextAlignment(.center)
+                    HStack(spacing: 4) {
+                        Text(member.displayName ?? member.name)
+                            .font(.headline)
+                            .fontDesign(.rounded)
+                        if let emoji = member.emoji, !emoji.isEmpty {
+                            Text(emoji).font(.subheadline)
+                        }
+                    }
+                    .multilineTextAlignment(.center)
 
                     if let pronouns = member.pronouns, !pronouns.isEmpty {
                         Text(pronouns)
@@ -233,10 +238,15 @@ struct WatchMemberTile: View {
             AvatarView(member: member, size: 32)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(member.displayName ?? member.name)
-                    .font(.footnote)
-                    .fontWeight(.semibold)
-                    .lineLimit(1)
+                HStack(spacing: 3) {
+                    Text(member.displayName ?? member.name)
+                        .font(.footnote)
+                        .fontWeight(.semibold)
+                        .lineLimit(1)
+                    if let emoji = member.emoji, !emoji.isEmpty {
+                        Text(emoji).font(.caption2)
+                    }
+                }
                 if let pronouns = member.pronouns, !pronouns.isEmpty {
                     Text(pronouns)
                         .font(.caption2)

@@ -188,6 +188,9 @@ struct MemberRow: View {
                         Text(member.displayName ?? member.name)
                             .font(.subheadline).fontWeight(.semibold)
                             .foregroundColor(theme.textPrimary)
+                        if let emoji = member.emoji, !emoji.isEmpty {
+                            Text(emoji).font(.caption)
+                        }
                         if member.isCustomFront {
                             Text("CF")
                                 .font(.caption2).fontWeight(.bold)
@@ -287,6 +290,9 @@ struct MemberDetailSheet: View {
                             Text(member.displayName ?? member.name)
                                 .font(.title2).fontWeight(.bold).fontDesign(.rounded)
                                 .foregroundColor(theme.textPrimary)
+                            if let emoji = member.emoji, !emoji.isEmpty {
+                                Text(emoji).font(.callout)
+                            }
                             if member.isCustomFront {
                                 Text("Custom Front")
                                     .font(.caption2).fontWeight(.bold)
@@ -336,6 +342,22 @@ struct MemberDetailSheet: View {
                             Spacer()
                             Text(bday)
                                 .font(.subheadline)
+                                .foregroundColor(theme.textPrimary)
+                        }
+                        .padding(16)
+                        .background(theme.backgroundCard)
+                        .cornerRadius(14)
+                    }
+
+                    // PluralKit ID
+                    if let pkID = member.pluralkitID, !pkID.isEmpty {
+                        HStack {
+                            Label("PluralKit ID", systemImage: "link")
+                                .font(.subheadline).fontWeight(.medium)
+                                .foregroundColor(theme.textSecondary)
+                            Spacer()
+                            Text(pkID)
+                                .font(.subheadline.monospaced())
                                 .foregroundColor(theme.textPrimary)
                         }
                         .padding(16)

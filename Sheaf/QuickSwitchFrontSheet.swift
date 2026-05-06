@@ -97,9 +97,14 @@ struct QuickSwitchFrontSheet: View {
                 AvatarView(member: member, size: 40)
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(member.displayName ?? member.name)
-                        .font(.subheadline).fontWeight(.medium)
-                        .foregroundColor(theme.textPrimary)
+                    HStack(spacing: 4) {
+                        Text(member.displayName ?? member.name)
+                            .font(.subheadline).fontWeight(.medium)
+                            .foregroundColor(theme.textPrimary)
+                        if let emoji = member.emoji, !emoji.isEmpty {
+                            Text(emoji).font(.caption)
+                        }
+                    }
                     if let pronouns = member.pronouns, !pronouns.isEmpty {
                         Text(pronouns)
                             .font(.caption)

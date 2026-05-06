@@ -32,8 +32,13 @@ struct AddFrontEntrySheet: View {
                         } label: {
                             HStack(spacing: 12) {
                                 AvatarView(member: member, size: 36)
-                                Text(member.displayName ?? member.name)
-                                    .foregroundColor(theme.textPrimary)
+                                HStack(spacing: 4) {
+                                    Text(member.displayName ?? member.name)
+                                        .foregroundColor(theme.textPrimary)
+                                    if let emoji = member.emoji, !emoji.isEmpty {
+                                        Text(emoji).font(.caption)
+                                    }
+                                }
                                 Spacer()
                                 Image(systemName: selectedIDs.contains(member.id)
                                       ? "checkmark.circle.fill" : "circle")

@@ -312,6 +312,9 @@ struct FrontTimelineGraph: View {
                             Circle()
                                 .fill(member.displayColor)
                                 .frame(width: 7, height: 7)
+                            if let emoji = member.emoji, !emoji.isEmpty {
+                                Text(emoji).font(.caption2)
+                            }
                             Text(member.displayName ?? member.name)
                                 .font(.caption2)
                                 .foregroundColor(theme.textSecondary)

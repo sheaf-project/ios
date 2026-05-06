@@ -228,14 +228,9 @@ struct AvatarView: View {
                     colors: [member.displayColor, member.displayColor.opacity(0.6)],
                     startPoint: .topLeading, endPoint: .bottomTrailing
                 ))
-            if let emoji = member.emoji, !emoji.isEmpty {
-                Text(emoji)
-                    .font(.system(size: size * 0.48))
-            } else {
-                Text(member.initials)
-                    .font(.system(size: size * 0.32, weight: .bold, design: .rounded))
-                    .foregroundColor(.white)
-            }
+            Text(member.initials)
+                .font(.system(size: size * 0.32, weight: .bold, design: .rounded))
+                .foregroundColor(.white)
         }
     }
 }
