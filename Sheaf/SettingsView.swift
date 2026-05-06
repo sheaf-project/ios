@@ -11,6 +11,7 @@ struct SettingsView: View {
     @State private var showEditSystem = false
     @State private var showImport = false
     @State private var showSheafImport = false
+    @State private var showPKImport = false
     @State private var showTOTPSetup = false
     @State private var showTOTPManage = false
     @State private var me: UserRead?
@@ -347,6 +348,25 @@ struct SettingsView: View {
                                         .foregroundColor(theme.accentLight)
                                         .frame(width: 20)
                                     Text("Import from Simply Plural")
+                                        .font(.subheadline).fontWeight(.medium)
+                                        .foregroundColor(theme.textPrimary)
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .font(.caption)
+                                        .foregroundColor(theme.textTertiary)
+                                }
+                                .padding(.horizontal, 16).padding(.vertical, 14)
+                            }
+
+                            Divider().background(theme.divider)
+
+                            // Import from PluralKit
+                            Button { showPKImport = true } label: {
+                                HStack {
+                                    Image(systemName: "square.and.arrow.down.fill")
+                                        .foregroundColor(theme.accentLight)
+                                        .frame(width: 20)
+                                    Text("Import from PluralKit")
                                         .font(.subheadline).fontWeight(.medium)
                                         .foregroundColor(theme.textPrimary)
                                     Spacer()
@@ -759,6 +779,10 @@ struct SettingsView: View {
         }
         .sheet(isPresented: $showSheafImport) {
             SheafImportSheet()
+                .environmentObject(store)
+        }
+        .sheet(isPresented: $showPKImport) {
+            PluralKitImportSheet()
                 .environmentObject(store)
         }
         .sheet(isPresented: $showTOTPSetup, onDismiss: { Task { await loadMe() } }) {

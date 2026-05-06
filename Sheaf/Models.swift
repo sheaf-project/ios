@@ -1111,6 +1111,46 @@ struct SPImportResult: Codable {
     }
 }
 
+// MARK: - PluralKit Import Models
+struct PKPreviewMember: Codable, Identifiable {
+    let id: String
+    let name: String
+}
+
+struct PKPreviewSummary: Codable {
+    var systemName: String?
+    var memberCount: Int
+    var members: [PKPreviewMember]
+    var groupCount: Int
+    var switchCount: Int
+    var earliestSwitch: Date?
+    var latestSwitch: Date?
+
+    enum CodingKeys: String, CodingKey {
+        case members
+        case systemName     = "system_name"
+        case memberCount    = "member_count"
+        case groupCount     = "group_count"
+        case switchCount    = "switch_count"
+        case earliestSwitch = "earliest_switch"
+        case latestSwitch   = "latest_switch"
+    }
+}
+
+struct PKImportResult: Codable {
+    var membersImported: Int
+    var groupsImported:  Int
+    var frontsImported:  Int
+    var warnings:        [String]
+
+    enum CodingKeys: String, CodingKey {
+        case warnings
+        case membersImported = "members_imported"
+        case groupsImported  = "groups_imported"
+        case frontsImported  = "fronts_imported"
+    }
+}
+
 // MARK: - Announcements
 
 enum AnnouncementSeverity: String, Codable {

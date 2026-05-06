@@ -1532,6 +1532,72 @@ class APIClient {
         return data
     }
 
+    // MARK: - PluralKit Import (File)
+
+    func previewPluralKitFileImport(fileData: Data, filename: String) async throws -> PKPreviewSummary {
+        let data = try await multipartRequest(
+            path: "/v1/import/pluralkit/preview",
+            fileData: fileData,
+            filename: filename
+        )
+        return try JSONDecoder.iso.decode(PKPreviewSummary.self, from: data)
+    }
+
+    func doPluralKitFileImport(
+        fileData: Data,
+        filename: String,
+        systemProfile: Bool = true,
+        memberIDs: [String]? = nil,
+        groups: Bool = true,
+        frontHistory: Bool = false
+    ) async throws -> PKImportResult {
+        var path = "/v1/import/pluralkit?system_profile=\(systemProfile)&groups=\(groups)&front_history=\(frontHistory)"
+        if let ids = memberIDs, !ids.isEmpty {
+            path += "&member_ids=\(ids.joined(separator: ","))"
+        }
+        let data = try await multipartRequest(path: path, fileData: fileData, filename: filename)
+        return try JSONDecoder.iso.decode(PKImportResult.self, from: data)
+    }
+
+    // MARK: - PluralKit Import (API Token)
+
+    func previewPluralKitAPIImport(token: String) async throws -> PKPreviewSummary {
+        let body = try JSONEncoder().encode(["token": token])
+        let data = try await request("/v1/import/pluralkit-api/preview", method: "POST", body: body)
+        return try JSONDecoder.iso.decode(PKPreviewSummary.self, from: data)
+    }
+
+    func doPluralKitAPIImport(
+        token: String,
+        systemProfile: Bool = true,
+        memberIDs: [String]? = nil,
+        groups: Bool = true,
+        frontHistory: Bool = false
+    ) async throws -> PKImportResult {
+        struct PKApiImportBody: Encodable {
+            let token: String
+            let options: Options
+            struct Options: Encodable {
+                let system_profile: Bool
+                let member_ids: [String]?
+                let groups: Bool
+                let front_history: Bool
+            }
+        }
+        let payload = PKApiImportBody(
+            token: token,
+            options: .init(
+                system_profile: systemProfile,
+                member_ids: memberIDs,
+                groups: groups,
+                front_history: frontHistory
+            )
+        )
+        let body = try JSONEncoder().encode(payload)
+        let data = try await request("/v1/import/pluralkit-api", method: "POST", body: body)
+        return try JSONDecoder.iso.decode(PKImportResult.self, from: data)
+    }
+
     func uploadFile(imageData: Data, mimeType: String = "image/jpeg") async throws -> String {
         let ext: String
         switch mimeType {
