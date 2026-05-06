@@ -586,6 +586,13 @@ class SystemStore: ObservableObject {
         }
     }
 
+    func loadFrontingAnalytics(days: Int) async throws -> FrontingAnalytics {
+        guard let api else { throw URLError(.badURL) }
+        let since = Calendar.current.date(byAdding: .day, value: -days, to: Date())
+        let tz = TimeZone.current.identifier
+        return try await api.getFrontingAnalytics(since: since, tz: tz)
+    }
+
     // MARK: - Fronts (consolidated for views)
 
     func updateFront(id: String, update: FrontUpdate) async {

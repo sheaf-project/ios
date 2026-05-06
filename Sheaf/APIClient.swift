@@ -1048,6 +1048,29 @@ class APIClient {
         return try? JSONDecoder.iso.decode(DeleteQueued.self, from: data)
     }
 
+    // MARK: - Analytics
+
+    func getFrontingAnalytics(since: Date? = nil, until: Date? = nil, tz: String? = nil) async throws -> FrontingAnalytics {
+        var path = "/v1/analytics/fronting"
+        var params: [String] = []
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let since {
+            params.append("since=\(formatter.string(from: since))")
+        }
+        if let until {
+            params.append("until=\(formatter.string(from: until))")
+        }
+        if let tz {
+            params.append("tz=\(tz.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? tz)")
+        }
+        if !params.isEmpty {
+            path += "?" + params.joined(separator: "&")
+        }
+        let data = try await request(path)
+        return try JSONDecoder.iso.decode(FrontingAnalytics.self, from: data)
+    }
+
     // MARK: - Groups
 
     func getGroups() async throws -> [SystemGroup] {

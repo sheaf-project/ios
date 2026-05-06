@@ -39,6 +39,7 @@ struct HistoryView: View {
     @State private var deleteQueuedInfo: DeleteQueued?
     @State private var graphTimeRange: GraphTimeRange = .week
     @State private var showGraph = true
+    @State private var showAnalytics = false
 
     var body: some View {
         ZStack {
@@ -52,6 +53,13 @@ struct HistoryView: View {
                         .foregroundColor(theme.textPrimary)
                     Spacer()
                     HStack(spacing: 16) {
+                        Button {
+                            showAnalytics = true
+                        } label: {
+                            Image(systemName: "chart.pie.fill")
+                                .font(.title3)
+                                .foregroundColor(theme.accentLight)
+                        }
                         Button {
                             showAddEntry = true
                         } label: {
@@ -204,6 +212,10 @@ struct HistoryView: View {
         }
         .sheet(item: $entryToEdit, onDismiss: { Task { await reload() } }) { entry in
             EditFrontEntrySheet(entry: entry)
+                .environmentObject(store)
+        }
+        .sheet(isPresented: $showAnalytics) {
+            AnalyticsView()
                 .environmentObject(store)
         }
     }

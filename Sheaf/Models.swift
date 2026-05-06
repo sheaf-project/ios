@@ -295,6 +295,44 @@ struct FrontUpdate: Codable {
     }
 }
 
+// MARK: - Fronting Analytics
+
+struct MemberFrontingStats: Codable, Identifiable {
+    let memberID: String
+    let isCustomFront: Bool
+    var totalSeconds: Int
+    var percentOfWindow: Double
+    var sessionCount: Int
+    var longestSessionSeconds: Int
+    var hourOfDaySeconds: [Int]
+
+    var id: String { memberID }
+
+    enum CodingKeys: String, CodingKey {
+        case memberID              = "member_id"
+        case isCustomFront         = "is_custom_front"
+        case totalSeconds          = "total_seconds"
+        case percentOfWindow       = "percent_of_window"
+        case sessionCount          = "session_count"
+        case longestSessionSeconds = "longest_session_seconds"
+        case hourOfDaySeconds      = "hour_of_day_seconds"
+    }
+}
+
+struct FrontingAnalytics: Codable {
+    let since: Date
+    let until: Date
+    let tz: String
+    let windowSeconds: Int
+    let members: [MemberFrontingStats]
+
+    enum CodingKeys: String, CodingKey {
+        case since, until, tz
+        case windowSeconds = "window_seconds"
+        case members
+    }
+}
+
 // MARK: - GroupRead
 struct SystemGroup: Identifiable, Codable, Hashable {
     let id: String
