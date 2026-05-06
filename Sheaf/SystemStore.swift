@@ -45,7 +45,7 @@ actor CacheManager {
 
     init() {
         let base = FileManager.default.containerURL(
-            forSecurityApplicationGroupIdentifier: "group.systems.lupine.sheaf"
+            forSecurityApplicationGroupIdentifier: "group.systems.lupine.sheaf.shared"
         )!
         container = base.appendingPathComponent("cache", isDirectory: true)
         try? FileManager.default.createDirectory(at: container, withIntermediateDirectories: true)
