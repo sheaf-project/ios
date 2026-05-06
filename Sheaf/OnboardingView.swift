@@ -9,7 +9,8 @@ struct OnboardingView: View {
     @State private var currentStep = 0
     @State private var showTOTPSetup = false
     @State private var showSafetySheet = false
-    @State private var showImportSheet = false
+    @State private var showSPImportSheet = false
+    @State private var showPKImportSheet = false
 
     var body: some View {
         ZStack {
@@ -73,8 +74,12 @@ struct OnboardingView: View {
             }
             .presentationDetents([.large])
         }
-        .sheet(isPresented: $showImportSheet) {
+        .sheet(isPresented: $showSPImportSheet) {
             SimplyPluralImportSheet()
+                .environmentObject(systemStore)
+        }
+        .sheet(isPresented: $showPKImportSheet) {
+            PluralKitImportSheet()
                 .environmentObject(systemStore)
         }
     }
@@ -117,14 +122,63 @@ struct OnboardingView: View {
     }
 
     private var importCard: some View {
-        onboardingCard(
-            icon: "square.and.arrow.down.fill",
-            title: String(localized: "Import Your Data"),
-            description: String(localized: "Already using Simply Plural? Import your members, groups, and front history."),
-            actionLabel: String(localized: "Import from Simply Plural"),
-            action: { showImportSheet = true },
-            isLastStep: true
-        )
+        VStack(spacing: 20) {
+            ZStack {
+                Circle()
+                    .fill(LinearGradient(
+                        colors: [theme.accentLight, theme.accent],
+                        startPoint: .topLeading, endPoint: .bottomTrailing))
+                    .frame(width: 72, height: 72)
+                Image(systemName: "square.and.arrow.down.fill")
+                    .font(.title)
+                    .foregroundColor(.white)
+            }
+            .shadow(color: theme.accentLight.opacity(0.5), radius: 20)
+
+            Text("Import Your Data")
+                .font(.title3).fontWeight(.bold).fontDesign(.rounded)
+                .foregroundColor(theme.textPrimary)
+
+            Text("Coming from Simply Plural or PluralKit? Import your members, groups, and front history.")
+                .font(.subheadline)
+                .foregroundColor(theme.textSecondary)
+                .multilineTextAlignment(.center)
+
+            Spacer().frame(height: 8)
+
+            Button { showSPImportSheet = true } label: {
+                HStack {
+                    Text("Import from Simply Plural")
+                    Image(systemName: "chevron.right")
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+            .tint(theme.accentLight)
+
+            Button { showPKImportSheet = true } label: {
+                HStack {
+                    Text("Import from PluralKit")
+                    Image(systemName: "chevron.right")
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+            .tint(theme.accentLight)
+
+            Button { authManager.needsOnboarding = false } label: {
+                Text("Get Started")
+                    .font(.subheadline).fontWeight(.medium)
+                    .foregroundColor(theme.accentLight)
+            }
+        }
+        .padding(24)
+        .background(theme.backgroundCard)
+        .cornerRadius(24)
+        .overlay(RoundedRectangle(cornerRadius: 24).stroke(theme.border, lineWidth: 1))
+        .padding(.horizontal, 24)
     }
 
     // MARK: - Card Builder
