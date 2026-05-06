@@ -15,6 +15,7 @@ struct SharedMember: Codable {
     let pronouns: String?
     let color: String?
     let avatarURL: String?
+    let emoji: String?
     let frontStartedAt: Date?
 }
 

@@ -444,6 +444,14 @@ struct FrontHistoryRow: View {
                     .foregroundColor(theme.textPrimary)
                     .lineLimit(1)
 
+                // Custom status
+                if let status = entry.customStatus, !status.isEmpty {
+                    Text(status)
+                        .font(.caption)
+                        .foregroundColor(theme.textSecondary)
+                        .lineLimit(1)
+                }
+
                 // Time range
                 HStack(spacing: 6) {
                     Text(entry.startedAt.formatted(date: .abbreviated, time: .shortened))

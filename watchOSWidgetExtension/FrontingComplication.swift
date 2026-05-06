@@ -391,14 +391,14 @@ struct FrontingComplication_Previews: PreviewProvider {
 // MARK: - Example Data
 extension SharedMember {
     static var example: SharedMember {
-        SharedMember(id: "1", name: "Alice", displayName: "Alice", pronouns: "she/her", color: "#9B59B6", avatarURL: nil, frontStartedAt: Date().addingTimeInterval(-7200))
+        SharedMember(id: "1", name: "Alice", displayName: "Alice", pronouns: "she/her", color: "#9B59B6", avatarURL: nil, emoji: nil, frontStartedAt: Date().addingTimeInterval(-7200))
     }
-    
+
     static var examples: [SharedMember] {
         [
-            SharedMember(id: "1", name: "Alice", displayName: "Alice", pronouns: "she/her", color: "#9B59B6", avatarURL: nil, frontStartedAt: Date().addingTimeInterval(-7200)),
-            SharedMember(id: "2", name: "Bob", displayName: "Bob", pronouns: "he/him", color: "#3498DB", avatarURL: nil, frontStartedAt: Date().addingTimeInterval(-7200)),
-            SharedMember(id: "3", name: "Carol", displayName: "Carol", pronouns: nil, color: "#E74C3C", avatarURL: nil, frontStartedAt: Date().addingTimeInterval(-3600)),
+            SharedMember(id: "1", name: "Alice", displayName: "Alice", pronouns: "she/her", color: "#9B59B6", avatarURL: nil, emoji: "✨", frontStartedAt: Date().addingTimeInterval(-7200)),
+            SharedMember(id: "2", name: "Bob", displayName: "Bob", pronouns: "he/him", color: "#3498DB", avatarURL: nil, emoji: nil, frontStartedAt: Date().addingTimeInterval(-7200)),
+            SharedMember(id: "3", name: "Carol", displayName: "Carol", pronouns: nil, color: "#E74C3C", avatarURL: nil, emoji: nil, frontStartedAt: Date().addingTimeInterval(-3600)),
         ]
     }
 }

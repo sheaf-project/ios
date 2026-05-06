@@ -184,9 +184,19 @@ struct MemberRow: View {
                     }
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(member.displayName ?? member.name)
-                        .font(.subheadline).fontWeight(.semibold)
-                        .foregroundColor(theme.textPrimary)
+                    HStack(spacing: 6) {
+                        Text(member.displayName ?? member.name)
+                            .font(.subheadline).fontWeight(.semibold)
+                            .foregroundColor(theme.textPrimary)
+                        if member.isCustomFront {
+                            Text("CF")
+                                .font(.caption2).fontWeight(.bold)
+                                .foregroundColor(theme.textTertiary)
+                                .padding(.horizontal, 4).padding(.vertical, 1)
+                                .background(theme.textTertiary.opacity(0.15))
+                                .cornerRadius(4)
+                        }
+                    }
                     if let pronouns = member.pronouns, !pronouns.isEmpty {
                         Text(pronouns)
                             .font(.caption)
@@ -273,9 +283,19 @@ struct MemberDetailSheet: View {
                     // Avatar + name
                     VStack(spacing: 12) {
                         AvatarView(member: member, size: 96)
-                        Text(member.displayName ?? member.name)
-                            .font(.title2).fontWeight(.bold).fontDesign(.rounded)
-                            .foregroundColor(theme.textPrimary)
+                        HStack(spacing: 8) {
+                            Text(member.displayName ?? member.name)
+                                .font(.title2).fontWeight(.bold).fontDesign(.rounded)
+                                .foregroundColor(theme.textPrimary)
+                            if member.isCustomFront {
+                                Text("Custom Front")
+                                    .font(.caption2).fontWeight(.bold)
+                                    .foregroundColor(theme.textTertiary)
+                                    .padding(.horizontal, 6).padding(.vertical, 3)
+                                    .background(theme.textTertiary.opacity(0.15))
+                                    .cornerRadius(6)
+                            }
+                        }
                         if let p = member.pronouns, !p.isEmpty {
                             Text(p)
                                 .padding(.horizontal, 14).padding(.vertical, 5)
@@ -465,6 +485,8 @@ struct MemberEditSheet: View {
     @State private var avatarURL = ""
     @State private var colorHex = "#A78BFA"
     @State private var birthday = ""
+    @State private var emoji = ""
+    @State private var isCustomFront = false
     @State private var privacy: PrivacyLevel = .private
     @State private var isSaving = false
     @State private var fieldValues: [String: String] = [:]  // fieldID -> string value
@@ -481,7 +503,27 @@ struct MemberEditSheet: View {
                     formField("Name *", value: $name, placeholder: "member-name")
                     formField("Display Name", value: $displayName, placeholder: "Shown to others")
                     formField("Pronouns", value: $pronouns, placeholder: "e.g. she/her")
+                    formField("Emoji", value: $emoji, placeholder: "e.g. ✨")
                     formField("Description", value: $description, placeholder: "Brief description", multiline: true)
+
+                    // Custom front toggle
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Custom Front")
+                                .font(.subheadline).fontWeight(.medium)
+                                .foregroundColor(theme.textPrimary)
+                            Text("Non-counting fronter (e.g. Asleep, Away)")
+                                .font(.caption)
+                                .foregroundColor(theme.textTertiary)
+                        }
+                        Spacer()
+                        Toggle("", isOn: $isCustomFront)
+                            .tint(theme.accentLight)
+                            .labelsHidden()
+                    }
+                    .padding(14)
+                    .background(theme.backgroundCard)
+                    .cornerRadius(12)
 
                     // Birthday
                     VStack(alignment: .leading, spacing: 6) {
@@ -615,15 +657,17 @@ struct MemberEditSheet: View {
 
     func populateFields() {
         guard let m = member else { return }
-        name        = m.name
-        displayName = m.displayName ?? ""
-        pronouns    = m.pronouns ?? ""
-        description = m.description ?? ""
-        avatarURL   = m.avatarURL ?? ""
+        name          = m.name
+        displayName   = m.displayName ?? ""
+        pronouns      = m.pronouns ?? ""
+        description   = m.description ?? ""
+        avatarURL     = m.avatarURL ?? ""
         if avatarURL.hasPrefix("/") { avatarMode = .upload }
-        colorHex    = m.color ?? "#A78BFA"
-        birthday    = m.birthday ?? ""
-        privacy     = m.privacy
+        colorHex      = m.color ?? "#A78BFA"
+        birthday      = m.birthday ?? ""
+        emoji         = m.emoji ?? ""
+        isCustomFront = m.isCustomFront
+        privacy       = m.privacy
         // Load existing field values
         Task {
             guard let memberID = member?.id else { return }
@@ -664,6 +708,8 @@ struct MemberEditSheet: View {
             avatarURL: avatarURL.isEmpty ? nil : avatarURL,
             color: colorHex.isEmpty ? nil : colorHex,
             birthday: birthday.isEmpty ? nil : birthday,
+            emoji: emoji.isEmpty ? nil : emoji,
+            isCustomFront: isCustomFront,
             privacy: privacy
         )
         Task {

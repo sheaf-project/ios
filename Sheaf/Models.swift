@@ -34,23 +34,65 @@ struct Member: Identifiable, Codable, Hashable {
     var avatarURL: String?
     var color: String?
     var birthday: String?
+    var emoji: String?
+    var isCustomFront: Bool
     var privacy: PrivacyLevel
     let createdAt: Date
     let updatedAt: Date
 
     enum CodingKeys: String, CodingKey {
         case id
-        case systemID     = "system_id"
+        case systemID      = "system_id"
         case name
-        case displayName  = "display_name"
+        case displayName   = "display_name"
         case description
         case pronouns
-        case avatarURL    = "avatar_url"
+        case avatarURL     = "avatar_url"
         case color
         case birthday
+        case emoji
+        case isCustomFront = "is_custom_front"
         case privacy
-        case createdAt    = "created_at"
-        case updatedAt    = "updated_at"
+        case createdAt     = "created_at"
+        case updatedAt     = "updated_at"
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id            = try c.decode(String.self, forKey: .id)
+        systemID      = try c.decode(String.self, forKey: .systemID)
+        name          = try c.decode(String.self, forKey: .name)
+        displayName   = try c.decodeIfPresent(String.self, forKey: .displayName)
+        description   = try c.decodeIfPresent(String.self, forKey: .description)
+        pronouns      = try c.decodeIfPresent(String.self, forKey: .pronouns)
+        avatarURL     = try c.decodeIfPresent(String.self, forKey: .avatarURL)
+        color         = try c.decodeIfPresent(String.self, forKey: .color)
+        birthday      = try c.decodeIfPresent(String.self, forKey: .birthday)
+        emoji         = try c.decodeIfPresent(String.self, forKey: .emoji)
+        isCustomFront = try c.decodeIfPresent(Bool.self, forKey: .isCustomFront) ?? false
+        privacy       = try c.decode(PrivacyLevel.self, forKey: .privacy)
+        createdAt     = try c.decode(Date.self, forKey: .createdAt)
+        updatedAt     = try c.decode(Date.self, forKey: .updatedAt)
+    }
+
+    init(id: String, systemID: String, name: String, displayName: String? = nil,
+         description: String? = nil, pronouns: String? = nil, avatarURL: String? = nil,
+         color: String? = nil, birthday: String? = nil, emoji: String? = nil,
+         isCustomFront: Bool = false, privacy: PrivacyLevel, createdAt: Date, updatedAt: Date) {
+        self.id = id
+        self.systemID = systemID
+        self.name = name
+        self.displayName = displayName
+        self.description = description
+        self.pronouns = pronouns
+        self.avatarURL = avatarURL
+        self.color = color
+        self.birthday = birthday
+        self.emoji = emoji
+        self.isCustomFront = isCustomFront
+        self.privacy = privacy
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
     }
 
     var displayColor: Color {
@@ -76,16 +118,20 @@ struct MemberCreate: Codable {
     var avatarURL: String?
     var color: String?
     var birthday: String?
+    var emoji: String?
+    var isCustomFront: Bool?
     var privacy: PrivacyLevel?
 
     enum CodingKeys: String, CodingKey {
         case name
-        case displayName  = "display_name"
+        case displayName   = "display_name"
         case description
         case pronouns
-        case avatarURL    = "avatar_url"
+        case avatarURL     = "avatar_url"
         case color
         case birthday
+        case emoji
+        case isCustomFront = "is_custom_front"
         case privacy
     }
 }
@@ -101,16 +147,20 @@ struct MemberUpdate: Codable {
     var avatarURL: String?
     var color: String?
     var birthday: String?
+    var emoji: String?
+    var isCustomFront: Bool?
     var privacy: PrivacyLevel?
 
     enum CodingKeys: String, CodingKey {
         case name
-        case displayName  = "display_name"
+        case displayName   = "display_name"
         case description
         case pronouns
-        case avatarURL    = "avatar_url"
+        case avatarURL     = "avatar_url"
         case color
         case birthday
+        case emoji
+        case isCustomFront = "is_custom_front"
         case privacy
     }
 
@@ -123,6 +173,8 @@ struct MemberUpdate: Codable {
         try c.encode(avatarURL, forKey: .avatarURL)
         try c.encode(color, forKey: .color)
         try c.encode(birthday, forKey: .birthday)
+        try c.encode(emoji, forKey: .emoji)
+        try c.encode(isCustomFront, forKey: .isCustomFront)
         try c.encode(privacy, forKey: .privacy)
     }
 }
@@ -191,13 +243,15 @@ struct FrontEntry: Identifiable, Codable {
     var startedAt: Date
     var endedAt: Date?
     var memberIDs: [String]
+    var customStatus: String?
 
     enum CodingKeys: String, CodingKey {
         case id
-        case systemID  = "system_id"
-        case startedAt = "started_at"
-        case endedAt   = "ended_at"
-        case memberIDs = "member_ids"
+        case systemID     = "system_id"
+        case startedAt    = "started_at"
+        case endedAt      = "ended_at"
+        case memberIDs    = "member_ids"
+        case customStatus = "custom_status"
     }
 }
 
@@ -206,11 +260,13 @@ struct FrontCreate: Codable {
     var memberIDs: [String]
     var startedAt: Date?
     var replaceFronts: Bool?
+    var customStatus: String?
 
     enum CodingKeys: String, CodingKey {
         case memberIDs     = "member_ids"
         case startedAt     = "started_at"
         case replaceFronts = "replace_fronts"
+        case customStatus  = "custom_status"
     }
 }
 
@@ -218,16 +274,19 @@ struct FrontCreate: Codable {
 struct FrontUpdate: Codable {
     var endedAt: Date?
     var memberIDs: [String]?
+    var customStatus: String?
 
     enum CodingKeys: String, CodingKey {
-        case endedAt   = "ended_at"
-        case memberIDs = "member_ids"
+        case endedAt      = "ended_at"
+        case memberIDs    = "member_ids"
+        case customStatus = "custom_status"
     }
 
     func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
         try c.encode(endedAt, forKey: .endedAt)
         try c.encode(memberIDs, forKey: .memberIDs)
+        try c.encodeIfPresent(customStatus, forKey: .customStatus)
     }
 }
 

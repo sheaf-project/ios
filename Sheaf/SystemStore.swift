@@ -502,6 +502,10 @@ class SystemStore: ObservableObject {
         loadAll()
     }
 
+    var regularMemberCount: Int {
+        members.filter { !$0.isCustomFront }.count
+    }
+
     // MARK: - Fronting
 
     var frontingMembers: [Member] {
@@ -513,7 +517,7 @@ class SystemStore: ObservableObject {
         currentFronts.min(by: { $0.startedAt < $1.startedAt })
     }
 
-    func switchFronting(to memberIDs: [String]) async {
+    func switchFronting(to memberIDs: [String], customStatus: String? = nil) async {
         let now = Date()
 
         if NetworkMonitor.shared.isOnline, let api {
@@ -521,7 +525,7 @@ class SystemStore: ObservableObject {
                 for front in currentFronts where front.endedAt == nil {
                     _ = try await api.updateFront(id: front.id, update: FrontUpdate(endedAt: now, memberIDs: nil))
                 }
-                let created = try await api.createFront(FrontCreate(memberIDs: memberIDs, startedAt: now))
+                let created = try await api.createFront(FrontCreate(memberIDs: memberIDs, startedAt: now, customStatus: customStatus))
                 currentFronts = [created]
                 saveAllToCache()
                 updateWatchComplication()
@@ -537,7 +541,7 @@ class SystemStore: ObservableObject {
                 }
             }
             // Queue create-front
-            let create = FrontCreate(memberIDs: memberIDs, startedAt: now)
+            let create = FrontCreate(memberIDs: memberIDs, startedAt: now, customStatus: customStatus)
             let tempID = UUID().uuidString
             if let body = try? JSONEncoder.iso.encode(create) {
                 enqueue(.createFront, tempID: tempID, body: body)
@@ -545,7 +549,8 @@ class SystemStore: ObservableObject {
             // Optimistic local update
             let optimistic = FrontEntry(
                 id: tempID, systemID: systemProfile?.id ?? "",
-                startedAt: now, endedAt: nil, memberIDs: memberIDs
+                startedAt: now, endedAt: nil, memberIDs: memberIDs,
+                customStatus: customStatus
             )
             currentFronts = [optimistic]
             saveAllToCache()
@@ -605,10 +610,12 @@ class SystemStore: ObservableObject {
             if let idx = frontHistory.firstIndex(where: { $0.id == id }) {
                 if let endedAt = update.endedAt { frontHistory[idx].endedAt = endedAt }
                 if let memberIDs = update.memberIDs { frontHistory[idx].memberIDs = memberIDs }
+                if let customStatus = update.customStatus { frontHistory[idx].customStatus = customStatus.isEmpty ? nil : customStatus }
             }
             if let idx = currentFronts.firstIndex(where: { $0.id == id }) {
                 if let endedAt = update.endedAt { currentFronts[idx].endedAt = endedAt }
                 if let memberIDs = update.memberIDs { currentFronts[idx].memberIDs = memberIDs }
+                if let customStatus = update.customStatus { currentFronts[idx].customStatus = customStatus.isEmpty ? nil : customStatus }
             }
             saveAllToCache()
         }
@@ -650,11 +657,11 @@ class SystemStore: ObservableObject {
     }
 
     /// Create a front entry (possibly already-ended) and update local state.
-    func addFrontEntry(memberIDs: [String], startedAt: Date, endedAt: Date?) async throws {
+    func addFrontEntry(memberIDs: [String], startedAt: Date, endedAt: Date?, customStatus: String? = nil) async throws {
         guard let api else { throw URLError(.badURL) }
 
         if NetworkMonitor.shared.isOnline {
-            var entry = try await api.createFront(FrontCreate(memberIDs: memberIDs, startedAt: startedAt))
+            var entry = try await api.createFront(FrontCreate(memberIDs: memberIDs, startedAt: startedAt, customStatus: customStatus))
             if let endedAt {
                 entry = try await api.updateFront(id: entry.id, update: FrontUpdate(endedAt: endedAt, memberIDs: nil))
             }
@@ -665,7 +672,7 @@ class SystemStore: ObservableObject {
             saveAllToCache()
         } else {
             let tempID = UUID().uuidString
-            let create = FrontCreate(memberIDs: memberIDs, startedAt: startedAt)
+            let create = FrontCreate(memberIDs: memberIDs, startedAt: startedAt, customStatus: customStatus)
             if let body = try? JSONEncoder.iso.encode(create) {
                 enqueue(.createFront, tempID: tempID, body: body)
             }
@@ -677,7 +684,8 @@ class SystemStore: ObservableObject {
             }
             let optimistic = FrontEntry(
                 id: tempID, systemID: systemProfile?.id ?? "",
-                startedAt: startedAt, endedAt: endedAt, memberIDs: memberIDs
+                startedAt: startedAt, endedAt: endedAt, memberIDs: memberIDs,
+                customStatus: customStatus
             )
             frontHistory.insert(optimistic, at: 0)
             if endedAt == nil {
@@ -697,7 +705,8 @@ class SystemStore: ObservableObject {
                         name: create.name, displayName: create.displayName,
                         description: create.description, pronouns: create.pronouns,
                         avatarURL: create.avatarURL, color: create.color,
-                        birthday: create.birthday, privacy: create.privacy
+                        birthday: create.birthday, emoji: create.emoji,
+                        isCustomFront: create.isCustomFront, privacy: create.privacy
                     )
                     let updated = try await api.updateMember(id: existing.id, update: update)
                     if let idx = members.firstIndex(where: { $0.id == existing.id }) {
@@ -715,7 +724,8 @@ class SystemStore: ObservableObject {
                     name: create.name, displayName: create.displayName,
                     description: create.description, pronouns: create.pronouns,
                     avatarURL: create.avatarURL, color: create.color,
-                    birthday: create.birthday, privacy: create.privacy
+                    birthday: create.birthday, emoji: create.emoji,
+                    isCustomFront: create.isCustomFront, privacy: create.privacy
                 )
                 if let body = try? JSONEncoder.iso.encode(update) {
                     enqueue(.updateMember, resourceID: existing.id, body: body)
@@ -729,6 +739,8 @@ class SystemStore: ObservableObject {
                     members[idx].avatarURL = create.avatarURL
                     members[idx].color = create.color
                     members[idx].birthday = create.birthday
+                    members[idx].emoji = create.emoji
+                    members[idx].isCustomFront = create.isCustomFront ?? false
                     if let privacy = create.privacy { members[idx].privacy = privacy }
                 }
             } else {
@@ -741,7 +753,9 @@ class SystemStore: ObservableObject {
                     name: create.name, displayName: create.displayName,
                     description: create.description, pronouns: create.pronouns,
                     avatarURL: create.avatarURL, color: create.color,
-                    birthday: create.birthday, privacy: create.privacy ?? .private,
+                    birthday: create.birthday, emoji: create.emoji,
+                    isCustomFront: create.isCustomFront ?? false,
+                    privacy: create.privacy ?? .private,
                     createdAt: Date(), updatedAt: Date()
                 )
                 members.append(optimistic)
@@ -1183,6 +1197,7 @@ class SystemStore: ObservableObject {
                 pronouns: member.pronouns,
                 color: member.color,
                 avatarURL: member.avatarURL,
+                emoji: member.emoji,
                 frontStartedAt: memberFrontStart
             )
         }

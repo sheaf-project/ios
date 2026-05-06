@@ -10,6 +10,7 @@ struct EditFrontEntrySheet: View {
     @State private var selectedIDs: Set<String> = []
     @State private var endedAt: Date = Date()
     @State private var isOngoing = false
+    @State private var customStatus = ""
     @State private var isSaving = false
     @State private var showAllMembers = false
 
@@ -64,6 +65,11 @@ struct EditFrontEntrySheet: View {
                     }
                 }
 
+                // Custom status
+                Section("Status") {
+                    TextField("Custom status (optional)", text: $customStatus)
+                }
+
                 // Time range
                 Section("When") {
                     HStack {
@@ -116,6 +122,7 @@ struct EditFrontEntrySheet: View {
                 selectedIDs = Set(entry.memberIDs)
                 isOngoing = entry.endedAt == nil
                 endedAt = entry.endedAt ?? Date()
+                customStatus = entry.customStatus ?? ""
             }
         }
     }
@@ -125,7 +132,8 @@ struct EditFrontEntrySheet: View {
         isSaving = true
         let update = FrontUpdate(
             endedAt: isOngoing ? nil : endedAt,
-            memberIDs: Array(selectedIDs)
+            memberIDs: Array(selectedIDs),
+            customStatus: customStatus
         )
         await store.updateFront(id: entry.id, update: update)
         isSaving = false

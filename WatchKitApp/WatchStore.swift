@@ -41,6 +41,10 @@ class WatchStore: ObservableObject {
         }
     }
 
+    var regularMemberCount: Int {
+        members.filter { !$0.isCustomFront }.count
+    }
+
     var frontingMembers: [Member] {
         let ids = Set(currentFronts.flatMap { $0.memberIDs })
         return members.filter { ids.contains($0.id) }
@@ -138,6 +142,7 @@ class WatchStore: ObservableObject {
                 pronouns: member.pronouns,
                 color: member.color,
                 avatarURL: member.avatarURL,
+                emoji: member.emoji,
                 frontStartedAt: memberFrontStart
             )
         }

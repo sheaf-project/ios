@@ -503,7 +503,7 @@ struct SettingsView: View {
                                 .padding(.horizontal, 16).padding(.vertical, 14)
                                 Divider().background(theme.divider)
                             }
-                            statRow(label: "Members",            value: "\(store.members.count)")
+                            statRow(label: "Members",            value: "\(store.regularMemberCount)")
                             Divider().background(theme.backgroundCard)
                             statRow(label: "Groups",             value: "\(store.groups.count)")
                             Divider().background(theme.backgroundCard)

@@ -9,6 +9,7 @@ struct AddFrontEntrySheet: View {
     @State private var startedAt: Date = Date().addingTimeInterval(-3600)
     @State private var endedAt: Date = Date()
     @State private var isOngoing = false
+    @State private var customStatus = ""
     @State private var isSaving = false
     @State private var error: String?
     @State private var showAllMembers = false
@@ -64,6 +65,13 @@ struct AddFrontEntrySheet: View {
                         .buttonStyle(.plain)
                         .listRowBackground(theme.backgroundCard)
                     }
+                }
+
+                // Custom status
+                Section("Status") {
+                    TextField("Custom status (optional)", text: $customStatus)
+                        .foregroundColor(theme.textPrimary)
+                        .listRowBackground(theme.backgroundCard)
                 }
 
                 // Time range
@@ -137,7 +145,8 @@ struct AddFrontEntrySheet: View {
             try await store.addFrontEntry(
                 memberIDs: Array(selectedIDs),
                 startedAt: startedAt,
-                endedAt: isOngoing ? nil : endedAt
+                endedAt: isOngoing ? nil : endedAt,
+                customStatus: customStatus.isEmpty ? nil : customStatus
             )
             isSaving = false
             dismiss()

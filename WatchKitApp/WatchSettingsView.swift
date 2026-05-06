@@ -14,7 +14,7 @@ struct WatchSettingsView: View {
 
                 // Info rows
                 infoRow(icon: "link", label: String(localized: "URL"), value: shortURL)
-                infoRow(icon: "person.2.fill", label: String(localized: "Members"), value: "\(store.members.count)")
+                infoRow(icon: "person.2.fill", label: String(localized: "Members"), value: "\(store.regularMemberCount)")
                 infoRow(icon: "arrow.left.arrow.right", label: String(localized: "Fronting"), value: "\(store.frontingMembers.count)")
 
                 Divider()

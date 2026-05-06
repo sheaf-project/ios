@@ -217,14 +217,30 @@ struct FrontingMemberCard: View {
     @Environment(\.theme) var theme
     let member: Member
 
+    private var activeFrontStatus: String? {
+        store.currentFronts
+            .first { $0.memberIDs.contains(member.id) && $0.endedAt == nil }?
+            .customStatus
+    }
+
     var body: some View {
         HStack(spacing: 16) {
             AvatarView(member: member, size: 64)
 
             VStack(alignment: .leading, spacing: 6) {
-                Text(member.displayName ?? member.name)
-                    .font(.title3).fontWeight(.bold).fontDesign(.rounded)
-                    .foregroundColor(theme.textPrimary)
+                HStack(spacing: 6) {
+                    Text(member.displayName ?? member.name)
+                        .font(.title3).fontWeight(.bold).fontDesign(.rounded)
+                        .foregroundColor(theme.textPrimary)
+                    if member.isCustomFront {
+                        Text("CF")
+                            .font(.caption2).fontWeight(.bold)
+                            .foregroundColor(theme.textTertiary)
+                            .padding(.horizontal, 5).padding(.vertical, 2)
+                            .background(theme.textTertiary.opacity(0.15))
+                            .cornerRadius(4)
+                    }
+                }
 
                 if let pronouns = member.pronouns, !pronouns.isEmpty {
                     Text(pronouns)
@@ -234,6 +250,13 @@ struct FrontingMemberCard: View {
                         .padding(.vertical, 3)
                         .background(member.displayColor.opacity(0.15))
                         .cornerRadius(8)
+                }
+
+                if let status = activeFrontStatus, !status.isEmpty {
+                    Text(status)
+                        .font(.caption)
+                        .foregroundColor(theme.textSecondary)
+                        .lineLimit(2)
                 }
             }
 
