@@ -218,7 +218,7 @@ struct AnalyticsView: View {
                             .frame(height: 6)
                         RoundedRectangle(cornerRadius: 3)
                             .fill(member.displayColor)
-                            .frame(width: max(2, geo.size.width * CGFloat(stats.percentOfWindow)), height: 6)
+                            .frame(width: max(2, geo.size.width * CGFloat(min(stats.percentOfWindow, 1.0))), height: 6)
                     }
                 }
                 .frame(height: 6)
