@@ -21,6 +21,7 @@ DerivedData/
 *.dSYM
 .build-debug
 install-debug.sh
+ExportOptions.plist
 
 # Swift Package Manager
 .build/
