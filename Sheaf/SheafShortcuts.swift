@@ -136,7 +136,7 @@ struct SwitchFrontIntent: AppIntent {
         let ids = members.map { $0.id }
         try await store.switchFronting(to: ids)
         let names = await formatNameList(members.map { $0.displayName ?? $0.name })
-        let verb = members.count == 1 ? "is" : "are"
+        let verb = members.count <= 1 ? "is" : "are"
         return .result(dialog: "\(names) \(verb) now fronting.")
     }
 }
@@ -235,7 +235,7 @@ struct PurgeFrontIntent: AppIntent {
         let names = await store.frontingMemberNames
         try await store.switchFronting(to: [])
         let nameList = await formatNameList(names)
-        let verb = names.count == 1 ? "has" : "have"
+        let verb = names.count <= 1 ? "has" : "have"
         return .result(dialog: "\(nameList) \(verb) been removed from front.")
     }
 }
