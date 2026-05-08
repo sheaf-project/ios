@@ -38,6 +38,7 @@ struct Member: Identifiable, Codable, Hashable {
     var pluralkitID: String?
     var isCustomFront: Bool
     var privacy: PrivacyLevel
+    var note: String?
     let createdAt: Date
     let updatedAt: Date
 
@@ -55,6 +56,7 @@ struct Member: Identifiable, Codable, Hashable {
         case pluralkitID   = "pluralkit_id"
         case isCustomFront = "is_custom_front"
         case privacy
+        case note
         case createdAt     = "created_at"
         case updatedAt     = "updated_at"
     }
@@ -74,6 +76,7 @@ struct Member: Identifiable, Codable, Hashable {
         pluralkitID   = try c.decodeIfPresent(String.self, forKey: .pluralkitID)
         isCustomFront = try c.decodeIfPresent(Bool.self, forKey: .isCustomFront) ?? false
         privacy       = try c.decode(PrivacyLevel.self, forKey: .privacy)
+        note          = try c.decodeIfPresent(String.self, forKey: .note)
         createdAt     = try c.decode(Date.self, forKey: .createdAt)
         updatedAt     = try c.decode(Date.self, forKey: .updatedAt)
     }
@@ -82,7 +85,7 @@ struct Member: Identifiable, Codable, Hashable {
          description: String? = nil, pronouns: String? = nil, avatarURL: String? = nil,
          color: String? = nil, birthday: String? = nil, emoji: String? = nil,
          pluralkitID: String? = nil, isCustomFront: Bool = false,
-         privacy: PrivacyLevel, createdAt: Date, updatedAt: Date) {
+         privacy: PrivacyLevel, note: String? = nil, createdAt: Date, updatedAt: Date) {
         self.id = id
         self.systemID = systemID
         self.name = name
@@ -96,6 +99,7 @@ struct Member: Identifiable, Codable, Hashable {
         self.pluralkitID = pluralkitID
         self.isCustomFront = isCustomFront
         self.privacy = privacy
+        self.note = note
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }
@@ -126,6 +130,7 @@ struct MemberCreate: Codable {
     var emoji: String?
     var isCustomFront: Bool?
     var privacy: PrivacyLevel?
+    var note: String?
 
     enum CodingKeys: String, CodingKey {
         case name
@@ -138,6 +143,7 @@ struct MemberCreate: Codable {
         case emoji
         case isCustomFront = "is_custom_front"
         case privacy
+        case note
     }
 }
 
@@ -155,6 +161,7 @@ struct MemberUpdate: Codable {
     var emoji: String?
     var isCustomFront: Bool?
     var privacy: PrivacyLevel?
+    var note: String?
 
     enum CodingKeys: String, CodingKey {
         case name
@@ -167,6 +174,7 @@ struct MemberUpdate: Codable {
         case emoji
         case isCustomFront = "is_custom_front"
         case privacy
+        case note
     }
 
     func encode(to encoder: Encoder) throws {
@@ -181,6 +189,7 @@ struct MemberUpdate: Codable {
         try c.encode(emoji, forKey: .emoji)
         try c.encode(isCustomFront, forKey: .isCustomFront)
         try c.encode(privacy, forKey: .privacy)
+        try c.encode(note, forKey: .note)
     }
 }
 
@@ -204,6 +213,7 @@ struct SystemProfile: Identifiable, Codable {
     let id: String
     var name: String
     var description: String?
+    var note: String?
     var tag: String?
     var avatarURL: String?
     var color: String?
@@ -215,7 +225,7 @@ struct SystemProfile: Identifiable, Codable {
     let updatedAt: Date
 
     enum CodingKeys: String, CodingKey {
-        case id, name, description, tag, color, privacy
+        case id, name, description, note, tag, color, privacy
         case avatarURL            = "avatar_url"
         case deleteConfirmation   = "delete_confirmation"
         case dateFormat           = "date_format"
@@ -229,6 +239,7 @@ struct SystemProfile: Identifiable, Codable {
         id                   = try c.decode(String.self, forKey: .id)
         name                 = try c.decode(String.self, forKey: .name)
         description          = try c.decodeIfPresent(String.self, forKey: .description)
+        note                 = try c.decodeIfPresent(String.self, forKey: .note)
         tag                  = try c.decodeIfPresent(String.self, forKey: .tag)
         avatarURL            = try c.decodeIfPresent(String.self, forKey: .avatarURL)
         color                = try c.decodeIfPresent(String.self, forKey: .color)

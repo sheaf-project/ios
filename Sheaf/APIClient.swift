@@ -1881,6 +1881,7 @@ private class CFHeaderPreservingDelegate: NSObject, URLSessionTaskDelegate {
 struct SystemUpdate: Codable {
     var name: String?
     var description: String?
+    var note: String?
     var tag: String?
     var avatarURL: String?
     var color: String?
@@ -1889,7 +1890,7 @@ struct SystemUpdate: Codable {
     var replaceFrontsDefault: Bool?
 
     enum CodingKeys: String, CodingKey {
-        case name, description, tag, color, privacy
+        case name, description, note, tag, color, privacy
         case avatarURL            = "avatar_url"
         case dateFormat           = "date_format"
         case replaceFrontsDefault = "replace_fronts_default"
@@ -1899,6 +1900,7 @@ struct SystemUpdate: Codable {
         var c = encoder.container(keyedBy: CodingKeys.self)
         try c.encode(name, forKey: .name)
         try c.encode(description, forKey: .description)
+        try c.encode(note, forKey: .note)
         try c.encode(tag, forKey: .tag)
         try c.encode(avatarURL, forKey: .avatarURL)
         try c.encode(color, forKey: .color)

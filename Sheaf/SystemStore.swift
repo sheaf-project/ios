@@ -713,7 +713,8 @@ class SystemStore: ObservableObject {
                         description: create.description, pronouns: create.pronouns,
                         avatarURL: create.avatarURL, color: create.color,
                         birthday: create.birthday, emoji: create.emoji,
-                        isCustomFront: create.isCustomFront, privacy: create.privacy
+                        isCustomFront: create.isCustomFront, privacy: create.privacy,
+                        note: create.note
                     )
                     let updated = try await api.updateMember(id: existing.id, update: update)
                     if let idx = members.firstIndex(where: { $0.id == existing.id }) {
@@ -732,7 +733,8 @@ class SystemStore: ObservableObject {
                     description: create.description, pronouns: create.pronouns,
                     avatarURL: create.avatarURL, color: create.color,
                     birthday: create.birthday, emoji: create.emoji,
-                    isCustomFront: create.isCustomFront, privacy: create.privacy
+                    isCustomFront: create.isCustomFront, privacy: create.privacy,
+                    note: create.note
                 )
                 if let body = try? JSONEncoder.iso.encode(update) {
                     enqueue(.updateMember, resourceID: existing.id, body: body)
@@ -749,6 +751,7 @@ class SystemStore: ObservableObject {
                     members[idx].emoji = create.emoji
                     members[idx].isCustomFront = create.isCustomFront ?? false
                     if let privacy = create.privacy { members[idx].privacy = privacy }
+                    members[idx].note = create.note
                 }
             } else {
                 let tempID = UUID().uuidString
@@ -892,6 +895,7 @@ class SystemStore: ObservableObject {
             // Optimistic update
             if let name = update.name { systemProfile?.name = name }
             if let desc = update.description { systemProfile?.description = desc }
+            if let note = update.note { systemProfile?.note = note }
             if let tag = update.tag { systemProfile?.tag = tag }
             if let url = update.avatarURL { systemProfile?.avatarURL = url }
             if let color = update.color { systemProfile?.color = color }

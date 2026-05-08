@@ -8,6 +8,7 @@ struct EditSystemProfileSheet: View {
 
     @State private var name        = ""
     @State private var description = ""
+    @State private var note        = ""
     @State private var tag         = ""
     @State private var avatarURL   = ""
     @State private var colorHex    = "#8B5CF6"
@@ -39,6 +40,12 @@ struct EditSystemProfileSheet: View {
 
                 Section("About") {
                     TextField("Description", text: $description, axis: .vertical)
+                        .lineLimit(3...6)
+                        .foregroundColor(theme.textPrimary)
+                }
+
+                Section(header: Text("Note"), footer: Text("Private note, only visible to you.")) {
+                    TextField("Note", text: $note, axis: .vertical)
                         .lineLimit(3...6)
                         .foregroundColor(theme.textPrimary)
                 }
@@ -113,6 +120,7 @@ struct EditSystemProfileSheet: View {
         guard let profile = store.systemProfile else { return }
         name        = profile.name
         description = profile.description ?? ""
+        note        = profile.note ?? ""
         tag         = profile.tag ?? ""
         avatarURL   = profile.avatarURL ?? ""
         if avatarURL.hasPrefix("/") { avatarMode = .upload }
@@ -126,6 +134,7 @@ struct EditSystemProfileSheet: View {
         await store.updateSystem(SystemUpdate(
             name:        name.isEmpty        ? nil : name,
             description: description.isEmpty ? nil : description,
+            note:        note.isEmpty        ? nil : note,
             tag:         tag.isEmpty         ? nil : tag,
             avatarURL:   avatarURL.isEmpty   ? nil : avatarURL,
             color:       colorHex,

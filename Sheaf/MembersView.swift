@@ -333,6 +333,24 @@ struct MemberDetailSheet: View {
                             .cornerRadius(14)
                     }
 
+                    // Note
+                    if let note = member.note, !note.isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Label("Note", systemImage: "note.text")
+                                .font(.footnote).fontWeight(.semibold)
+                                .foregroundColor(theme.textSecondary)
+                                .textCase(.uppercase)
+                                .kerning(0.8)
+                            Text(note)
+                                .font(.subheadline)
+                                .foregroundColor(theme.textPrimary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .padding(16)
+                        .background(theme.backgroundCard)
+                        .cornerRadius(14)
+                    }
+
                     // Birthday
                     if let bday = member.birthday, !bday.isEmpty {
                         HStack {
@@ -508,6 +526,7 @@ struct MemberEditSheet: View {
     @State private var colorHex = "#A78BFA"
     @State private var birthday = ""
     @State private var emoji = ""
+    @State private var note = ""
     @State private var isCustomFront = false
     @State private var privacy: PrivacyLevel = .private
     @State private var isSaving = false
@@ -527,6 +546,7 @@ struct MemberEditSheet: View {
                     formField("Pronouns", value: $pronouns, placeholder: "e.g. she/her")
                     formField("Emoji", value: $emoji, placeholder: "e.g. ✨")
                     formField("Description", value: $description, placeholder: "Brief description", multiline: true)
+                    formField("Note", value: $note, placeholder: "Private note (only visible to you)", multiline: true)
 
                     // Custom front toggle
                     HStack {
@@ -688,6 +708,7 @@ struct MemberEditSheet: View {
         colorHex      = m.color ?? "#A78BFA"
         birthday      = m.birthday ?? ""
         emoji         = m.emoji ?? ""
+        note          = m.note ?? ""
         isCustomFront = m.isCustomFront
         privacy       = m.privacy
         // Load existing field values
@@ -732,7 +753,8 @@ struct MemberEditSheet: View {
             birthday: birthday.isEmpty ? nil : birthday,
             emoji: emoji.isEmpty ? nil : emoji,
             isCustomFront: isCustomFront,
-            privacy: privacy
+            privacy: privacy,
+            note: note.isEmpty ? nil : note
         )
         Task {
             await store.saveMember(existing: member, create: create)
