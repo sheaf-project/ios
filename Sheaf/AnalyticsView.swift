@@ -156,7 +156,7 @@ struct AnalyticsView: View {
                                     .foregroundColor(theme.textPrimary)
                                     .lineLimit(1)
                                 Spacer()
-                                Text(String(format: "%.0f%%", stat.percentOfWindow * 100))
+                                Text(String(format: "%.0f%%", stat.percentOfWindow))
                                     .font(.caption2).fontWeight(.semibold)
                                     .foregroundColor(theme.textSecondary)
                             }
@@ -218,7 +218,7 @@ struct AnalyticsView: View {
                             .frame(height: 6)
                         RoundedRectangle(cornerRadius: 3)
                             .fill(member.displayColor)
-                            .frame(width: max(2, geo.size.width * CGFloat(min(stats.percentOfWindow, 1.0))), height: 6)
+                            .frame(width: max(2, geo.size.width * CGFloat(min(stats.percentOfWindow / 100.0, 1.0))), height: 6)
                     }
                 }
                 .frame(height: 6)
