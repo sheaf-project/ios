@@ -5,6 +5,7 @@ struct HomeView: View {
     @EnvironmentObject var authManager: AuthManager
     @Environment(\.theme) var theme
     @State private var showSwitchSheet = false
+    @State private var showSettings = false
 
     var body: some View {
         ZStack {
@@ -29,6 +30,13 @@ struct HomeView: View {
                             }
                         }
                         Spacer()
+                        Button {
+                            showSettings = true
+                        } label: {
+                            Image(systemName: "gearshape.fill")
+                                .font(.title3)
+                                .foregroundColor(theme.textSecondary)
+                        }
                     }
                     .padding(.horizontal, 24)
                     .padding(.top, 16)
@@ -154,6 +162,11 @@ struct HomeView: View {
         }
         .sheet(isPresented: $showSwitchSheet) {
             SwitchFrontingSheet()
+                .environmentObject(store)
+        }
+        .sheet(isPresented: $showSettings) {
+            SettingsView()
+                .environmentObject(authManager)
                 .environmentObject(store)
         }
         .task {

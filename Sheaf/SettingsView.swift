@@ -7,6 +7,7 @@ struct SettingsView: View {
     @EnvironmentObject var themeManager: ThemeManager
     @ObservedObject private var lockManager = AppLockManager.shared
     @Environment(\.theme) var theme
+    @Environment(\.dismiss) var dismiss
     @State private var showLogoutConfirm = false
     @State private var showEditSystem = false
     @State private var showImport = false
@@ -168,6 +169,33 @@ struct SettingsView: View {
                                             .font(.subheadline).fontWeight(.medium)
                                             .foregroundColor(theme.textPrimary)
                                         Text("ntfy, Pushover, webhooks")
+                                            .font(.caption)
+                                            .foregroundColor(theme.textTertiary)
+                                    }
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .font(.caption)
+                                        .foregroundColor(theme.textTertiary)
+                                }
+                                .padding(.horizontal, 16).padding(.vertical, 14)
+                            }
+                            .buttonStyle(.plain)
+
+                            Divider().padding(.leading, 48)
+
+                            NavigationLink {
+                                RemindersView()
+                                    .environmentObject(store)
+                            } label: {
+                                HStack(spacing: 12) {
+                                    Image(systemName: "bell.and.waves.left.and.right")
+                                        .foregroundColor(theme.accentLight)
+                                        .frame(width: 20)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("Reminders")
+                                            .font(.subheadline).fontWeight(.medium)
+                                            .foregroundColor(theme.textPrimary)
+                                        Text("Scheduled & automated notifications")
                                             .font(.caption)
                                             .foregroundColor(theme.textTertiary)
                                     }
@@ -760,6 +788,12 @@ struct SettingsView: View {
                 store.loadAll()
                 await loadMe()
                 try? await Task.sleep(nanoseconds: 500_000_000)
+            }
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                        .foregroundColor(theme.accentLight)
+                }
             }
         }
         .sheet(isPresented: $showEditSystem) {

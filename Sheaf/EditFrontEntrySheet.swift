@@ -48,6 +48,7 @@ struct EditFrontEntrySheet: View {
                             }
                         }
                         .buttonStyle(.plain)
+                        .listRowBackground(theme.backgroundCard)
                     }
 
                     if allMembers.count > 5 {
@@ -67,6 +68,7 @@ struct EditFrontEntrySheet: View {
                             }
                         }
                         .buttonStyle(.plain)
+                        .listRowBackground(theme.backgroundCard)
                     }
                 }
 
@@ -74,6 +76,7 @@ struct EditFrontEntrySheet: View {
                 Section("Status") {
                     TextField("Custom status (optional)", text: $customStatus)
                 }
+                .listRowBackground(theme.backgroundCard)
 
                 // Time range
                 Section("When") {
@@ -95,8 +98,7 @@ struct EditFrontEntrySheet: View {
                             .foregroundColor(theme.textPrimary)
                     }
                 }
-
-
+                .listRowBackground(theme.backgroundCard)
             }
             .scrollContentBackground(.hidden)
             .background(theme.backgroundPrimary)

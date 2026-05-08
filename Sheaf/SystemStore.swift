@@ -1163,6 +1163,140 @@ class SystemStore: ObservableObject {
         }
     }
 
+    // MARK: - Reminders
+
+    @Published var reminders: [Reminder] = []
+
+    func loadReminders() async {
+        guard NetworkMonitor.shared.isOnline, let api else { return }
+        do {
+            reminders = try await api.getReminders()
+        } catch {
+            showError(error)
+        }
+    }
+
+    func createReminder(_ create: ReminderCreate) async -> Reminder? {
+        guard NetworkMonitor.shared.isOnline, let api else { return nil }
+        do {
+            let created = try await api.createReminder(create)
+            reminders.insert(created, at: 0)
+            return created
+        } catch {
+            showError(error)
+            return nil
+        }
+    }
+
+    func updateReminder(id: String, update: ReminderUpdate) async -> Reminder? {
+        guard NetworkMonitor.shared.isOnline, let api else { return nil }
+        do {
+            let updated = try await api.updateReminder(id: id, update: update)
+            if let idx = reminders.firstIndex(where: { $0.id == id }) {
+                reminders[idx] = updated
+            }
+            return updated
+        } catch {
+            showError(error)
+            return nil
+        }
+    }
+
+    func toggleReminder(id: String, enabled: Bool) async {
+        let update = ReminderUpdate(enabled: enabled)
+        _ = await updateReminder(id: id, update: update)
+    }
+
+    @discardableResult
+    func deleteReminder(id: String, confirmation: MemberDeleteConfirm? = nil) async -> DeleteQueued? {
+        guard NetworkMonitor.shared.isOnline, let api else { return nil }
+        do {
+            let queued = try await api.deleteReminder(id: id, confirmation: confirmation)
+            if queued == nil {
+                reminders.removeAll { $0.id == id }
+            }
+            return queued
+        } catch {
+            showError(error)
+            return nil
+        }
+    }
+
+    // MARK: - Polls
+
+    @Published var polls: [Poll] = []
+
+    func loadPolls() async {
+        guard NetworkMonitor.shared.isOnline, let api else { return }
+        do {
+            polls = try await api.getPolls()
+        } catch {
+            showError(error)
+        }
+    }
+
+    func createPoll(_ create: PollCreate) async -> Poll? {
+        guard NetworkMonitor.shared.isOnline, let api else { return nil }
+        do {
+            let created = try await api.createPoll(create)
+            polls.insert(created, at: 0)
+            return created
+        } catch {
+            showError(error)
+            return nil
+        }
+    }
+
+    func refreshPoll(id: String) async -> Poll? {
+        guard NetworkMonitor.shared.isOnline, let api else { return nil }
+        do {
+            let poll = try await api.getPoll(id: id)
+            if let idx = polls.firstIndex(where: { $0.id == id }) {
+                polls[idx] = poll
+            }
+            return poll
+        } catch {
+            showError(error)
+            return nil
+        }
+    }
+
+    @discardableResult
+    func deletePoll(id: String, confirmation: MemberDeleteConfirm? = nil) async -> DeleteQueued? {
+        guard NetworkMonitor.shared.isOnline, let api else { return nil }
+        do {
+            let queued = try await api.deletePoll(id: id, confirmation: confirmation)
+            if queued == nil {
+                polls.removeAll { $0.id == id }
+            }
+            return queued
+        } catch {
+            showError(error)
+            return nil
+        }
+    }
+
+    func castVote(pollID: String, vote: VoteCast) async -> PollVoteRead? {
+        guard NetworkMonitor.shared.isOnline, let api else { return nil }
+        do {
+            return try await api.castVote(pollID: pollID, vote: vote)
+        } catch {
+            showError(error)
+            return nil
+        }
+    }
+
+    func withdrawVote(pollID: String, memberID: String) async -> Bool {
+        guard NetworkMonitor.shared.isOnline, let api else { return false }
+        do {
+            try await api.withdrawVote(pollID: pollID, memberID: memberID)
+            return true
+        } catch {
+            showError(error)
+            return false
+        }
+    }
+
     // MARK: - Helpers
 
     var membersByFrontFrequency: [Member] {

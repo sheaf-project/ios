@@ -1802,3 +1802,537 @@ struct TestDispatchResponse: Codable {
     let delivered: Bool
     var error: String?
 }
+
+// MARK: - Polls
+
+enum PollKind: String, Codable, CaseIterable {
+    case singleChoice = "single_choice"
+    case multiChoice = "multi_choice"
+
+    var label: String {
+        switch self {
+        case .singleChoice: return "Single Choice"
+        case .multiChoice: return "Multiple Choice"
+        }
+    }
+}
+
+enum PollResultsVisibility: String, Codable, CaseIterable {
+    case live = "live"
+    case endOnly = "end_only"
+
+    var label: String {
+        switch self {
+        case .live: return "Live"
+        case .endOnly: return "After Closing"
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .live: return "Results visible while poll is open"
+        case .endOnly: return "Results hidden until poll closes"
+        }
+    }
+}
+
+struct PollOption: Identifiable, Codable, Hashable {
+    let id: String
+    let text: String
+    let position: Int
+}
+
+struct PollTallyEntry: Codable {
+    let optionID: String
+    let count: Int
+
+    enum CodingKeys: String, CodingKey {
+        case optionID = "option_id"
+        case count
+    }
+}
+
+struct PollVote: Codable {
+    let votedAsMemberID: String
+    let optionIDs: [String]
+    let createdAt: Date
+    let updatedAt: Date
+
+    enum CodingKeys: String, CodingKey {
+        case votedAsMemberID = "voted_as_member_id"
+        case optionIDs = "option_ids"
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+    }
+}
+
+struct Poll: Identifiable, Codable {
+    let id: String
+    let systemID: String
+    let question: String
+    let description: String?
+    let kind: PollKind
+    let resultsVisibility: PollResultsVisibility
+    let closesAt: Date
+    let retentionDays: Int
+    let includeCustomFronts: Bool
+    let options: [PollOption]
+    let isClosed: Bool
+    let closedSince: Date?
+    let purgesAt: Date
+    let totalVotes: Int
+    let tally: [PollTallyEntry]?
+    let votes: [PollVote]?
+    let createdAt: Date
+    let updatedAt: Date
+
+    enum CodingKeys: String, CodingKey {
+        case id, question, description, kind, options
+        case systemID = "system_id"
+        case resultsVisibility = "results_visibility"
+        case closesAt = "closes_at"
+        case retentionDays = "retention_days"
+        case includeCustomFronts = "include_custom_fronts"
+        case isClosed = "is_closed"
+        case closedSince = "closed_since"
+        case purgesAt = "purges_at"
+        case totalVotes = "total_votes"
+        case tally, votes
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id                  = try c.decode(String.self, forKey: .id)
+        systemID            = try c.decode(String.self, forKey: .systemID)
+        question            = try c.decode(String.self, forKey: .question)
+        description         = try c.decodeIfPresent(String.self, forKey: .description)
+        kind                = try c.decode(PollKind.self, forKey: .kind)
+        resultsVisibility   = try c.decode(PollResultsVisibility.self, forKey: .resultsVisibility)
+        closesAt            = try c.decode(Date.self, forKey: .closesAt)
+        retentionDays       = try c.decode(Int.self, forKey: .retentionDays)
+        includeCustomFronts = try c.decodeIfPresent(Bool.self, forKey: .includeCustomFronts) ?? false
+        options             = try c.decode([PollOption].self, forKey: .options)
+        isClosed            = try c.decode(Bool.self, forKey: .isClosed)
+        closedSince         = try c.decodeIfPresent(Date.self, forKey: .closedSince)
+        purgesAt            = try c.decode(Date.self, forKey: .purgesAt)
+        totalVotes          = try c.decode(Int.self, forKey: .totalVotes)
+        tally               = try c.decodeIfPresent([PollTallyEntry].self, forKey: .tally)
+        votes               = try c.decodeIfPresent([PollVote].self, forKey: .votes)
+        createdAt           = try c.decode(Date.self, forKey: .createdAt)
+        updatedAt           = try c.decode(Date.self, forKey: .updatedAt)
+    }
+}
+
+struct PollOptionCreate: Codable {
+    let text: String
+}
+
+struct PollCreate: Codable {
+    var question: String
+    var description: String?
+    var kind: PollKind
+    var resultsVisibility: PollResultsVisibility
+    var closesAt: Date
+    var retentionDays: Int?
+    var includeCustomFronts: Bool?
+    var options: [PollOptionCreate]
+
+    enum CodingKeys: String, CodingKey {
+        case question, description, kind, options
+        case resultsVisibility = "results_visibility"
+        case closesAt = "closes_at"
+        case retentionDays = "retention_days"
+        case includeCustomFronts = "include_custom_fronts"
+    }
+}
+
+struct VoteCast: Codable {
+    let votedAsMemberID: String
+    let optionIDs: [String]
+
+    enum CodingKeys: String, CodingKey {
+        case votedAsMemberID = "voted_as_member_id"
+        case optionIDs = "option_ids"
+    }
+}
+
+struct PollVoteRead: Codable {
+    let votedAsMemberID: String
+    let optionIDs: [String]
+    let createdAt: Date
+    let updatedAt: Date
+
+    enum CodingKeys: String, CodingKey {
+        case votedAsMemberID = "voted_as_member_id"
+        case optionIDs = "option_ids"
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+    }
+}
+
+// MARK: - Reminders
+
+enum ReminderTriggerType: String, Codable, CaseIterable {
+    case automated = "automated"
+    case repeated = "repeated"
+
+    var label: String {
+        switch self {
+        case .automated: return "Automated"
+        case .repeated: return "Repeated"
+        }
+    }
+}
+
+enum ReminderTriggerEvent: String, Codable, CaseIterable {
+    case start = "start"
+    case stop = "stop"
+    case any = "any"
+
+    var label: String {
+        switch self {
+        case .start: return "Starts fronting"
+        case .stop: return "Stops fronting"
+        case .any: return "Any change"
+        }
+    }
+}
+
+enum ReminderScheduleKind: String, Codable, CaseIterable {
+    case daily = "daily"
+    case weekly = "weekly"
+    case monthly = "monthly"
+
+    var label: String {
+        switch self {
+        case .daily: return "Daily"
+        case .weekly: return "Weekly"
+        case .monthly: return "Monthly"
+        }
+    }
+}
+
+enum ReminderScope: String, Codable, CaseIterable {
+    case system = "system"
+    case member = "member"
+
+    var label: String {
+        switch self {
+        case .system: return "Everyone"
+        case .member: return "Specific members"
+        }
+    }
+}
+
+struct Reminder: Identifiable, Codable {
+    let id: String
+    let systemID: String
+    let channelID: String
+    var name: String
+    var title: String
+    var body: String?
+    var enabled: Bool
+    var triggerType: String
+
+    var triggerMemberID: String?
+    var triggerEvent: String?
+    var delaySeconds: Int?
+
+    var scheduleKind: String?
+    var scheduleTime: String?
+    var scheduleDowMask: Int?
+    var scheduleDom: Int?
+    var scheduleTz: String?
+    var cronExpression: String?
+
+    var scope: String?
+    var scopeMemberIDs: [String]?
+    var digestWhenAbsent: Bool?
+
+    var lastFiredAt: Date?
+    var pendingCount: Int?
+    var nextFireAt: Date?
+
+    let createdAt: Date
+    let updatedAt: Date
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, title, body, enabled, scope
+        case systemID = "system_id"
+        case channelID = "channel_id"
+        case triggerType = "trigger_type"
+        case triggerMemberID = "trigger_member_id"
+        case triggerEvent = "trigger_event"
+        case delaySeconds = "delay_seconds"
+        case scheduleKind = "schedule_kind"
+        case scheduleTime = "schedule_time"
+        case scheduleDowMask = "schedule_dow_mask"
+        case scheduleDom = "schedule_dom"
+        case scheduleTz = "schedule_tz"
+        case cronExpression = "cron_expression"
+        case scopeMemberIDs = "scope_member_ids"
+        case digestWhenAbsent = "digest_when_absent"
+        case lastFiredAt = "last_fired_at"
+        case pendingCount = "pending_count"
+        case nextFireAt = "next_fire_at"
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        systemID = try c.decode(String.self, forKey: .systemID)
+        channelID = try c.decode(String.self, forKey: .channelID)
+        name = try c.decode(String.self, forKey: .name)
+        title = try c.decode(String.self, forKey: .title)
+        body = try c.decodeIfPresent(String.self, forKey: .body)
+        enabled = try c.decodeIfPresent(Bool.self, forKey: .enabled) ?? true
+        triggerType = try c.decode(String.self, forKey: .triggerType)
+        triggerMemberID = try c.decodeIfPresent(String.self, forKey: .triggerMemberID)
+        triggerEvent = try c.decodeIfPresent(String.self, forKey: .triggerEvent)
+        delaySeconds = try c.decodeIfPresent(Int.self, forKey: .delaySeconds)
+        scheduleKind = try c.decodeIfPresent(String.self, forKey: .scheduleKind)
+        scheduleTime = try c.decodeIfPresent(String.self, forKey: .scheduleTime)
+        scheduleDowMask = try c.decodeIfPresent(Int.self, forKey: .scheduleDowMask)
+        scheduleDom = try c.decodeIfPresent(Int.self, forKey: .scheduleDom)
+        scheduleTz = try c.decodeIfPresent(String.self, forKey: .scheduleTz)
+        cronExpression = try c.decodeIfPresent(String.self, forKey: .cronExpression)
+        scope = try c.decodeIfPresent(String.self, forKey: .scope)
+        scopeMemberIDs = try c.decodeIfPresent([String].self, forKey: .scopeMemberIDs)
+        digestWhenAbsent = try c.decodeIfPresent(Bool.self, forKey: .digestWhenAbsent)
+        lastFiredAt = try c.decodeIfPresent(Date.self, forKey: .lastFiredAt)
+        pendingCount = try c.decodeIfPresent(Int.self, forKey: .pendingCount)
+        nextFireAt = try c.decodeIfPresent(Date.self, forKey: .nextFireAt)
+        createdAt = try c.decode(Date.self, forKey: .createdAt)
+        updatedAt = try c.decode(Date.self, forKey: .updatedAt)
+    }
+
+    var parsedTriggerType: ReminderTriggerType {
+        ReminderTriggerType(rawValue: triggerType) ?? .automated
+    }
+
+    var parsedScheduleKind: ReminderScheduleKind? {
+        scheduleKind.flatMap { ReminderScheduleKind(rawValue: $0) }
+    }
+
+    var scheduleDescription: String {
+        if parsedTriggerType == .automated {
+            let event = triggerEvent.flatMap { ReminderTriggerEvent(rawValue: $0) }?.label ?? "Any change"
+            let delay = delaySeconds ?? 0
+            var desc = event
+            if delay > 0 {
+                let minutes = delay / 60
+                if minutes >= 60 {
+                    desc += " + \(minutes / 60)h delay"
+                } else if minutes > 0 {
+                    desc += " + \(minutes)m delay"
+                } else {
+                    desc += " + \(delay)s delay"
+                }
+            }
+            return desc
+        }
+
+        if let cron = cronExpression, !cron.isEmpty {
+            return "Cron: \(cron)"
+        }
+
+        guard let kind = parsedScheduleKind, let time = scheduleTime else {
+            return "Schedule not set"
+        }
+
+        switch kind {
+        case .daily:
+            return "Daily at \(time)"
+        case .weekly:
+            let days = dowMaskToLabels(scheduleDowMask ?? 0)
+            return "Weekly \(days) at \(time)"
+        case .monthly:
+            let dom = scheduleDom ?? 1
+            return "Monthly on day \(dom) at \(time)"
+        }
+    }
+
+    private func dowMaskToLabels(_ mask: Int) -> String {
+        let dayNames = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+        var result: [String] = []
+        for i in 0..<7 {
+            if mask & (1 << i) != 0 {
+                result.append(dayNames[i])
+            }
+        }
+        return result.isEmpty ? "No days" : result.joined(separator: ", ")
+    }
+}
+
+struct ReminderCreate: Codable {
+    var name: String
+    var title: String
+    var body: String?
+    var enabled: Bool = true
+    var channelID: String
+    var triggerType: String
+
+    var triggerMemberID: String?
+    var triggerEvent: String?
+    var delaySeconds: Int?
+
+    var scheduleKind: String?
+    var scheduleTime: String?
+    var scheduleDowMask: Int?
+    var scheduleDom: Int?
+    var scheduleTz: String?
+    var cronExpression: String?
+
+    var scope: String?
+    var scopeMemberIDs: [String]?
+    var digestWhenAbsent: Bool?
+
+    enum CodingKeys: String, CodingKey {
+        case name, title, body, enabled, scope
+        case channelID = "channel_id"
+        case triggerType = "trigger_type"
+        case triggerMemberID = "trigger_member_id"
+        case triggerEvent = "trigger_event"
+        case delaySeconds = "delay_seconds"
+        case scheduleKind = "schedule_kind"
+        case scheduleTime = "schedule_time"
+        case scheduleDowMask = "schedule_dow_mask"
+        case scheduleDom = "schedule_dom"
+        case scheduleTz = "schedule_tz"
+        case cronExpression = "cron_expression"
+        case scopeMemberIDs = "scope_member_ids"
+        case digestWhenAbsent = "digest_when_absent"
+    }
+}
+
+struct ReminderUpdate: Codable {
+    var name: String?
+    var title: String?
+    var body: String?
+    var enabled: Bool?
+    var channelID: String?
+    var triggerType: String?
+
+    var triggerMemberID: String?
+    var triggerEvent: String?
+    var delaySeconds: Int?
+
+    var scheduleKind: String?
+    var scheduleTime: String?
+    var scheduleDowMask: Int?
+    var scheduleDom: Int?
+    var scheduleTz: String?
+    var cronExpression: String?
+
+    var scope: String?
+    var scopeMemberIDs: [String]?
+    var digestWhenAbsent: Bool?
+
+    enum CodingKeys: String, CodingKey {
+        case name, title, body, enabled, scope
+        case channelID = "channel_id"
+        case triggerType = "trigger_type"
+        case triggerMemberID = "trigger_member_id"
+        case triggerEvent = "trigger_event"
+        case delaySeconds = "delay_seconds"
+        case scheduleKind = "schedule_kind"
+        case scheduleTime = "schedule_time"
+        case scheduleDowMask = "schedule_dow_mask"
+        case scheduleDom = "schedule_dom"
+        case scheduleTz = "schedule_tz"
+        case cronExpression = "cron_expression"
+        case scopeMemberIDs = "scope_member_ids"
+        case digestWhenAbsent = "digest_when_absent"
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(name, forKey: .name)
+        try c.encode(title, forKey: .title)
+        try c.encode(body, forKey: .body)
+        try c.encode(enabled, forKey: .enabled)
+        try c.encode(channelID, forKey: .channelID)
+        try c.encode(triggerType, forKey: .triggerType)
+        try c.encode(triggerMemberID, forKey: .triggerMemberID)
+        try c.encode(triggerEvent, forKey: .triggerEvent)
+        try c.encode(delaySeconds, forKey: .delaySeconds)
+        try c.encode(scheduleKind, forKey: .scheduleKind)
+        try c.encode(scheduleTime, forKey: .scheduleTime)
+        try c.encode(scheduleDowMask, forKey: .scheduleDowMask)
+        try c.encode(scheduleDom, forKey: .scheduleDom)
+        try c.encode(scheduleTz, forKey: .scheduleTz)
+        try c.encode(cronExpression, forKey: .cronExpression)
+        try c.encode(scope, forKey: .scope)
+        try c.encode(scopeMemberIDs, forKey: .scopeMemberIDs)
+        try c.encode(digestWhenAbsent, forKey: .digestWhenAbsent)
+    }
+}
+
+struct ReminderNextFire: Codable {
+    let nextFireAt: Date?
+
+    enum CodingKeys: String, CodingKey {
+        case nextFireAt = "next_fire_at"
+    }
+}
+
+// MARK: - Polls
+
+struct PollServerConfig: Codable {
+    let tier: String
+    let minCloseSeconds: Int
+    let maxCloseSeconds: Int
+    let defaultRetentionDays: Int
+    let maxRetentionDays: Int
+    let maxConcurrentOpenPolls: Int
+
+    enum CodingKeys: String, CodingKey {
+        case tier
+        case minCloseSeconds = "min_close_seconds"
+        case maxCloseSeconds = "max_close_seconds"
+        case defaultRetentionDays = "default_retention_days"
+        case maxRetentionDays = "max_retention_days"
+        case maxConcurrentOpenPolls = "max_concurrent_open_polls"
+    }
+}
+
+enum PollAuditAction: String, Codable {
+    case cast = "cast"
+    case change = "change"
+    case withdraw = "withdraw"
+}
+
+struct PollVoteEvent: Identifiable, Codable {
+    let id: String
+    let votedAsMemberID: String?
+    let action: PollAuditAction
+    let optionIDs: [String]
+    let frontingMemberIDs: [String]
+    let actorUserID: String?
+    let createdAt: Date
+
+    enum CodingKeys: String, CodingKey {
+        case id, action
+        case votedAsMemberID = "voted_as_member_id"
+        case optionIDs = "option_ids"
+        case frontingMemberIDs = "fronting_member_ids"
+        case actorUserID = "actor_user_id"
+        case createdAt = "created_at"
+    }
+}
+
+struct PollAuditRead: Codable {
+    let pollID: String
+    let isVisible: Bool
+    let events: [PollVoteEvent]
+
+    enum CodingKeys: String, CodingKey {
+        case pollID = "poll_id"
+        case isVisible = "is_visible"
+        case events
+    }
+}

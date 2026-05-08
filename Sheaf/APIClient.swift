@@ -1756,6 +1756,89 @@ class APIClient {
         return try JSONDecoder.iso.decode(TestDispatchResponse.self, from: data)
     }
 
+    // MARK: - Reminders
+
+    func getReminders() async throws -> [Reminder] {
+        let data = try await request("/v1/reminders")
+        return try JSONDecoder.iso.decode([Reminder].self, from: data)
+    }
+
+    func getReminder(id: String) async throws -> Reminder {
+        let data = try await request("/v1/reminders/\(id)")
+        return try JSONDecoder.iso.decode(Reminder.self, from: data)
+    }
+
+    func createReminder(_ create: ReminderCreate) async throws -> Reminder {
+        let body = try JSONEncoder.iso.encode(create)
+        let data = try await request("/v1/reminders", method: "POST", body: body)
+        return try JSONDecoder.iso.decode(Reminder.self, from: data)
+    }
+
+    func updateReminder(id: String, update: ReminderUpdate) async throws -> Reminder {
+        let body = try JSONEncoder.iso.encode(update)
+        let data = try await request("/v1/reminders/\(id)", method: "PATCH", body: body)
+        return try JSONDecoder.iso.decode(Reminder.self, from: data)
+    }
+
+    @discardableResult
+    func deleteReminder(id: String, confirmation: MemberDeleteConfirm? = nil) async throws -> DeleteQueued? {
+        let body = confirmation != nil ? try JSONEncoder.iso.encode(confirmation) : nil
+        let data = try await request("/v1/reminders/\(id)", method: "DELETE", body: body)
+        guard !data.isEmpty else { return nil }
+        return try? JSONDecoder.iso.decode(DeleteQueued.self, from: data)
+    }
+
+    func getReminderNextFire(id: String) async throws -> ReminderNextFire {
+        let data = try await request("/v1/reminders/\(id)/next-fire")
+        return try JSONDecoder.iso.decode(ReminderNextFire.self, from: data)
+    }
+
+    // MARK: - Polls
+
+    func getPollServerConfig() async throws -> PollServerConfig {
+        let data = try await request("/v1/polls/server-config")
+        return try JSONDecoder.iso.decode(PollServerConfig.self, from: data)
+    }
+
+    func getPolls() async throws -> [Poll] {
+        let data = try await request("/v1/polls")
+        return try JSONDecoder.iso.decode([Poll].self, from: data)
+    }
+
+    func getPoll(id: String) async throws -> Poll {
+        let data = try await request("/v1/polls/\(id)")
+        return try JSONDecoder.iso.decode(Poll.self, from: data)
+    }
+
+    func createPoll(_ create: PollCreate) async throws -> Poll {
+        let body = try JSONEncoder.iso.encode(create)
+        let data = try await request("/v1/polls", method: "POST", body: body)
+        return try JSONDecoder.iso.decode(Poll.self, from: data)
+    }
+
+    @discardableResult
+    func deletePoll(id: String, confirmation: MemberDeleteConfirm? = nil) async throws -> DeleteQueued? {
+        let body = confirmation != nil ? try JSONEncoder.iso.encode(confirmation) : nil
+        let data = try await request("/v1/polls/\(id)", method: "DELETE", body: body)
+        guard !data.isEmpty else { return nil }
+        return try? JSONDecoder.iso.decode(DeleteQueued.self, from: data)
+    }
+
+    func castVote(pollID: String, vote: VoteCast) async throws -> PollVoteRead {
+        let body = try JSONEncoder.iso.encode(vote)
+        let data = try await request("/v1/polls/\(pollID)/votes", method: "POST", body: body)
+        return try JSONDecoder.iso.decode(PollVoteRead.self, from: data)
+    }
+
+    func withdrawVote(pollID: String, memberID: String) async throws {
+        _ = try await request("/v1/polls/\(pollID)/votes/\(memberID)", method: "DELETE")
+    }
+
+    func getPollAudit(pollID: String) async throws -> PollAuditRead {
+        let data = try await request("/v1/polls/\(pollID)/audit")
+        return try JSONDecoder.iso.decode(PollAuditRead.self, from: data)
+    }
+
     /// Decodes JSON, detecting Cloudflare Access interception and giving a clear error.
     static func decodeJSON<T: Decodable>(_ type: T.Type, from data: Data) throws -> T {
         // Detect HTML responses (e.g. Cloudflare Access login page served as 200)

@@ -28,7 +28,7 @@ struct QuickSwitchFrontSheet: View {
 
     var body: some View {
         NavigationStack {
-            List {
+            Form {
                 // Currently fronting section
                 if !filteredFrontingMembers.isEmpty {
                     Section("Currently Fronting") {
@@ -47,7 +47,8 @@ struct QuickSwitchFrontSheet: View {
                     }
                 }
             }
-            .listStyle(.insetGrouped)
+            .scrollContentBackground(.hidden)
+            .background(theme.backgroundPrimary)
             .navigationTitle("Switch Front")
             .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $searchText, prompt: "Search members")
@@ -133,6 +134,7 @@ struct QuickSwitchFrontSheet: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .listRowBackground(theme.backgroundCard)
     }
 
     private func confirmSwitch() async {

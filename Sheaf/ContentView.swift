@@ -62,10 +62,10 @@ struct ContentView: View {
                     .tabItem {
                         Label("Journal", systemImage: "book.fill")
                     }
-                SettingsView()
+                PollsView()
                     .tag(4)
                     .tabItem {
-                        Label("Settings", systemImage: "gearshape.fill")
+                        Label("Polls", systemImage: "chart.bar.xaxis")
                     }
             }
             .tint(theme.accentLight)
