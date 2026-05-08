@@ -10,6 +10,7 @@ struct RemindersView: View {
     @State private var selectedReminder: Reminder?
     @State private var reminderToDelete: Reminder?
     @State private var showDeleteConfirm = false
+    @State private var showDeleteAuthSheet = false
     @State private var showDeleteQueued = false
     @State private var deleteQueuedInfo: DeleteQueued?
     @State private var channels: [NotificationChannel] = []
@@ -125,6 +126,15 @@ struct RemindersView: View {
         } message: { _ in
             Text("This will permanently delete this reminder.")
         }
+        .sheet(isPresented: $showDeleteAuthSheet) {
+            if let reminder = reminderToDelete {
+                ReminderDeleteConfirmSheet(reminder: reminder) { queued in
+                    deleteQueuedInfo = queued
+                    showDeleteQueued = true
+                }
+                .environmentObject(store)
+            }
+        }
         .alert("Deletion Queued", isPresented: $showDeleteQueued) {
             Button("OK", role: .cancel) { deleteQueuedInfo = nil }
         } message: {
@@ -142,8 +152,7 @@ struct RemindersView: View {
         .buttonStyle(.plain)
         .swipeActions(edge: .trailing) {
             Button(role: .destructive) {
-                reminderToDelete = reminder
-                showDeleteConfirm = true
+                requestDelete(reminder)
             } label: {
                 Label("Delete", systemImage: "trash")
             }
@@ -171,6 +180,16 @@ struct RemindersView: View {
         await store.loadReminders()
         await loadChannels()
         isLoading = false
+    }
+
+    private func requestDelete(_ reminder: Reminder) {
+        reminderToDelete = reminder
+        let level = store.systemProfile?.deleteConfirmation ?? .none
+        if level == .none {
+            showDeleteConfirm = true
+        } else {
+            showDeleteAuthSheet = true
+        }
     }
 
     private func loadChannels() async {
@@ -682,6 +701,132 @@ struct EditReminderSheet: View {
                 }
             }
             isSaving = false
+        }
+    }
+}
+
+// MARK: - Reminder Delete Confirmation Sheet
+
+struct ReminderDeleteConfirmSheet: View {
+    @Environment(\.theme) var theme
+    @EnvironmentObject var store: SystemStore
+    @Environment(\.dismiss) var dismiss
+    let reminder: Reminder
+    var onQueued: ((DeleteQueued) -> Void)?
+
+    @State private var password = ""
+    @State private var totpCode = ""
+    @State private var isDeleting = false
+    @State private var errorMessage: String?
+
+    private var level: DeleteConfirmation {
+        store.systemProfile?.deleteConfirmation ?? .none
+    }
+
+    private var needsPassword: Bool {
+        level == .password || level == .both
+    }
+
+    private var needsTOTP: Bool {
+        level == .totp || level == .both
+    }
+
+    private var canSubmit: Bool {
+        (!needsPassword || !password.isEmpty) && (!needsTOTP || totpCode.count == 6)
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 16) {
+                    Text("Deleting \"\(reminder.name)\"")
+                        .font(.subheadline).fontWeight(.medium)
+                        .foregroundColor(theme.textPrimary)
+
+                    Text("Deletion protection is enabled. Please verify your identity to continue.")
+                        .font(.subheadline)
+                        .foregroundColor(theme.textSecondary)
+                        .multilineTextAlignment(.center)
+
+                    if needsPassword {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Password").font(.footnote).fontWeight(.semibold).foregroundColor(theme.textSecondary)
+                            SecureField("Enter your password", text: $password)
+                                .autocorrectionDisabled().textContentType(.password)
+                                .padding(14).background(theme.backgroundCard).cornerRadius(12).foregroundColor(theme.textPrimary)
+                        }
+                    }
+
+                    if needsTOTP {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("TOTP Code").font(.footnote).fontWeight(.semibold).foregroundColor(theme.textSecondary)
+                            TextField("6-digit code", text: $totpCode)
+                                .keyboardType(.numberPad).textContentType(.oneTimeCode)
+                                .padding(14).background(theme.backgroundCard).cornerRadius(12).foregroundColor(theme.textPrimary)
+                                .onChange(of: totpCode) { _, newValue in
+                                    totpCode = String(newValue.prefix(6)).filter(\.isNumber)
+                                }
+                        }
+                    }
+
+                    if let errorMessage {
+                        Text(errorMessage)
+                            .font(.footnote)
+                            .foregroundColor(theme.danger)
+                    }
+
+                    Button {
+                        performDelete()
+                    } label: {
+                        HStack {
+                            if isDeleting {
+                                ProgressView().tint(.white).scaleEffect(0.8)
+                            }
+                            Text("Delete Reminder")
+                                .font(.subheadline).fontWeight(.semibold)
+                        }
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(16)
+                        .background(canSubmit && !isDeleting ? theme.danger : theme.danger.opacity(0.4))
+                        .cornerRadius(14)
+                    }
+                    .disabled(!canSubmit || isDeleting)
+                }
+                .padding(.horizontal, 24).padding(.top, 24)
+            }
+            .background(theme.backgroundPrimary)
+            .navigationTitle("Confirm Deletion")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                        .foregroundColor(theme.accentLight)
+                }
+            }
+        }
+    }
+
+    private func performDelete() {
+        isDeleting = true
+        errorMessage = nil
+        let confirmation = MemberDeleteConfirm(
+            password: needsPassword ? password : nil,
+            totpCode: needsTOTP ? totpCode : nil
+        )
+        Task {
+            let queued = await store.deleteReminder(id: reminder.id, confirmation: confirmation)
+            await MainActor.run {
+                isDeleting = false
+                if let queued {
+                    dismiss()
+                    onQueued?(queued)
+                } else if !store.reminders.contains(where: { $0.id == reminder.id }) {
+                    dismiss()
+                } else {
+                    errorMessage = "Deletion failed. Please check your credentials and try again."
+                }
+            }
         }
     }
 }

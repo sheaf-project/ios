@@ -10,11 +10,22 @@ struct PollsView: View {
     @State private var selectedPoll: Poll?
     @State private var pollToDelete: Poll?
     @State private var showDeleteConfirm = false
+    @State private var showDeleteAuthSheet = false
     @State private var showDeleteQueued = false
     @State private var deleteQueuedInfo: DeleteQueued?
 
     private var openPolls: [Poll] { store.polls.filter { !$0.isClosed } }
     private var closedPolls: [Poll] { store.polls.filter { $0.isClosed } }
+
+    private func requestDelete(_ poll: Poll) {
+        pollToDelete = poll
+        let level = store.systemProfile?.deleteConfirmation ?? .none
+        if level == .none {
+            showDeleteConfirm = true
+        } else {
+            showDeleteAuthSheet = true
+        }
+    }
 
     var body: some View {
         ZStack {
@@ -129,6 +140,20 @@ struct PollsView: View {
         } message: { _ in
             Text("This will permanently delete this poll and all votes.")
         }
+        .sheet(isPresented: $showDeleteAuthSheet) {
+            if let poll = pollToDelete {
+                DeleteConfirmSheet(resourceName: poll.question, actionLabel: "Delete Poll") { confirmation in
+                    Task {
+                        let queued = await store.deletePoll(id: poll.id, confirmation: confirmation)
+                        if let queued {
+                            deleteQueuedInfo = queued
+                            showDeleteQueued = true
+                        }
+                    }
+                }
+                .environmentObject(store)
+            }
+        }
         .alert("Deletion Queued", isPresented: $showDeleteQueued) {
             Button("OK", role: .cancel) { deleteQueuedInfo = nil }
         } message: {
@@ -146,8 +171,7 @@ struct PollsView: View {
         .buttonStyle(.plain)
         .swipeActions(edge: .trailing) {
             Button(role: .destructive) {
-                pollToDelete = poll
-                showDeleteConfirm = true
+                requestDelete(poll)
             } label: {
                 Label("Delete", systemImage: "trash")
             }
@@ -244,11 +268,21 @@ struct PollDetailSheet: View {
     @State private var isVoting = false
     @State private var voteError: String?
     @State private var showDeleteConfirm = false
+    @State private var showDeleteAuthSheet = false
     @State private var showDeleteQueued = false
     @State private var deleteQueuedInfo: DeleteQueued?
     @State private var showAudit = false
 
     private var activePoll: Poll { livePoll ?? poll }
+
+    private func requestDelete() {
+        let level = store.systemProfile?.deleteConfirmation ?? .none
+        if level == .none {
+            showDeleteConfirm = true
+        } else {
+            showDeleteAuthSheet = true
+        }
+    }
 
     private var frontingMemberIDs: [String] {
         let ids = store.currentFronts.flatMap { $0.memberIDs }
@@ -309,7 +343,7 @@ struct PollDetailSheet: View {
                     .accessibilityLabel("Audit Log")
 
                     Button(role: .destructive) {
-                        showDeleteConfirm = true
+                        requestDelete()
                     } label: {
                         Image(systemName: "trash")
                             .foregroundColor(theme.danger)
@@ -338,6 +372,20 @@ struct PollDetailSheet: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("This will permanently delete this poll and all votes.")
+        }
+        .sheet(isPresented: $showDeleteAuthSheet) {
+            DeleteConfirmSheet(resourceName: activePoll.question, actionLabel: "Delete Poll") { confirmation in
+                Task {
+                    let queued = await store.deletePoll(id: activePoll.id, confirmation: confirmation)
+                    if let queued {
+                        deleteQueuedInfo = queued
+                        showDeleteQueued = true
+                    } else {
+                        dismiss()
+                    }
+                }
+            }
+            .environmentObject(store)
         }
         .alert("Deletion Queued", isPresented: $showDeleteQueued) {
             Button("OK", role: .cancel) {
