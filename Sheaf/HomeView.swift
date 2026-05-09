@@ -207,14 +207,7 @@ struct HomeView: View {
     }
 
     func removeMemberFromFront(_ member: Member) async {
-        let remaining = store.frontingMembers
-            .filter { $0.id != member.id }
-            .map { $0.id }
-        if remaining.isEmpty {
-            await store.endAllFronts()
-        } else {
-            await store.switchFronting(to: remaining)
-        }
+        await store.removeMemberFromFront(member.id)
     }
 
     func refresh() async {

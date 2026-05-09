@@ -517,6 +517,52 @@ class SystemStore: ObservableObject {
         currentFronts.min(by: { $0.startedAt < $1.startedAt })
     }
 
+    func addToFront(_ memberIDs: [String], customStatus: String? = nil) async {
+        let now = Date()
+
+        if NetworkMonitor.shared.isOnline, let api {
+            do {
+                let created = try await api.createFront(FrontCreate(memberIDs: memberIDs, startedAt: now, replaceFronts: false, customStatus: customStatus))
+                currentFronts.append(created)
+                saveAllToCache()
+                updateWatchComplication()
+            } catch {
+                showError(error)
+            }
+        } else {
+            let create = FrontCreate(memberIDs: memberIDs, startedAt: now, replaceFronts: false, customStatus: customStatus)
+            let tempID = UUID().uuidString
+            if let body = try? JSONEncoder.iso.encode(create) {
+                enqueue(.createFront, tempID: tempID, body: body)
+            }
+            let optimistic = FrontEntry(
+                id: tempID, systemID: systemProfile?.id ?? "",
+                startedAt: now, endedAt: nil, memberIDs: memberIDs,
+                customStatus: customStatus
+            )
+            currentFronts.append(optimistic)
+            saveAllToCache()
+            updateWatchComplication()
+        }
+    }
+
+    func removeMemberFromFront(_ memberID: String) async {
+        let now = Date()
+        let affected = currentFronts.filter { $0.endedAt == nil && $0.memberIDs.contains(memberID) }
+
+        for front in affected {
+            let remaining = front.memberIDs.filter { $0 != memberID }
+            if remaining.isEmpty {
+                await updateFront(id: front.id, update: FrontUpdate(endedAt: now, memberIDs: nil))
+                currentFronts.removeAll { $0.id == front.id }
+            } else {
+                await updateFront(id: front.id, update: FrontUpdate(memberIDs: remaining))
+            }
+        }
+        saveAllToCache()
+        updateWatchComplication()
+    }
+
     func switchFronting(to memberIDs: [String], customStatus: String? = nil) async {
         let now = Date()
 

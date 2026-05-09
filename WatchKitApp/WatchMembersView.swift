@@ -89,8 +89,7 @@ struct WatchMembersView: View {
     }
 
     private func addToFront(_ member: Member) async {
-        let current = store.frontingMembers.map { $0.id }
-        await store.switchFronting(to: current + [member.id])
+        await store.addToFront([member.id])
     }
 
     private func switchToOnly(_ member: Member) async {
@@ -98,10 +97,7 @@ struct WatchMembersView: View {
     }
 
     private func removeFromFront(_ member: Member) async {
-        let remaining = store.frontingMembers
-            .filter { $0.id != member.id }
-            .map { $0.id }
-        await store.switchFronting(to: remaining)
+        await store.removeMemberFromFront(member.id)
     }
 }
 
@@ -168,10 +164,7 @@ struct WatchMemberDetailView: View {
                 if isFronting {
                     Button {
                         Task {
-                            let remaining = store.frontingMembers
-                                .filter { $0.id != member.id }
-                                .map { $0.id }
-                            await store.switchFronting(to: remaining)
+                            await store.removeMemberFromFront(member.id)
                         }
                     } label: {
                         Label("Remove from Front", systemImage: "person.fill.xmark")
@@ -183,8 +176,7 @@ struct WatchMemberDetailView: View {
                 } else {
                     Button {
                         Task {
-                            let current = store.frontingMembers.map { $0.id }
-                            await store.switchFronting(to: current + [member.id])
+                            await store.addToFront([member.id])
                         }
                     } label: {
                         Label("Add to Front", systemImage: "person.fill.checkmark")

@@ -105,6 +105,43 @@ class WatchStore: ObservableObject {
         }
     }
 
+    func addToFront(_ memberIDs: [String]) async {
+        guard let api else { return }
+        do {
+            let created = try await api.createFront(FrontCreate(memberIDs: memberIDs, startedAt: Date(), replaceFronts: false))
+            currentFronts.append(created)
+            updateComplicationData()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func removeMemberFromFront(_ memberID: String) async {
+        guard let api else { return }
+        let now = Date()
+        let affected = currentFronts.filter { $0.endedAt == nil && $0.memberIDs.contains(memberID) }
+        do {
+            for front in affected {
+                let remaining = front.memberIDs.filter { $0 != memberID }
+                if remaining.isEmpty {
+                    let updated = try await api.updateFront(id: front.id, update: FrontUpdate(endedAt: now, memberIDs: nil))
+                    if let idx = currentFronts.firstIndex(where: { $0.id == front.id }) {
+                        currentFronts[idx] = updated
+                    }
+                    currentFronts.removeAll { $0.id == front.id }
+                } else {
+                    let updated = try await api.updateFront(id: front.id, update: FrontUpdate(memberIDs: remaining))
+                    if let idx = currentFronts.firstIndex(where: { $0.id == front.id }) {
+                        currentFronts[idx] = updated
+                    }
+                }
+            }
+            updateComplicationData()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
     func switchFronting(to memberIDs: [String]) async {
         guard let api else { return }
         do {
@@ -114,7 +151,7 @@ class WatchStore: ObservableObject {
             }
             let created = try await api.createFront(FrontCreate(memberIDs: memberIDs, startedAt: now))
             currentFronts = [created]
-            
+
             // Update complication data
             updateComplicationData()
         } catch {

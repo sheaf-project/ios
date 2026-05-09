@@ -15,14 +15,7 @@ struct MembersView: View {
 
 
     private func removeMemberFromFront(_ member: Member) async {
-        let remaining = store.frontingMembers
-            .filter { $0.id != member.id }
-            .map { $0.id }
-        if remaining.isEmpty {
-            await store.endAllFronts()
-        } else {
-            await store.switchFronting(to: remaining)
-        }
+        await store.removeMemberFromFront(member.id)
     }
 
     var filtered: [Member] {
@@ -81,7 +74,7 @@ struct MembersView: View {
                                 .tint(.orange)
                             } else {
                                 Button {
-                                    Task { await store.switchFronting(to: store.frontingMembers.map { $0.id } + [member.id]) }
+                                    Task { await store.addToFront([member.id]) }
                                 } label: {
                                     Label("Add to Front", systemImage: "person.fill.checkmark")
                                 }
@@ -229,7 +222,7 @@ struct MemberRow: View {
                 }
             } else {
                 Button {
-                    Task { await store.switchFronting(to: store.frontingMembers.map { $0.id } + [member.id]) }
+                    Task { await store.addToFront([member.id]) }
                 } label: {
                     Label("Add to Front", systemImage: "person.fill.checkmark")
                 }
@@ -257,14 +250,7 @@ struct MemberRow: View {
     }
 
     private func removeMemberFromFront() async {
-        let remaining = store.frontingMembers
-            .filter { $0.id != member.id }
-            .map { $0.id }
-        if remaining.isEmpty {
-            await store.endAllFronts()
-        } else {
-            await store.switchFronting(to: remaining)
-        }
+        await store.removeMemberFromFront(member.id)
     }
 }
 

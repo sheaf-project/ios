@@ -158,9 +158,7 @@ struct AddToFrontIntent: AppIntent {
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
         let store = await ShortcutsDataStore.shared
-        let currentIDs = await store.currentFrontingIDs
-        let newIDs = Array(Set(currentIDs + [member.id]))
-        try await store.switchFronting(to: newIDs)
+        try await store.addToFront([member.id])
         let name = member.displayName ?? member.name
         return .result(dialog: "\(name) has been added to front.")
     }
@@ -298,6 +296,13 @@ final class ShortcutsDataStore {
             guard isReady, let api else { return [] }
             return (try? await api.getMembers()) ?? []
         }
+    }
+
+    func addToFront(_ memberIDs: [String]) async throws {
+        guard isReady, let api else {
+            throw ShortcutError.notAuthenticated
+        }
+        _ = try await api.createFront(FrontCreate(memberIDs: memberIDs, startedAt: Date(), replaceFronts: false))
     }
 
     func switchFronting(to memberIDs: [String]) async throws {
