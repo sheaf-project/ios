@@ -35,6 +35,7 @@ struct HistoryView: View {
     @State private var showAddEntry = false
     @State private var entryToDelete: FrontEntry?
     @State private var showDeleteConfirm = false
+    @State private var showDeleteAuthSheet = false
     @State private var showDeleteQueued = false
     @State private var deleteQueuedInfo: DeleteQueued?
     @State private var graphTimeRange: GraphTimeRange = .week
@@ -144,8 +145,7 @@ struct HistoryView: View {
                                 .buttonStyle(.plain)
                                 .swipeActions(edge: .trailing) {
                                     Button(role: .destructive) {
-                                        entryToDelete = entry
-                                        showDeleteConfirm = true
+                                        requestDelete(entry)
                                     } label: {
                                         Label("Delete", systemImage: "trash")
                                     }
@@ -202,6 +202,21 @@ struct HistoryView: View {
                             Text("This deletion has been queued and will finalize \(info.finalizeAfter, style: .relative). You can cancel it from System Safety settings.")
                         }
                     }
+                    .sheet(isPresented: $showDeleteAuthSheet) {
+                        if let entry = entryToDelete {
+                            let names = membersFor(entry).map { $0.displayName ?? $0.name }.joined(separator: ", ")
+                            DeleteConfirmSheet(resourceName: names.isEmpty ? "front entry" : names, actionLabel: "Delete Entry") { confirmation in
+                                Task {
+                                    let queued = await store.deleteFront(id: entry.id, confirmation: confirmation)
+                                    if let queued {
+                                        deleteQueuedInfo = queued
+                                        showDeleteQueued = true
+                                    }
+                                }
+                            }
+                            .environmentObject(store)
+                        }
+                    }
                 }
             }
         }
@@ -220,6 +235,16 @@ struct HistoryView: View {
         }
     }
 
+
+    private func requestDelete(_ entry: FrontEntry) {
+        entryToDelete = entry
+        let level = store.systemProfile?.deleteConfirmation ?? .none
+        if level == .none {
+            showDeleteConfirm = true
+        } else {
+            showDeleteAuthSheet = true
+        }
+    }
 
     func deleteFrontEntry(_ entry: FrontEntry) async {
         let queued = await store.deleteFront(id: entry.id)
