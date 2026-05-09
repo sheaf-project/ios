@@ -1839,6 +1839,93 @@ class APIClient {
         return try JSONDecoder.iso.decode(PollAuditRead.self, from: data)
     }
 
+    // MARK: - Message Boards
+
+    func getBoards(callerMemberID: String? = nil) async throws -> [BoardSummary] {
+        var path = "/v1/messages/boards"
+        if let id = callerMemberID { path += "?caller_member_id=\(id)" }
+        let data = try await request(path)
+        return try JSONDecoder.iso.decode([BoardSummary].self, from: data)
+    }
+
+    func getMessages(boardKind: BoardKind, boardMemberID: String? = nil, callerMemberID: String? = nil, limit: Int = 100, before: Date? = nil) async throws -> MessagesPage {
+        var params: [String] = ["board_kind=\(boardKind.rawValue)"]
+        if let id = boardMemberID { params.append("board_member_id=\(id)") }
+        if let id = callerMemberID { params.append("caller_member_id=\(id)") }
+        params.append("limit=\(limit)")
+        if let before {
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            params.append("before=\(formatter.string(from: before))")
+        }
+        let path = "/v1/messages?\(params.joined(separator: "&"))"
+        let data = try await request(path)
+        return try JSONDecoder.iso.decode(MessagesPage.self, from: data)
+    }
+
+    func createMessage(_ create: MessageCreate) async throws -> BoardMessage {
+        let body = try JSONEncoder.iso.encode(create)
+        let data = try await request("/v1/messages", method: "POST", body: body)
+        return try JSONDecoder.iso.decode(BoardMessage.self, from: data)
+    }
+
+    func updateMessage(id: String, update: MessageUpdate) async throws -> BoardMessage {
+        let body = try JSONEncoder.iso.encode(update)
+        let data = try await request("/v1/messages/\(id)", method: "PATCH", body: body)
+        return try JSONDecoder.iso.decode(BoardMessage.self, from: data)
+    }
+
+    func deleteMessage(id: String, confirmation: MemberDeleteConfirm? = nil) async throws -> DeleteQueued? {
+        let body = confirmation != nil ? try JSONEncoder.iso.encode(confirmation) : nil
+        let data = try await request("/v1/messages/\(id)", method: "DELETE", body: body)
+        guard !data.isEmpty else { return nil }
+        return try? JSONDecoder.iso.decode(DeleteQueued.self, from: data)
+    }
+
+    func deleteMessageThread(id: String, confirmation: MemberDeleteConfirm? = nil) async throws -> DeleteQueued? {
+        let body = confirmation != nil ? try JSONEncoder.iso.encode(confirmation) : nil
+        let data = try await request("/v1/messages/\(id)/thread", method: "DELETE", body: body)
+        guard !data.isEmpty else { return nil }
+        return try? JSONDecoder.iso.decode(DeleteQueued.self, from: data)
+    }
+
+    func markBoardSeen(_ req: MarkSeenRequest) async throws {
+        let body = try JSONEncoder.iso.encode(req)
+        _ = try await request("/v1/messages/mark-seen", method: "POST", body: body)
+    }
+
+    func getUnreadCounts(callerMemberID: String) async throws -> UnreadCounts {
+        let data = try await request("/v1/messages/unread?caller_member_id=\(callerMemberID)")
+        return try JSONDecoder.iso.decode(UnreadCounts.self, from: data)
+    }
+
+    func getMessageRevisions(messageID: String) async throws -> [ContentRevision] {
+        let data = try await request("/v1/messages/\(messageID)/revisions")
+        return try JSONDecoder.iso.decode([ContentRevision].self, from: data)
+    }
+
+    func restoreMessageRevision(messageID: String, revisionID: String) async throws -> BoardMessage {
+        let body = try JSONEncoder.iso.encode(RestoreRevisionRequest(revisionID: revisionID))
+        let data = try await request("/v1/messages/\(messageID)/restore-revision", method: "POST", body: body)
+        return try JSONDecoder.iso.decode(BoardMessage.self, from: data)
+    }
+
+    func pinMessageRevision(messageID: String, revisionID: String) async throws -> ContentRevision {
+        let body = try JSONEncoder.iso.encode(PinRevisionRequest(revisionID: revisionID))
+        let data = try await request("/v1/messages/\(messageID)/pin-revision", method: "POST", body: body)
+        return try JSONDecoder.iso.decode(ContentRevision.self, from: data)
+    }
+
+    func unpinMessageRevision(messageID: String, revisionID: String, password: String? = nil, totpCode: String? = nil) async throws -> UnpinRevisionResponse {
+        let body = try JSONEncoder.iso.encode(UnpinRevisionRequest(revisionID: revisionID, password: password, totpCode: totpCode))
+        let (data, status) = try await perform("/v1/messages/\(messageID)/unpin-revision", method: "POST", body: body)
+        if !(200...299).contains(status) {
+            throw NSError(domain: "APIError", code: status,
+                          userInfo: [NSLocalizedDescriptionKey: friendlyErrorMessage(statusCode: status, data: data)])
+        }
+        return try JSONDecoder.iso.decode(UnpinRevisionResponse.self, from: data)
+    }
+
     /// Decodes JSON, detecting Cloudflare Access interception and giving a clear error.
     static func decodeJSON<T: Decodable>(_ type: T.Type, from data: Data) throws -> T {
         // Detect HTML responses (e.g. Cloudflare Access login page served as 200)

@@ -6,6 +6,7 @@ struct HomeView: View {
     @Environment(\.theme) var theme
     @State private var showSwitchSheet = false
     @State private var showSettings = false
+    @State private var showMessages = false
 
     var body: some View {
         ZStack {
@@ -30,12 +31,33 @@ struct HomeView: View {
                             }
                         }
                         Spacer()
-                        Button {
-                            showSettings = true
-                        } label: {
-                            Image(systemName: "gearshape.fill")
-                                .font(.title3)
-                                .foregroundColor(theme.textSecondary)
+                        HStack(spacing: 16) {
+                            Button {
+                                showMessages = true
+                            } label: {
+                                ZStack(alignment: .topTrailing) {
+                                    Image(systemName: "bubble.left.and.bubble.right.fill")
+                                        .font(.title3)
+                                        .foregroundColor(theme.textSecondary)
+                                    if store.totalUnreadMessages > 0 {
+                                        Text("\(store.totalUnreadMessages)")
+                                            .font(.system(size: 9, weight: .bold))
+                                            .foregroundColor(.white)
+                                            .padding(.horizontal, 4)
+                                            .padding(.vertical, 1)
+                                            .background(theme.danger)
+                                            .clipShape(Capsule())
+                                            .offset(x: 6, y: -6)
+                                    }
+                                }
+                            }
+                            Button {
+                                showSettings = true
+                            } label: {
+                                Image(systemName: "gearshape.fill")
+                                    .font(.title3)
+                                    .foregroundColor(theme.textSecondary)
+                            }
                         }
                     }
                     .padding(.horizontal, 24)
@@ -169,8 +191,13 @@ struct HomeView: View {
                 .environmentObject(authManager)
                 .environmentObject(store)
         }
+        .sheet(isPresented: $showMessages) {
+            MessageBoardView()
+                .environmentObject(store)
+        }
         .task {
             await loadHistoryForFrequency()
+            await store.loadBoards(callerMemberID: store.frontingMembers.first?.id)
         }
     }
 

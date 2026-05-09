@@ -2347,3 +2347,130 @@ struct PollAuditRead: Codable {
         case events
     }
 }
+
+// MARK: - Message Board
+
+enum BoardKind: String, Codable {
+    case system = "system"
+    case member = "member"
+}
+
+struct BoardSummary: Identifiable, Codable {
+    let boardKind: BoardKind
+    let boardMemberID: String?
+    let memberName: String?
+    let lastMessageAt: Date?
+    let lastMessagePreview: String?
+    let messageCount: Int
+    let unreadCount: Int
+
+    var id: String {
+        if boardKind == .system { return "system" }
+        return boardMemberID ?? "unknown"
+    }
+
+    var displayName: String {
+        if boardKind == .system { return "System Board" }
+        return memberName ?? "Unknown Member"
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case boardKind = "board_kind"
+        case boardMemberID = "board_member_id"
+        case memberName = "member_name"
+        case lastMessageAt = "last_message_at"
+        case lastMessagePreview = "last_message_preview"
+        case messageCount = "message_count"
+        case unreadCount = "unread_count"
+    }
+}
+
+struct BoardMessage: Identifiable, Codable {
+    let id: String
+    let systemID: String
+    let boardKind: BoardKind
+    let boardMemberID: String?
+    let authorMemberID: String?
+    let authorMemberName: String?
+    let parentMessageID: String?
+    let parentPreview: String?
+    let parentAuthorMemberName: String?
+    let body: String
+    let createdAt: Date
+    let updatedAt: Date
+
+    var isEdited: Bool { updatedAt > createdAt }
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case systemID = "system_id"
+        case boardKind = "board_kind"
+        case boardMemberID = "board_member_id"
+        case authorMemberID = "author_member_id"
+        case authorMemberName = "author_member_name"
+        case parentMessageID = "parent_message_id"
+        case parentPreview = "parent_preview"
+        case parentAuthorMemberName = "parent_author_member_name"
+        case body
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+    }
+}
+
+struct MessagesPage: Codable {
+    let boardKind: BoardKind
+    let boardMemberID: String?
+    let messages: [BoardMessage]
+    let callerLastSeenAt: Date?
+
+    enum CodingKeys: String, CodingKey {
+        case boardKind = "board_kind"
+        case boardMemberID = "board_member_id"
+        case messages
+        case callerLastSeenAt = "caller_last_seen_at"
+    }
+}
+
+struct MessageCreate: Codable {
+    var boardKind: BoardKind
+    var boardMemberID: String?
+    var authorMemberID: String
+    var parentMessageID: String?
+    var body: String
+
+    enum CodingKeys: String, CodingKey {
+        case boardKind = "board_kind"
+        case boardMemberID = "board_member_id"
+        case authorMemberID = "author_member_id"
+        case parentMessageID = "parent_message_id"
+        case body
+    }
+}
+
+struct MessageUpdate: Codable {
+    var body: String
+}
+
+struct MarkSeenRequest: Codable {
+    var memberID: String
+    var boardKind: BoardKind
+    var boardMemberID: String?
+
+    enum CodingKeys: String, CodingKey {
+        case memberID = "member_id"
+        case boardKind = "board_kind"
+        case boardMemberID = "board_member_id"
+    }
+}
+
+struct UnreadCounts: Codable {
+    let memberID: String
+    let total: Int
+    let byBoard: [BoardSummary]
+
+    enum CodingKeys: String, CodingKey {
+        case memberID = "member_id"
+        case total
+        case byBoard = "by_board"
+    }
+}

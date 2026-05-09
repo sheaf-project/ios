@@ -1347,6 +1347,71 @@ class SystemStore: ObservableObject {
         }
     }
 
+    // MARK: - Message Boards
+
+    @Published var boardSummaries: [BoardSummary] = []
+    @Published var totalUnreadMessages: Int = 0
+
+    func loadBoards(callerMemberID: String? = nil) async {
+        guard NetworkMonitor.shared.isOnline, let api else { return }
+        do {
+            boardSummaries = try await api.getBoards(callerMemberID: callerMemberID)
+            totalUnreadMessages = boardSummaries.reduce(0) { $0 + $1.unreadCount }
+        } catch {
+            showError(error)
+        }
+    }
+
+    func loadMessages(boardKind: BoardKind, boardMemberID: String? = nil, callerMemberID: String? = nil, before: Date? = nil) async -> MessagesPage? {
+        guard NetworkMonitor.shared.isOnline, let api else { return nil }
+        do {
+            return try await api.getMessages(boardKind: boardKind, boardMemberID: boardMemberID, callerMemberID: callerMemberID, before: before)
+        } catch {
+            showError(error)
+            return nil
+        }
+    }
+
+    func sendMessage(_ create: MessageCreate) async -> BoardMessage? {
+        guard NetworkMonitor.shared.isOnline, let api else { return nil }
+        do {
+            return try await api.createMessage(create)
+        } catch {
+            showError(error)
+            return nil
+        }
+    }
+
+    func editMessage(id: String, body: String) async -> BoardMessage? {
+        guard NetworkMonitor.shared.isOnline, let api else { return nil }
+        do {
+            return try await api.updateMessage(id: id, update: MessageUpdate(body: body))
+        } catch {
+            showError(error)
+            return nil
+        }
+    }
+
+    @discardableResult
+    func deleteMessage(id: String, confirmation: MemberDeleteConfirm? = nil) async -> DeleteQueued? {
+        guard NetworkMonitor.shared.isOnline, let api else { return nil }
+        do {
+            return try await api.deleteMessage(id: id, confirmation: confirmation)
+        } catch {
+            showError(error)
+            return nil
+        }
+    }
+
+    func markBoardSeen(memberID: String, boardKind: BoardKind, boardMemberID: String? = nil) async {
+        guard NetworkMonitor.shared.isOnline, let api else { return }
+        do {
+            try await api.markBoardSeen(MarkSeenRequest(memberID: memberID, boardKind: boardKind, boardMemberID: boardMemberID))
+        } catch {
+            showError(error)
+        }
+    }
+
     // MARK: - Helpers
 
     var membersByFrontFrequency: [Member] {
