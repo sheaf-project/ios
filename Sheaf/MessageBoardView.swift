@@ -8,9 +8,22 @@ struct MessageBoardView: View {
     @Environment(\.dismiss) var dismiss
     @State private var isLoading = false
     @State private var refreshToken = 0
+    @State private var searchText = ""
 
     private var callerMemberID: String? {
         store.frontingMembers.first?.id
+    }
+
+    private var systemBoards: [BoardSummary] {
+        store.boardSummaries.filter { $0.boardKind == .system }
+    }
+
+    private var memberBoards: [BoardSummary] {
+        let sorted = store.boardSummaries
+            .filter { $0.boardKind == .member }
+            .sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
+        if searchText.isEmpty { return sorted }
+        return sorted.filter { $0.displayName.localizedCaseInsensitiveContains(searchText) }
     }
 
     var body: some View {
@@ -36,7 +49,21 @@ struct MessageBoardView: View {
                     .padding(40)
                 } else {
                     List {
-                        ForEach(store.boardSummaries) { board in
+                        if searchText.isEmpty {
+                            ForEach(systemBoards) { board in
+                                NavigationLink {
+                                    BoardDetailView(board: board)
+                                        .environmentObject(store)
+                                } label: {
+                                    BoardRow(board: board)
+                                }
+                                .listRowBackground(Color.clear)
+                                .listRowSeparator(.hidden)
+                                .listRowInsets(EdgeInsets(top: 5, leading: 24, bottom: 5, trailing: 24))
+                            }
+                        }
+
+                        ForEach(memberBoards) { board in
                             NavigationLink {
                                 BoardDetailView(board: board)
                                     .environmentObject(store)
@@ -50,6 +77,7 @@ struct MessageBoardView: View {
                     }
                     .listStyle(.plain)
                     .scrollContentBackground(.hidden)
+                    .searchable(text: $searchText, prompt: "Search members")
                 }
             }
             .navigationTitle("Messages")
@@ -372,6 +400,7 @@ struct BoardDetailView: View {
                 if let member = authorMember {
                     Button { showAuthorPicker = true } label: {
                         AvatarView(member: member, size: 26)
+                            .id(member.id)
                     }
                 }
 
