@@ -204,6 +204,15 @@ final class AuthManager: ObservableObject {
             Task { await api.logout() }
         }
 
+        #if os(iOS)
+        Task {
+            await PushNotificationManager.shared.unregisterFromServer()
+            await MainActor.run {
+                PushNotificationManager.shared.clearInstallId()
+            }
+        }
+        #endif
+
         accessToken  = ""
         refreshToken = ""
         baseURL      = ""
@@ -1754,6 +1763,32 @@ class APIClient {
     func testChannel(id: String) async throws -> TestDispatchResponse {
         let data = try await request("/v1/channels/\(id)/test", method: "POST")
         return try JSONDecoder.iso.decode(TestDispatchResponse.self, from: data)
+    }
+
+    // MARK: - Push Device Tokens
+
+    func registerPushDevice(_ registration: PushDeviceRegister) async throws {
+        let body = try JSONEncoder.iso.encode(registration)
+        _ = try await request("/v1/devices/push", method: "POST", body: body)
+    }
+
+    func unregisterPushDevice(token: String) async throws {
+        let body = try JSONEncoder.iso.encode(PushDeviceDelete(token: token))
+        _ = try await request("/v1/devices/push", method: "DELETE", body: body)
+    }
+
+    func listPushDevices() async throws -> [PushDevice] {
+        let data = try await request("/v1/devices/push")
+        return try JSONDecoder.iso.decode([PushDevice].self, from: data)
+    }
+
+    // MARK: - Notification Redemption
+
+    func redeemNotificationChannel(activationCode: String) async throws {
+        let body = try JSONSerialization.data(withJSONObject: [
+            "activation_code": activationCode
+        ])
+        _ = try await request("/notifications/redeem", method: "POST", body: body)
     }
 
     // MARK: - Reminders

@@ -1,5 +1,6 @@
 import Combine
 import UIKit
+import UserNotifications
 
 // MARK: - Quick Action Handler
 final class QuickActionHandler: ObservableObject {
@@ -43,6 +44,14 @@ extension UIApplicationShortcutItem {
 class AppDelegate: NSObject, UIApplicationDelegate {
     func application(
         _ application: UIApplication,
+        didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
+    ) -> Bool {
+        UNUserNotificationCenter.current().delegate = PushNotificationManager.shared
+        return true
+    }
+
+    func application(
+        _ application: UIApplication,
         configurationForConnecting connectingSceneSession: UISceneSession,
         options: UIScene.ConnectionOptions
     ) -> UISceneConfiguration {
@@ -57,6 +66,20 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         )
         config.delegateClass = SceneDelegate.self
         return config
+    }
+
+    func application(
+        _ application: UIApplication,
+        didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
+    ) {
+        PushNotificationManager.shared.didRegisterForRemoteNotifications(deviceToken: deviceToken)
+    }
+
+    func application(
+        _ application: UIApplication,
+        didFailToRegisterForRemoteNotificationsWithError error: Error
+    ) {
+        PushNotificationManager.shared.didFailToRegisterForRemoteNotifications(error: error)
     }
 }
 

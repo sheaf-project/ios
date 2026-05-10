@@ -1543,6 +1543,9 @@ enum DestinationType: String, Codable, CaseIterable {
     case ntfy = "ntfy"
     case pushover = "pushover"
     case webPush = "web_push"
+    case fcm = "fcm"
+    case apnsDev = "apns_dev"
+    case apnsProd = "apns_prod"
     case unknown
 
     init(from decoder: Decoder) throws {
@@ -1556,6 +1559,9 @@ enum DestinationType: String, Codable, CaseIterable {
         case .ntfy: return "ntfy"
         case .pushover: return "Pushover"
         case .webPush: return "Web Push"
+        case .fcm: return "FCM"
+        case .apnsDev: return "APNs (Dev)"
+        case .apnsProd: return "APNs"
         case .unknown: return "Unknown"
         }
     }
@@ -1566,6 +1572,8 @@ enum DestinationType: String, Codable, CaseIterable {
         case .ntfy: return "bell.badge"
         case .pushover: return "iphone.radiowaves.left.and.right"
         case .webPush: return "globe"
+        case .fcm: return "bell.badge.fill"
+        case .apnsDev, .apnsProd: return "iphone.badge.play"
         case .unknown: return "questionmark.circle"
         }
     }
@@ -1812,6 +1820,48 @@ struct ChannelCreateResponse: Codable {
 struct TestDispatchResponse: Codable {
     let delivered: Bool
     var error: String?
+}
+
+// MARK: - Push Device Tokens
+
+enum PushDevicePlatform: String, Codable {
+    case fcm = "fcm"
+    case apnsDev = "apns_dev"
+    case apnsProd = "apns_prod"
+}
+
+struct PushDevice: Identifiable, Codable {
+    let id: String
+    let platform: PushDevicePlatform
+    let appVersion: String?
+    let installId: String?
+    let createdAt: Date
+    let lastSeenAt: Date
+
+    enum CodingKeys: String, CodingKey {
+        case id, platform
+        case appVersion = "app_version"
+        case installId  = "install_id"
+        case createdAt  = "created_at"
+        case lastSeenAt = "last_seen_at"
+    }
+}
+
+struct PushDeviceRegister: Codable {
+    let platform: PushDevicePlatform
+    let token: String
+    var installId: String?
+    var appVersion: String?
+
+    enum CodingKeys: String, CodingKey {
+        case platform, token
+        case installId  = "install_id"
+        case appVersion = "app_version"
+    }
+}
+
+struct PushDeviceDelete: Codable {
+    let token: String
 }
 
 // MARK: - Polls

@@ -10,5 +10,7 @@
 	<array>
 		<string>$(AppIdentifierPrefix)systems.lupine.sheaf</string>
 	</array>
+	<key>aps-environment</key>
+	<string>production</string>
 </dict>
 </plist>

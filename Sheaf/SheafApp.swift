@@ -41,6 +41,9 @@ struct RootView: View {
     @Environment(\.colorScheme) private var systemScheme
     @Binding var selectedTab: Int
 
+    @State private var pendingRedemptionCode: String?
+    @State private var showRedemptionSheet = false
+
     var body: some View {
         ZStack {
             Group {
@@ -78,6 +81,15 @@ struct RootView: View {
         } message: {
             Text(systemStore.errorMessage ?? "")
         }
+        .sheet(isPresented: $showRedemptionSheet) {
+            if let code = pendingRedemptionCode {
+                NotificationRedemptionSheet(activationCode: code)
+                    .environmentObject(authManager)
+            }
+        }
+        .onOpenURL { url in
+            handleDeepLink(url)
+        }
         .onAppear {
             // Configure PhoneConnectivityManager as soon as we have access to authManager
             PhoneConnectivityManager.shared.configure(auth: authManager)
@@ -88,8 +100,33 @@ struct RootView: View {
                 PhoneConnectivityManager.shared.syncCredentials()
             }
         }
+        .onChange(of: authManager.isAuthenticated) {
+            if authManager.isAuthenticated, pendingRedemptionCode != nil {
+                showRedemptionSheet = true
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)) { _ in
             lockManager.lockIfEnabled()
+        }
+    }
+
+    private func handleDeepLink(_ url: URL) {
+        guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return }
+
+        let isRedemptionLink: Bool
+        if url.scheme == "sheaf" {
+            isRedemptionLink = url.host == "notifications" && url.path.hasPrefix("/redeem")
+        } else {
+            isRedemptionLink = url.path.contains("/notifications/redeem")
+        }
+
+        guard isRedemptionLink else { return }
+
+        guard let code = components.queryItems?.first(where: { $0.name == "code" })?.value else { return }
+        pendingRedemptionCode = code
+
+        if authManager.isAuthenticated {
+            showRedemptionSheet = true
         }
     }
 
@@ -151,6 +188,9 @@ struct MainView: View {
                           me.accountStatus == .active || me.accountStatus == .pendingDeletion else { return }
                 }
                 systemStore.loadAll()
+
+                PushNotificationManager.shared.configure(auth: authManager)
+                await PushNotificationManager.shared.requestPermissionAndRegister()
             }
             .onReceive(quickActions.$pendingAction) { action in
                 guard let action else { return }

@@ -168,7 +168,35 @@ struct SettingsView: View {
                                         Text("Notification Channels")
                                             .font(.subheadline).fontWeight(.medium)
                                             .foregroundColor(theme.textPrimary)
-                                        Text("ntfy, Pushover, webhooks")
+                                        Text("Push, ntfy, Pushover, webhooks")
+                                            .font(.caption)
+                                            .foregroundColor(theme.textTertiary)
+                                    }
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .font(.caption)
+                                        .foregroundColor(theme.textTertiary)
+                                }
+                                .padding(.horizontal, 16).padding(.vertical, 14)
+                            }
+                            .buttonStyle(.plain)
+
+                            Divider().padding(.leading, 48)
+
+                            NavigationLink {
+                                PushDevicesView()
+                                    .environmentObject(authManager)
+                                    .environmentObject(store)
+                            } label: {
+                                HStack(spacing: 12) {
+                                    Image(systemName: "iphone.badge.play")
+                                        .foregroundColor(theme.accentLight)
+                                        .frame(width: 20)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("Push Devices")
+                                            .font(.subheadline).fontWeight(.medium)
+                                            .foregroundColor(theme.textPrimary)
+                                        Text("Manage registered devices")
                                             .font(.caption)
                                             .foregroundColor(theme.textTertiary)
                                     }
