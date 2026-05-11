@@ -24,8 +24,10 @@ struct EditSystemProfileSheet: View {
             Form {
                 Section("Identity") {
                     field("System Name", placeholder: "Your system's name", value: $name)
+                        .listRowBackground(theme.backgroundCard)
                     field("Tag", placeholder: "Short tag, e.g. SYS", value: $tag)
                         .autocapitalization(.allCharacters)
+                        .listRowBackground(theme.backgroundCard)
                 }
 
                 Section("Avatar") {
@@ -36,18 +38,21 @@ struct EditSystemProfileSheet: View {
                         isUploading: $isUploadingAvatar,
                         api: store.api
                     )
+                    .listRowBackground(theme.backgroundCard)
                 }
 
                 Section("About") {
                     TextField("Description", text: $description, axis: .vertical)
                         .lineLimit(3...6)
                         .foregroundColor(theme.textPrimary)
+                        .listRowBackground(theme.backgroundCard)
                 }
 
                 Section(header: Text("Note"), footer: Text("Private note, only visible to you.")) {
                     TextField("Note", text: $note, axis: .vertical)
                         .lineLimit(3...6)
                         .foregroundColor(theme.textPrimary)
+                        .listRowBackground(theme.backgroundCard)
                 }
 
                 Section("Display") {
@@ -61,6 +66,7 @@ struct EditSystemProfileSheet: View {
                         ))
                         .labelsHidden()
                     }
+                    .listRowBackground(theme.backgroundCard)
 
                     Picker("Privacy", selection: $privacy) {
                         ForEach(PrivacyLevel.allCases, id: \.self) { level in
@@ -70,6 +76,7 @@ struct EditSystemProfileSheet: View {
                     .pickerStyle(.menu)
                     .tint(theme.accentLight)
                     .foregroundColor(theme.textPrimary)
+                    .listRowBackground(theme.backgroundCard)
                 }
 
                 if let error {
@@ -78,6 +85,7 @@ struct EditSystemProfileSheet: View {
                             .foregroundColor(theme.danger)
                             .font(.footnote)
                     }
+                    .listRowBackground(theme.backgroundCard)
                 }
             }
             .scrollContentBackground(.hidden)

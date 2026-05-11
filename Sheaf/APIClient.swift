@@ -2020,15 +2020,15 @@ struct SystemUpdate: Codable {
 
     func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
-        try c.encode(name, forKey: .name)
-        try c.encode(description, forKey: .description)
-        try c.encode(note, forKey: .note)
-        try c.encode(tag, forKey: .tag)
-        try c.encode(avatarURL, forKey: .avatarURL)
-        try c.encode(color, forKey: .color)
-        try c.encode(privacy, forKey: .privacy)
-        try c.encode(dateFormat, forKey: .dateFormat)
-        try c.encode(replaceFrontsDefault, forKey: .replaceFrontsDefault)
+        try c.encodeIfPresent(name, forKey: .name)
+        try c.encodeIfPresent(description, forKey: .description)
+        try c.encodeIfPresent(note, forKey: .note)
+        try c.encodeIfPresent(tag, forKey: .tag)
+        try c.encodeIfPresent(avatarURL, forKey: .avatarURL)
+        try c.encodeIfPresent(color, forKey: .color)
+        try c.encodeIfPresent(privacy, forKey: .privacy)
+        try c.encodeIfPresent(dateFormat, forKey: .dateFormat)
+        try c.encodeIfPresent(replaceFrontsDefault, forKey: .replaceFrontsDefault)
     }
 }
 
