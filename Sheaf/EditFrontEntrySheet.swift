@@ -8,6 +8,7 @@ struct EditFrontEntrySheet: View {
     let entry: FrontEntry
 
     @State private var selectedIDs: Set<String> = []
+    @State private var startedAt: Date = Date()
     @State private var endedAt: Date = Date()
     @State private var isOngoing = false
     @State private var customStatus = ""
@@ -80,20 +81,17 @@ struct EditFrontEntrySheet: View {
 
                 // Time range
                 Section("When") {
-                    HStack {
-                        Text("Started")
-                            .foregroundColor(theme.textPrimary)
-                        Spacer()
-                        Text(entry.startedAt.formatted(date: .abbreviated, time: .shortened))
-                            .foregroundColor(theme.textSecondary)
-                    }
+                    DatePicker("Started", selection: $startedAt,
+                               in: ...(!isOngoing ? endedAt : .distantFuture),
+                               displayedComponents: [.date, .hourAndMinute])
+                        .foregroundColor(theme.textPrimary)
 
                     Toggle("Still ongoing", isOn: $isOngoing)
                         .tint(theme.accentLight)
 
                     if !isOngoing {
                         DatePicker("Ended", selection: $endedAt,
-                                   in: entry.startedAt...,
+                                   in: startedAt...,
                                    displayedComponents: [.date, .hourAndMinute])
                             .foregroundColor(theme.textPrimary)
                     }
@@ -127,6 +125,7 @@ struct EditFrontEntrySheet: View {
             }
             .onAppear {
                 selectedIDs = Set(entry.memberIDs)
+                startedAt = entry.startedAt
                 isOngoing = entry.endedAt == nil
                 endedAt = entry.endedAt ?? Date()
                 customStatus = entry.customStatus ?? ""
@@ -138,6 +137,7 @@ struct EditFrontEntrySheet: View {
         guard !selectedIDs.isEmpty else { return }
         isSaving = true
         let update = FrontUpdate(
+            startedAt: startedAt,
             endedAt: isOngoing ? nil : endedAt,
             memberIDs: Array(selectedIDs),
             customStatus: customStatus

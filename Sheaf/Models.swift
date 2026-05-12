@@ -288,11 +288,13 @@ struct FrontCreate: Codable {
 
 // MARK: - FrontUpdate
 struct FrontUpdate: Codable {
+    var startedAt: Date?
     var endedAt: Date?
     var memberIDs: [String]?
     var customStatus: String?
 
     enum CodingKeys: String, CodingKey {
+        case startedAt    = "started_at"
         case endedAt      = "ended_at"
         case memberIDs    = "member_ids"
         case customStatus = "custom_status"
@@ -300,6 +302,7 @@ struct FrontUpdate: Codable {
 
     func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encodeIfPresent(startedAt, forKey: .startedAt)
         try c.encode(endedAt, forKey: .endedAt)
         try c.encode(memberIDs, forKey: .memberIDs)
         try c.encodeIfPresent(customStatus, forKey: .customStatus)
