@@ -302,7 +302,7 @@ struct FrontUpdate: Codable {
         var c = encoder.container(keyedBy: CodingKeys.self)
         try c.encodeIfPresent(startedAt, forKey: .startedAt)
         try c.encode(endedAt, forKey: .endedAt)
-        try c.encode(memberIDs, forKey: .memberIDs)
+        try c.encodeIfPresent(memberIDs, forKey: .memberIDs)
         try c.encodeIfPresent(customStatus, forKey: .customStatus)
     }
 }
