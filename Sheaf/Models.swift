@@ -148,8 +148,6 @@ struct MemberCreate: Codable {
 }
 
 // MARK: - MemberUpdate (all optional for PATCH)
-// Custom encode(to:) ensures nil values are sent as JSON null
-// so the API clears them, rather than omitting the key (which means "don't change").
 struct MemberUpdate: Codable {
     var name: String?
     var displayName: String?
@@ -179,17 +177,17 @@ struct MemberUpdate: Codable {
 
     func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
-        try c.encode(name, forKey: .name)
-        try c.encode(displayName, forKey: .displayName)
-        try c.encode(description, forKey: .description)
-        try c.encode(pronouns, forKey: .pronouns)
-        try c.encode(avatarURL, forKey: .avatarURL)
-        try c.encode(color, forKey: .color)
-        try c.encode(birthday, forKey: .birthday)
-        try c.encode(emoji, forKey: .emoji)
-        try c.encode(isCustomFront, forKey: .isCustomFront)
-        try c.encode(privacy, forKey: .privacy)
-        try c.encode(note, forKey: .note)
+        try c.encodeIfPresent(name, forKey: .name)
+        try c.encodeIfPresent(displayName, forKey: .displayName)
+        try c.encodeIfPresent(description, forKey: .description)
+        try c.encodeIfPresent(pronouns, forKey: .pronouns)
+        try c.encodeIfPresent(avatarURL, forKey: .avatarURL)
+        try c.encodeIfPresent(color, forKey: .color)
+        try c.encodeIfPresent(birthday, forKey: .birthday)
+        try c.encodeIfPresent(emoji, forKey: .emoji)
+        try c.encodeIfPresent(isCustomFront, forKey: .isCustomFront)
+        try c.encodeIfPresent(privacy, forKey: .privacy)
+        try c.encodeIfPresent(note, forKey: .note)
     }
 }
 

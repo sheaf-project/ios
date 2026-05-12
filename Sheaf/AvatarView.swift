@@ -118,6 +118,10 @@ struct AvatarView: View {
         }
         .frame(width: size, height: size)
         .onAppear { loadIfNeeded() }
+        .onChange(of: member.avatarURL) { _, _ in
+            image = nil
+            loadIfNeeded()
+        }
         #if os(watchOS)
         .onReceive(NotificationCenter.default.publisher(for: .avatarsUpdated)) { _ in
             loadFromLocalCache()

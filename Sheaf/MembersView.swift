@@ -265,21 +265,25 @@ struct MemberDetailSheet: View {
     @State private var fieldValues: [CustomFieldValue] = []
     @State private var loadingFields = false
 
+    private var liveMember: Member {
+        store.members.first(where: { $0.id == member.id }) ?? member
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 24) {
                     // Avatar + name
                     VStack(spacing: 12) {
-                        AvatarView(member: member, size: 96)
+                        AvatarView(member: liveMember, size: 96)
                         HStack(spacing: 8) {
-                            Text(member.displayName ?? member.name)
+                            Text(liveMember.displayName ?? liveMember.name)
                                 .font(.title2).fontWeight(.bold).fontDesign(.rounded)
                                 .foregroundColor(theme.textPrimary)
-                            if let emoji = member.emoji, !emoji.isEmpty {
+                            if let emoji = liveMember.emoji, !emoji.isEmpty {
                                 Text(emoji).font(.callout)
                             }
-                            if member.isCustomFront {
+                            if liveMember.isCustomFront {
                                 Text("Custom Front")
                                     .font(.caption2).fontWeight(.bold)
                                     .foregroundColor(theme.textTertiary)
@@ -288,12 +292,12 @@ struct MemberDetailSheet: View {
                                     .cornerRadius(6)
                             }
                         }
-                        if let p = member.pronouns, !p.isEmpty {
+                        if let p = liveMember.pronouns, !p.isEmpty {
                             Text(p)
                                 .padding(.horizontal, 14).padding(.vertical, 5)
-                                .background(member.displayColor.opacity(0.15))
+                                .background(liveMember.displayColor.opacity(0.15))
                                 .cornerRadius(10)
-                                .foregroundColor(member.displayColor)
+                                .foregroundColor(liveMember.displayColor)
                                 .font(.subheadline)
                         }
                     }
@@ -310,7 +314,7 @@ struct MemberDetailSheet: View {
                     }
 
                     // Description
-                    if let desc = member.description, !desc.isEmpty {
+                    if let desc = liveMember.description, !desc.isEmpty {
                         MarkdownText(desc, color: theme.textSecondary)
                             .font(.subheadline)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -320,7 +324,7 @@ struct MemberDetailSheet: View {
                     }
 
                     // Note
-                    if let note = member.note, !note.isEmpty {
+                    if let note = liveMember.note, !note.isEmpty {
                         VStack(alignment: .leading, spacing: 8) {
                             Label("Note", systemImage: "note.text")
                                 .font(.footnote).fontWeight(.semibold)
@@ -338,7 +342,7 @@ struct MemberDetailSheet: View {
                     }
 
                     // Birthday
-                    if let bday = member.birthday, !bday.isEmpty {
+                    if let bday = liveMember.birthday, !bday.isEmpty {
                         HStack {
                             Label("Birthday", systemImage: "gift")
                                 .font(.subheadline).fontWeight(.medium)
@@ -354,7 +358,7 @@ struct MemberDetailSheet: View {
                     }
 
                     // PluralKit ID
-                    if let pkID = member.pluralkitID, !pkID.isEmpty {
+                    if let pkID = liveMember.pluralkitID, !pkID.isEmpty {
                         HStack {
                             Label("PluralKit ID", systemImage: "link")
                                 .font(.subheadline).fontWeight(.medium)
@@ -414,7 +418,7 @@ struct MemberDetailSheet: View {
                             dismiss()
                         }
                     } label: {
-                        Label("Switch to \(member.displayName ?? member.name)", systemImage: "arrow.left.arrow.right")
+                        Label("Switch to \(liveMember.displayName ?? liveMember.name)", systemImage: "arrow.left.arrow.right")
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.borderedProminent)
@@ -451,11 +455,11 @@ struct MemberDetailSheet: View {
             }
         }
         .sheet(isPresented: $showEdit) {
-            MemberEditSheet(member: member)
+            MemberEditSheet(member: liveMember)
                 .environmentObject(store)
         }
         .sheet(isPresented: $showBioRevisions) {
-            MemberBioRevisionsView(member: member)
+            MemberBioRevisionsView(member: liveMember)
                 .environmentObject(store)
         }
         .presentationDragIndicator(.visible)
