@@ -1788,7 +1788,7 @@ class APIClient {
         let body = try JSONSerialization.data(withJSONObject: [
             "activation_code": activationCode
         ])
-        _ = try await request("/notifications/redeem", method: "POST", body: body)
+        _ = try await request("/v1/notifications/redeem", method: "POST", body: body)
     }
 
     // MARK: - Reminders

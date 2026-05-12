@@ -42,7 +42,7 @@ struct RootView: View {
     @Binding var selectedTab: Int
 
     @State private var pendingRedemptionCode: String?
-    @State private var showRedemptionSheet = false
+    @State private var presentedRedemptionCode: String?
 
     var body: some View {
         ZStack {
@@ -81,11 +81,13 @@ struct RootView: View {
         } message: {
             Text(systemStore.errorMessage ?? "")
         }
-        .sheet(isPresented: $showRedemptionSheet) {
-            if let code = pendingRedemptionCode {
-                NotificationRedemptionSheet(activationCode: code)
-                    .environmentObject(authManager)
-            }
+        .sheet(isPresented: Binding(
+            get: { presentedRedemptionCode != nil },
+            set: { if !$0 { presentedRedemptionCode = nil } }
+        )) {
+            NotificationRedemptionSheet(activationCode: presentedRedemptionCode ?? "")
+                .environmentObject(authManager)
+                .environment(\.theme, resolvedTheme)
         }
         .onOpenURL { url in
             handleDeepLink(url)
@@ -101,8 +103,9 @@ struct RootView: View {
             }
         }
         .onChange(of: authManager.isAuthenticated) {
-            if authManager.isAuthenticated, pendingRedemptionCode != nil {
-                showRedemptionSheet = true
+            if authManager.isAuthenticated, let code = pendingRedemptionCode {
+                presentedRedemptionCode = code
+                pendingRedemptionCode = nil
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)) { _ in
@@ -123,10 +126,10 @@ struct RootView: View {
         guard isRedemptionLink else { return }
 
         guard let code = components.queryItems?.first(where: { $0.name == "code" })?.value else { return }
-        pendingRedemptionCode = code
-
         if authManager.isAuthenticated {
-            showRedemptionSheet = true
+            presentedRedemptionCode = code
+        } else {
+            pendingRedemptionCode = code
         }
     }
 

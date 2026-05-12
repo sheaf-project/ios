@@ -134,6 +134,13 @@
 			);
 			target = 2A72C0B62FB04E2600425525 /* NotificationServiceExtension */;
 		};
+		2A72C1682FB1814900425525 /* Exceptions for "Sheaf" folder in "Sheaf" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 2A2027962F6B92F10084B22F /* Sheaf */;
+		};
 		2ACEC1A22F6D27BF00B4AB57 /* Exceptions for "watchOSWidgetExtension" folder in "watchOSWidgetExtension" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
@@ -170,6 +177,7 @@
 		2A2027992F6B92F10084B22F /* Sheaf */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
+				2A72C1682FB1814900425525 /* Exceptions for "Sheaf" folder in "Sheaf" target */,
 				2A20285A2F6BB4420084B22F /* Exceptions for "Sheaf" folder in "watchOS App" target */,
 				2ACEC1AC2F6D286700B4AB57 /* Exceptions for "Sheaf" folder in "watchOSWidgetExtension" target */,
 				2ADC39342F70DDC300FC9769 /* Exceptions for "Sheaf" folder in "iOSWidgetExtension" target */,
@@ -713,6 +721,7 @@
 				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = 9WFRFPMG45;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Sheaf/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Sheaf;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.lifestyle";
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "Sheaf uses ​Face ​ID to lock and unlock the app.";
@@ -754,6 +763,7 @@
 				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = 9WFRFPMG45;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Sheaf/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Sheaf;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.lifestyle";
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "Sheaf uses ​Face ​ID to lock and unlock the app.";
@@ -863,9 +873,11 @@
 		2A72C0C02FB04E2600425525 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
+				CODE_SIGN_STYLE = Manual;
+				CURRENT_PROJECT_VERSION = 149;
 				DEVELOPMENT_TEAM = "";
+				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = 9WFRFPMG45;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NotificationServiceExtension/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = NotificationServiceExtension;
@@ -879,6 +891,8 @@
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = systems.lupine.sheaf.NotificationServiceExtension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = "Sheaf - Notifications";
 				SKIP_INSTALL = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -892,9 +906,11 @@
 		2A72C0C12FB04E2600425525 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Distribution";
+				CODE_SIGN_STYLE = Manual;
+				CURRENT_PROJECT_VERSION = 149;
 				DEVELOPMENT_TEAM = "";
+				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = 9WFRFPMG45;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NotificationServiceExtension/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = NotificationServiceExtension;
@@ -908,6 +924,8 @@
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = systems.lupine.sheaf.NotificationServiceExtension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = "Sheaf - Notifications ASC";
 				SKIP_INSTALL = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
