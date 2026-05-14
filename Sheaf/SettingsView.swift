@@ -13,6 +13,7 @@ struct SettingsView: View {
     @State private var showImport = false
     @State private var showSheafImport = false
     @State private var showPKImport = false
+    @State private var showTBImport = false
     @State private var showTOTPSetup = false
     @State private var showTOTPManage = false
     @State private var me: UserRead?
@@ -435,6 +436,25 @@ struct SettingsView: View {
 
                             Divider().background(theme.divider)
 
+                            // Import from Tupperbox
+                            Button { showTBImport = true } label: {
+                                HStack {
+                                    Image(systemName: "square.and.arrow.down.fill")
+                                        .foregroundColor(theme.accentLight)
+                                        .frame(width: 20)
+                                    Text("Import from Tupperbox")
+                                        .font(.subheadline).fontWeight(.medium)
+                                        .foregroundColor(theme.textPrimary)
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .font(.caption)
+                                        .foregroundColor(theme.textTertiary)
+                                }
+                                .padding(.horizontal, 16).padding(.vertical, 14)
+                            }
+
+                            Divider().background(theme.divider)
+
                             // Import from Sheaf
                             Button { showSheafImport = true } label: {
                                 HStack {
@@ -845,6 +865,10 @@ struct SettingsView: View {
         }
         .sheet(isPresented: $showPKImport) {
             PluralKitImportSheet()
+                .environmentObject(store)
+        }
+        .sheet(isPresented: $showTBImport) {
+            TupperboxImportSheet()
                 .environmentObject(store)
         }
         .sheet(isPresented: $showTOTPSetup, onDismiss: { Task { await loadMe() } }) {

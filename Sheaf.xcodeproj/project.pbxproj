@@ -12,6 +12,7 @@
 		2A4546A12F6F02B0006A8EE3 /* WatchKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2A4546A02F6F02B0006A8EE3 /* WatchKit.framework */; };
 		2A4546A92F6F5718006A8EE3 /* watchOS App.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 2A2028282F6BB3070084B22F /* watchOS App.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		2A72C0BE2FB04E2600425525 /* NotificationServiceExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 2A72C0B72FB04E2600425525 /* NotificationServiceExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		2A9338942FB3FAB8005C1C33 /* TupperboxImportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A9338932FB3FAB8005C1C33 /* TupperboxImportView.swift */; };
 		2ACEC1902F6D27BD00B4AB57 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2ACEC10E2F6D1AD700B4AB57 /* WidgetKit.framework */; };
 		2ACEC1912F6D27BD00B4AB57 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2ACEC1102F6D1AD700B4AB57 /* SwiftUI.framework */; };
 		2ACEC19E2F6D27BF00B4AB57 /* watchOSWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 2ACEC18F2F6D27BD00B4AB57 /* watchOSWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -97,6 +98,7 @@
 		2A4546A42F6F0425006A8EE3 /* watchOS AppRelease.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "watchOS AppRelease.entitlements"; sourceTree = "<group>"; };
 		2A72C0B72FB04E2600425525 /* NotificationServiceExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = NotificationServiceExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		2A8D15EE2F6E210C001F5282 /* watchOSWidgetExtensionDebug.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = watchOSWidgetExtensionDebug.entitlements; sourceTree = "<group>"; };
+		2A9338932FB3FAB8005C1C33 /* TupperboxImportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TupperboxImportView.swift; sourceTree = "<group>"; };
 		2ACEC10E2F6D1AD700B4AB57 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
 		2ACEC1102F6D1AD700B4AB57 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 		2ACEC1402F6D1BD600B4AB57 /* FrontingComplicationExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = FrontingComplicationExtension.entitlements; sourceTree = "<group>"; };
@@ -287,6 +289,7 @@
 				2A2027982F6B92F10084B22F /* Products */,
 				2A2028952F6C8D310084B22F /* .gitignore */,
 				2A063BB12F6CE58000321DA6 /* README.md */,
+				2A9338932FB3FAB8005C1C33 /* TupperboxImportView.swift */,
 			);
 			sourceTree = "<group>";
 		};
@@ -528,6 +531,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				2A9338942FB3FAB8005C1C33 /* TupperboxImportView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

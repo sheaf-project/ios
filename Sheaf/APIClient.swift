@@ -1630,6 +1630,31 @@ class APIClient {
         return try JSONDecoder.iso.decode(PKImportResult.self, from: data)
     }
 
+    // MARK: - Tupperbox Import (File)
+
+    func previewTupperboxImport(fileData: Data, filename: String) async throws -> TBPreviewSummary {
+        let data = try await multipartRequest(
+            path: "/v1/import/tupperbox/preview",
+            fileData: fileData,
+            filename: filename
+        )
+        return try JSONDecoder.iso.decode(TBPreviewSummary.self, from: data)
+    }
+
+    func doTupperboxImport(
+        fileData: Data,
+        filename: String,
+        memberIDs: [String]? = nil,
+        groups: Bool = true
+    ) async throws -> TBImportResult {
+        var path = "/v1/import/tupperbox?groups=\(groups)"
+        if let ids = memberIDs, !ids.isEmpty {
+            path += "&member_ids=\(ids.joined(separator: ","))"
+        }
+        let data = try await multipartRequest(path: path, fileData: fileData, filename: filename)
+        return try JSONDecoder.iso.decode(TBImportResult.self, from: data)
+    }
+
     func uploadFile(imageData: Data, mimeType: String = "image/jpeg") async throws -> String {
         let ext: String
         switch mimeType {

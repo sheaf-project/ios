@@ -11,6 +11,7 @@ struct OnboardingView: View {
     @State private var showSafetySheet = false
     @State private var showSPImportSheet = false
     @State private var showPKImportSheet = false
+    @State private var showTBImportSheet = false
 
     var body: some View {
         ZStack {
@@ -82,6 +83,10 @@ struct OnboardingView: View {
             PluralKitImportSheet()
                 .environmentObject(systemStore)
         }
+        .sheet(isPresented: $showTBImportSheet) {
+            TupperboxImportSheet()
+                .environmentObject(systemStore)
+        }
     }
 
     // MARK: - Step Indicator
@@ -139,7 +144,7 @@ struct OnboardingView: View {
                 .font(.title3).fontWeight(.bold).fontDesign(.rounded)
                 .foregroundColor(theme.textPrimary)
 
-            Text("Coming from Simply Plural or PluralKit? Import your members, groups, and front history.")
+            Text("Coming from Simply Plural, PluralKit, or Tupperbox? Import your members, groups, and front history.")
                 .font(.subheadline)
                 .foregroundColor(theme.textSecondary)
                 .multilineTextAlignment(.center)
@@ -160,6 +165,17 @@ struct OnboardingView: View {
             Button { showPKImportSheet = true } label: {
                 HStack {
                     Text("Import from PluralKit")
+                    Image(systemName: "chevron.right")
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+            .tint(theme.accentLight)
+
+            Button { showTBImportSheet = true } label: {
+                HStack {
+                    Text("Import from Tupperbox")
                     Image(systemName: "chevron.right")
                 }
                 .frame(maxWidth: .infinity)

@@ -1265,6 +1265,36 @@ struct PKImportResult: Codable {
     }
 }
 
+// MARK: - Tupperbox Import Models
+struct TBPreviewMember: Codable, Identifiable {
+    let id: String
+    let name: String
+}
+
+struct TBPreviewSummary: Codable {
+    var memberCount: Int
+    var members: [TBPreviewMember]
+    var groupCount: Int
+
+    enum CodingKeys: String, CodingKey {
+        case members
+        case memberCount = "member_count"
+        case groupCount  = "group_count"
+    }
+}
+
+struct TBImportResult: Codable {
+    var membersImported: Int
+    var groupsImported:  Int
+    var warnings:        [String]
+
+    enum CodingKeys: String, CodingKey {
+        case warnings
+        case membersImported = "members_imported"
+        case groupsImported  = "groups_imported"
+    }
+}
+
 // MARK: - Announcements
 
 enum AnnouncementSeverity: String, Codable {
