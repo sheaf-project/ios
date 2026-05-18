@@ -177,17 +177,21 @@ struct MemberUpdate: Codable {
 
     func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
+        // Form-controlled fields are encoded unconditionally so cleared
+        // values are sent to the server as JSON null (which the API treats
+        // as "clear this field"). Skipping them would leave the prior value
+        // in place.
         try c.encodeIfPresent(name, forKey: .name)
-        try c.encodeIfPresent(displayName, forKey: .displayName)
-        try c.encodeIfPresent(description, forKey: .description)
-        try c.encodeIfPresent(pronouns, forKey: .pronouns)
-        try c.encodeIfPresent(avatarURL, forKey: .avatarURL)
-        try c.encodeIfPresent(color, forKey: .color)
-        try c.encodeIfPresent(birthday, forKey: .birthday)
-        try c.encodeIfPresent(emoji, forKey: .emoji)
+        try c.encode(displayName, forKey: .displayName)
+        try c.encode(description, forKey: .description)
+        try c.encode(pronouns, forKey: .pronouns)
+        try c.encode(avatarURL, forKey: .avatarURL)
+        try c.encode(color, forKey: .color)
+        try c.encode(birthday, forKey: .birthday)
+        try c.encode(emoji, forKey: .emoji)
         try c.encodeIfPresent(isCustomFront, forKey: .isCustomFront)
         try c.encodeIfPresent(privacy, forKey: .privacy)
-        try c.encodeIfPresent(note, forKey: .note)
+        try c.encode(note, forKey: .note)
     }
 }
 
@@ -1716,6 +1720,18 @@ struct WatchTokenCreate: Codable {
 
 struct WatchTokenUpdate: Codable {
     var label: String?
+
+    enum CodingKeys: String, CodingKey {
+        case label
+    }
+
+    // Encode label unconditionally so a cleared label is sent as JSON null
+    // (which the API treats as "clear this field"). The default synthesized
+    // encoder uses encodeIfPresent, which would silently drop the change.
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(label, forKey: .label)
+    }
 }
 
 struct NotificationChannel: Identifiable, Codable {

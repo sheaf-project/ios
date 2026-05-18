@@ -2045,11 +2045,16 @@ struct SystemUpdate: Codable {
 
     func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
+        // Form-controlled fields are encoded unconditionally so cleared
+        // values are sent to the server as JSON null (which the API treats
+        // as "clear this field"). Skipping them would leave the prior value
+        // in place. dateFormat and replaceFrontsDefault are set outside the
+        // profile edit form and keep encodeIfPresent so they aren't reset.
         try c.encodeIfPresent(name, forKey: .name)
-        try c.encodeIfPresent(description, forKey: .description)
-        try c.encodeIfPresent(note, forKey: .note)
-        try c.encodeIfPresent(tag, forKey: .tag)
-        try c.encodeIfPresent(avatarURL, forKey: .avatarURL)
+        try c.encode(description, forKey: .description)
+        try c.encode(note, forKey: .note)
+        try c.encode(tag, forKey: .tag)
+        try c.encode(avatarURL, forKey: .avatarURL)
         try c.encodeIfPresent(color, forKey: .color)
         try c.encodeIfPresent(privacy, forKey: .privacy)
         try c.encodeIfPresent(dateFormat, forKey: .dateFormat)
