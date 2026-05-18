@@ -6,10 +6,22 @@ struct NotificationRedemptionSheet: View {
     @Environment(\.dismiss) var dismiss
 
     let activationCode: String
+    var instanceURL: String? = nil
 
     @State private var isRedeeming = false
     @State private var redeemed = false
     @State private var errorMessage: String?
+
+    private var instanceMismatch: Bool {
+        guard let instanceURL else { return false }
+        return Self.normalize(instanceURL) != Self.normalize(authManager.baseURL)
+    }
+
+    private static func normalize(_ url: String) -> String {
+        var s = url.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        while s.hasSuffix("/") { s.removeLast() }
+        return s
+    }
 
     var body: some View {
         NavigationStack {
@@ -29,6 +41,28 @@ struct NotificationRedemptionSheet: View {
                         Text("You'll receive push notifications for this channel on your registered devices.")
                             .font(.subheadline)
                             .foregroundColor(theme.textSecondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 32)
+                    } else if instanceMismatch {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 56))
+                            .foregroundColor(theme.warning)
+                        Text("Different Server")
+                            .font(.title3).fontWeight(.bold).fontDesign(.rounded)
+                            .foregroundColor(theme.textPrimary)
+                        Text("This activation link is for a Sheaf instance you're not signed into:")
+                            .font(.subheadline)
+                            .foregroundColor(theme.textSecondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 32)
+                        Text(instanceURL ?? "")
+                            .font(.footnote.monospaced())
+                            .foregroundColor(theme.textPrimary)
+                            .textSelection(.enabled)
+                            .padding(.horizontal, 32)
+                        Text("Sign out and sign in to that server, then tap the link again.")
+                            .font(.footnote)
+                            .foregroundColor(theme.textTertiary)
                             .multilineTextAlignment(.center)
                             .padding(.horizontal, 32)
                     } else {

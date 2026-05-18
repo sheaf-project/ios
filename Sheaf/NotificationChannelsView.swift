@@ -460,7 +460,7 @@ struct CreateChannelSheet: View {
     let watchTokenID: String
 
     @State private var name = ""
-    @State private var destinationType: DestinationType = .ntfy
+    @State private var destinationType: DestinationType = .mobilePush
     @State private var ntfyServer = "https://ntfy.sh"
     @State private var ntfyTopic = ""
     @State private var pushoverUserKey = ""
@@ -476,6 +476,14 @@ struct CreateChannelSheet: View {
     @State private var showAdvanced = false
     @State private var isSaving = false
     @State private var errorMessage: String?
+    @State private var activationShare: ActivationShareInfo?
+
+    struct ActivationShareInfo: Identifiable {
+        let id = UUID()
+        let channelName: String
+        let url: String
+        let expiresAt: Date?
+    }
 
     private var isValid: Bool {
         guard !name.trimmingCharacters(in: .whitespaces).isEmpty else { return false }
@@ -483,6 +491,7 @@ struct CreateChannelSheet: View {
         case .ntfy: return !ntfyServer.isEmpty && !ntfyTopic.trimmingCharacters(in: .whitespaces).isEmpty
         case .pushover: return !pushoverUserKey.trimmingCharacters(in: .whitespaces).isEmpty
         case .webhook: return !webhookURL.trimmingCharacters(in: .whitespaces).isEmpty
+        case .mobilePush: return true
         default: return false
         }
     }
@@ -521,20 +530,25 @@ struct CreateChannelSheet: View {
                             }
                         }
 
+                        if destinationType.isMobilePush {
+                            mobilePushInfoCard
+                        }
+
                         sectionCard(title: "Configuration") {
                             VStack(spacing: 0) {
-                                fieldRow(label: "Name", text: $name, placeholder: "e.g. My Phone")
-
-                                Divider().background(theme.divider)
+                                fieldRow(label: "Name", text: $name, placeholder: "e.g. Mara's phone")
 
                                 switch destinationType {
                                 case .ntfy:
+                                    Divider().background(theme.divider)
                                     fieldRow(label: "Server", text: $ntfyServer, placeholder: "https://ntfy.sh")
                                     Divider().background(theme.divider)
                                     fieldRow(label: "Topic", text: $ntfyTopic, placeholder: "my-sheaf-alerts")
                                 case .pushover:
+                                    Divider().background(theme.divider)
                                     fieldRow(label: "User Key", text: $pushoverUserKey, placeholder: "Your Pushover user key")
                                 case .webhook:
+                                    Divider().background(theme.divider)
                                     fieldRow(label: "URL", text: $webhookURL, placeholder: "https://example.com/webhook", keyboardType: .URL)
                                     Divider().background(theme.divider)
                                     pickerRow(label: "Format", selection: $webhookFormat) { f in
@@ -634,7 +648,32 @@ struct CreateChannelSheet: View {
                         .foregroundColor(theme.accentLight)
                 }
             }
+            .sheet(item: $activationShare, onDismiss: { dismiss() }) { info in
+                ActivationShareSheet(info: info)
+                    .environmentObject(authManager)
+                    .environmentObject(store)
+            }
         }
+    }
+
+    private var mobilePushInfoCard: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "info.circle.fill")
+                .foregroundColor(theme.accentLight)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("How mobile push works")
+                    .font(.subheadline).fontWeight(.semibold)
+                    .foregroundColor(theme.textPrimary)
+                Text("After creating, you'll get an activation link to share with the person who should receive these notifications. They tap it to subscribe their device.")
+                    .font(.footnote)
+                    .foregroundColor(theme.textSecondary)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(theme.backgroundCard)
+        .cornerRadius(14)
+        .padding(.horizontal, 24)
     }
 
     private func save() async {
@@ -673,8 +712,17 @@ struct CreateChannelSheet: View {
                 baseIncludePrivate: includePrivate
             )
 
-            _ = try await api.createChannel(watchTokenID: watchTokenID, create: create)
-            dismiss()
+            let response = try await api.createChannel(watchTokenID: watchTokenID, create: create)
+
+            if destinationType.isMobilePush, let url = response.activationURL {
+                activationShare = ActivationShareInfo(
+                    channelName: response.channel.name,
+                    url: url,
+                    expiresAt: response.activationExpiresAt
+                )
+            } else {
+                dismiss()
+            }
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -1173,6 +1221,114 @@ struct ChannelDetailView: View {
             }
         }
         .padding(.horizontal, 16).padding(.vertical, 12)
+    }
+}
+
+// MARK: - ActivationShareSheet
+
+struct ActivationShareSheet: View {
+    @Environment(\.theme) var theme
+    @Environment(\.dismiss) var dismiss
+    let info: CreateChannelSheet.ActivationShareInfo
+
+    @State private var copied = false
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                theme.backgroundPrimary.ignoresSafeArea()
+
+                ScrollView {
+                    VStack(spacing: 20) {
+                        VStack(spacing: 12) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.system(size: 48))
+                                .foregroundColor(theme.success)
+                            Text("Channel Created")
+                                .font(.title3).fontWeight(.bold).fontDesign(.rounded)
+                                .foregroundColor(theme.textPrimary)
+                            Text("Share this activation link with whoever should receive notifications. They'll need the Sheaf app installed and an account on this server.")
+                                .font(.subheadline)
+                                .foregroundColor(theme.textSecondary)
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal, 24)
+                        }
+                        .padding(.top, 24)
+
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Activation link")
+                                .font(.caption).fontWeight(.semibold)
+                                .foregroundColor(theme.textSecondary)
+                                .textCase(.uppercase)
+                                .kerning(0.8)
+                            Text(info.url)
+                                .font(.footnote)
+                                .foregroundColor(theme.textPrimary)
+                                .textSelection(.enabled)
+                                .padding(12)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(theme.backgroundCard)
+                                .cornerRadius(10)
+                            if let expiresAt = info.expiresAt {
+                                Text("Expires \(expiresAt, style: .relative)")
+                                    .font(.caption)
+                                    .foregroundColor(theme.textTertiary)
+                            }
+                        }
+                        .padding(.horizontal, 24)
+
+                        VStack(spacing: 10) {
+                            if let url = URL(string: info.url) {
+                                ShareLink(item: url, subject: Text("Sheaf notification channel"), message: Text("Activate the \"\(info.channelName)\" channel")) {
+                                    HStack {
+                                        Image(systemName: "square.and.arrow.up")
+                                        Text("Share Link")
+                                            .fontWeight(.semibold)
+                                    }
+                                    .font(.subheadline)
+                                    .foregroundColor(.white)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 14)
+                                    .background(theme.accentLight)
+                                    .cornerRadius(12)
+                                }
+                            }
+
+                            Button {
+                                UIPasteboard.general.string = info.url
+                                withAnimation { copied = true }
+                                Task {
+                                    try? await Task.sleep(nanoseconds: 1_500_000_000)
+                                    withAnimation { copied = false }
+                                }
+                            } label: {
+                                HStack {
+                                    Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                                    Text(copied ? "Copied" : "Copy Link")
+                                        .fontWeight(.medium)
+                                }
+                                .font(.subheadline)
+                                .foregroundColor(theme.accentLight)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 14)
+                                .background(theme.backgroundCard)
+                                .cornerRadius(12)
+                            }
+                        }
+                        .padding(.horizontal, 24)
+                    }
+                    .padding(.bottom, 40)
+                }
+            }
+            .navigationTitle("Share Activation")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { dismiss() }
+                        .foregroundColor(theme.accentLight)
+                }
+            }
+        }
     }
 }
 

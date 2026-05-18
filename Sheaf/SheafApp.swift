@@ -41,8 +41,17 @@ struct RootView: View {
     @Environment(\.colorScheme) private var systemScheme
     @Binding var selectedTab: Int
 
-    @State private var pendingRedemptionCode: String?
-    @State private var presentedRedemptionCode: String?
+    @State private var pendingRedemption: PendingRedemption?
+    @State private var presentedRedemption: PendingRedemption?
+
+    struct PendingRedemption: Identifiable {
+        let id = UUID()
+        let code: String
+        // For mobile_push activation links the URL carries an `instance`
+        // query param naming the Sheaf instance that owns the channel.
+        // Other (legacy) redemption paths don't include it.
+        let instanceURL: String?
+    }
 
     var body: some View {
         ZStack {
@@ -81,11 +90,11 @@ struct RootView: View {
         } message: {
             Text(systemStore.errorMessage ?? "")
         }
-        .sheet(isPresented: Binding(
-            get: { presentedRedemptionCode != nil },
-            set: { if !$0 { presentedRedemptionCode = nil } }
-        )) {
-            NotificationRedemptionSheet(activationCode: presentedRedemptionCode ?? "")
+        .sheet(item: $presentedRedemption) { redemption in
+            NotificationRedemptionSheet(
+                activationCode: redemption.code,
+                instanceURL: redemption.instanceURL
+            )
                 .environmentObject(authManager)
                 .environment(\.theme, resolvedTheme)
         }
@@ -103,9 +112,9 @@ struct RootView: View {
             }
         }
         .onChange(of: authManager.isAuthenticated) {
-            if authManager.isAuthenticated, let code = pendingRedemptionCode {
-                presentedRedemptionCode = code
-                pendingRedemptionCode = nil
+            if authManager.isAuthenticated, let pending = pendingRedemption {
+                presentedRedemption = pending
+                pendingRedemption = nil
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)) { _ in
@@ -119,6 +128,10 @@ struct RootView: View {
         let isRedemptionLink: Bool
         if url.scheme == "sheaf" {
             isRedemptionLink = url.host == "notifications" && url.path.hasPrefix("/redeem")
+        } else if url.host?.lowercased() == "sheaf.sh" && url.path == "/redeem" {
+            // mobile_push activation links funnel through the shared
+            // Universal Link host (see backend mobile_activation_url).
+            isRedemptionLink = true
         } else {
             isRedemptionLink = url.path.contains("/notifications/redeem")
         }
@@ -126,10 +139,12 @@ struct RootView: View {
         guard isRedemptionLink else { return }
 
         guard let code = components.queryItems?.first(where: { $0.name == "code" })?.value else { return }
+        let instance = components.queryItems?.first(where: { $0.name == "instance" })?.value
+        let redemption = PendingRedemption(code: code, instanceURL: instance)
         if authManager.isAuthenticated {
-            presentedRedemptionCode = code
+            presentedRedemption = redemption
         } else {
-            pendingRedemptionCode = code
+            pendingRedemption = redemption
         }
     }
 

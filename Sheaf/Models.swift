@@ -1578,6 +1578,10 @@ enum DestinationType: String, Codable, CaseIterable {
     case ntfy = "ntfy"
     case pushover = "pushover"
     case webPush = "web_push"
+    case mobilePush = "mobile_push"
+    // Legacy mobile types retained so channels created before the
+    // mobile_push unification still decode for read-back. Channel
+    // creation rejects these — use .mobilePush instead.
     case fcm = "fcm"
     case apnsDev = "apns_dev"
     case apnsProd = "apns_prod"
@@ -1594,9 +1598,10 @@ enum DestinationType: String, Codable, CaseIterable {
         case .ntfy: return "ntfy"
         case .pushover: return "Pushover"
         case .webPush: return "Web Push"
-        case .fcm: return "FCM"
-        case .apnsDev: return "APNs (Dev)"
-        case .apnsProd: return "APNs"
+        case .mobilePush: return "Mobile Push"
+        case .fcm: return "Android Push"
+        case .apnsDev: return "iPhone Push (Sandbox)"
+        case .apnsProd: return "iPhone Push"
         case .unknown: return "Unknown"
         }
     }
@@ -1607,14 +1612,22 @@ enum DestinationType: String, Codable, CaseIterable {
         case .ntfy: return "bell.badge"
         case .pushover: return "iphone.radiowaves.left.and.right"
         case .webPush: return "globe"
+        case .mobilePush: return "iphone.badge.play"
         case .fcm: return "bell.badge.fill"
         case .apnsDev, .apnsProd: return "iphone.badge.play"
         case .unknown: return "questionmark.circle"
         }
     }
 
+    var isMobilePush: Bool {
+        switch self {
+        case .mobilePush, .apnsDev, .apnsProd, .fcm: return true
+        default: return false
+        }
+    }
+
     static var creatableTypes: [DestinationType] {
-        [.ntfy, .pushover, .webhook]
+        [.mobilePush, .ntfy, .pushover, .webhook]
     }
 }
 
