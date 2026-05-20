@@ -1076,7 +1076,7 @@ struct AdminPanelView: View {
             totpCode = ""
             await loadAdminData()
         } catch {
-            authError = error.localizedDescription
+            authError = error.userFacingMessage
         }
         isAuthenticating = false
     }
@@ -1534,7 +1534,7 @@ struct AdminUserEditSheet: View {
             onSave(updated)
             dismiss()
         } catch {
-            self.error = error.localizedDescription
+            self.error = error.userFacingMessage
         }
         isSaving = false
     }
@@ -1858,7 +1858,7 @@ struct CreateInviteSheet: View {
             }
         } catch {
             await MainActor.run {
-                self.error = error.localizedDescription
+                self.error = error.userFacingMessage
                 isCreating = false
             }
         }

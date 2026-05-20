@@ -2001,9 +2001,9 @@ struct Poll: Identifiable, Codable {
     let isClosed: Bool
     let closedSince: Date?
     let purgesAt: Date
-    let totalVotes: Int
-    let tally: [PollTallyEntry]?
-    let votes: [PollVote]?
+    var totalVotes: Int
+    var tally: [PollTallyEntry]?
+    var votes: [PollVote]?
     let createdAt: Date
     let updatedAt: Date
 
@@ -2043,6 +2043,38 @@ struct Poll: Identifiable, Codable {
         votes               = try c.decodeIfPresent([PollVote].self, forKey: .votes)
         createdAt           = try c.decode(Date.self, forKey: .createdAt)
         updatedAt           = try c.decode(Date.self, forKey: .updatedAt)
+    }
+
+    /// Memberwise init — used for optimistic local construction (e.g. a poll
+    /// the user just created while offline). The custom `init(from:)` decoder
+    /// suppresses Swift's auto-synthesised one, so it's spelled out here.
+    init(
+        id: String, systemID: String, question: String, description: String?,
+        kind: PollKind, resultsVisibility: PollResultsVisibility,
+        closesAt: Date, retentionDays: Int, includeCustomFronts: Bool,
+        options: [PollOption], isClosed: Bool, closedSince: Date?,
+        purgesAt: Date, totalVotes: Int,
+        tally: [PollTallyEntry]?, votes: [PollVote]?,
+        createdAt: Date, updatedAt: Date
+    ) {
+        self.id = id
+        self.systemID = systemID
+        self.question = question
+        self.description = description
+        self.kind = kind
+        self.resultsVisibility = resultsVisibility
+        self.closesAt = closesAt
+        self.retentionDays = retentionDays
+        self.includeCustomFronts = includeCustomFronts
+        self.options = options
+        self.isClosed = isClosed
+        self.closedSince = closedSince
+        self.purgesAt = purgesAt
+        self.totalVotes = totalVotes
+        self.tally = tally
+        self.votes = votes
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
     }
 }
 

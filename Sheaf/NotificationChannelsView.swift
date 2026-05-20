@@ -139,7 +139,7 @@ struct NotificationChannelsView: View {
         do {
             watchTokens = try await api.listWatchTokens(systemID: systemID)
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = error.userFacingMessage
         }
     }
 
@@ -151,7 +151,7 @@ struct NotificationChannelsView: View {
             _ = try await api.createWatchToken(systemID: systemID, label: label.isEmpty ? nil : label)
             await loadData()
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = error.userFacingMessage
         }
     }
 }
@@ -405,7 +405,7 @@ struct WatcherDetailView: View {
             channels = try await api.listChannels(watchTokenID: watchToken.id)
                 .sorted { $0.createdAt > $1.createdAt }
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = error.userFacingMessage
         }
     }
 
@@ -416,7 +416,7 @@ struct WatcherDetailView: View {
             watchToken = try await api.updateWatchToken(id: watchToken.id, label: label.isEmpty ? nil : label)
             await onUpdate()
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = error.userFacingMessage
         }
     }
 
@@ -443,7 +443,7 @@ struct WatcherDetailView: View {
                 dismiss()
             }
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = error.userFacingMessage
             isRevoking = false
         }
     }
@@ -724,7 +724,7 @@ struct CreateChannelSheet: View {
                 dismiss()
             }
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = error.userFacingMessage
         }
         isSaving = false
     }
@@ -1070,7 +1070,7 @@ struct ChannelDetailView: View {
             hasUnsavedChanges = false
             await onUpdate()
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = error.userFacingMessage
         }
     }
 
@@ -1085,7 +1085,7 @@ struct ChannelDetailView: View {
             }
             await onUpdate()
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = error.userFacingMessage
         }
         isToggling = false
     }
@@ -1130,7 +1130,7 @@ struct ChannelDetailView: View {
                 dismiss()
             }
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = error.userFacingMessage
             isDeleting = false
         }
     }

@@ -165,7 +165,7 @@ struct DeleteConfirmationSheet: View {
             await MainActor.run { isSaving = false }
         } catch {
             await MainActor.run {
-                self.error = error.localizedDescription
+                self.error = error.userFacingMessage ?? ""
                 isSaving = false
             }
         }
@@ -318,7 +318,7 @@ struct DeleteAccountSheet: View {
         } catch is CancellationError {
             isDeleting = false
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = error.userFacingMessage
             isDeleting = false
         }
     }

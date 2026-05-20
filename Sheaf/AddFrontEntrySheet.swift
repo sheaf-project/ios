@@ -158,7 +158,7 @@ struct AddFrontEntrySheet: View {
         } catch is CancellationError {
             isSaving = false
         } catch {
-            self.error = error.localizedDescription
+            self.error = error.userFacingMessage
             isSaving = false
         }
     }

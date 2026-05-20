@@ -983,7 +983,7 @@ struct AvatarInputSection: View {
             await MainActor.run { selectedPhoto = nil }
         } catch {
             await MainActor.run {
-                uploadError = error.localizedDescription
+                uploadError = error.userFacingMessage
                 selectedPhoto = nil
             }
         }
@@ -1382,7 +1382,7 @@ struct MemberBioRevisionDetailView: View {
             let response = try await store.api?.unpinMemberBioRevision(memberID: member.id, revisionID: revision.id)
             handleUnpinResponse(response)
         } catch {
-            pinError = error.localizedDescription
+            pinError = error.userFacingMessage
         }
         isPinLoading = false
     }
@@ -1407,7 +1407,7 @@ struct MemberBioRevisionDetailView: View {
             isPinned = true
             if let updated { onPinChanged?(updated) }
         } catch {
-            pinError = error.localizedDescription
+            pinError = error.userFacingMessage
         }
         isPinLoading = false
     }

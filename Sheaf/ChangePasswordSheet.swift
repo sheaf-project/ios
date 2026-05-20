@@ -170,7 +170,7 @@ struct ChangePasswordSheet: View {
             await MainActor.run { isSaving = false }
         } catch {
             await MainActor.run {
-                self.error = error.localizedDescription
+                self.error = error.userFacingMessage ?? ""
                 isSaving = false
             }
         }

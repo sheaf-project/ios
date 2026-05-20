@@ -318,7 +318,7 @@ struct TOTPSetupSheet: View {
         } catch is CancellationError {
         } catch {
             await MainActor.run {
-                self.error = error.localizedDescription
+                self.error = error.userFacingMessage ?? ""
                 withAnimation { step = .scan }
             }
         }
@@ -723,7 +723,7 @@ struct TOTPManageSheet: View {
             await MainActor.run { isProcessing = false }
         } catch {
             await MainActor.run {
-                self.error = error.localizedDescription
+                self.error = error.userFacingMessage ?? ""
                 isProcessing = false
             }
         }
@@ -744,7 +744,7 @@ struct TOTPManageSheet: View {
             await MainActor.run { isProcessing = false }
         } catch {
             await MainActor.run {
-                self.error = error.localizedDescription
+                self.error = error.userFacingMessage ?? ""
                 isProcessing = false
             }
         }

@@ -3,6 +3,7 @@ import SwiftUI
 struct HomeView: View {
     @EnvironmentObject var store: SystemStore
     @EnvironmentObject var authManager: AuthManager
+    @EnvironmentObject var networkMonitor: NetworkMonitor
     @Environment(\.theme) var theme
     @State private var showSwitchSheet = false
     @State private var showSettings = false
@@ -62,6 +63,34 @@ struct HomeView: View {
                     }
                     .padding(.horizontal, 24)
                     .padding(.top, 16)
+
+                    // Offline / unreachable-server banner
+                    if !networkMonitor.isOnline || !store.isOnline {
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack(spacing: 8) {
+                                Image(systemName: "wifi.slash")
+                                    .foregroundColor(theme.warning)
+                                    .font(.subheadline)
+                                Text(networkMonitor.isOnline ? "Can't reach server" : "Offline")
+                                    .font(.subheadline).fontWeight(.semibold)
+                                    .foregroundColor(theme.textPrimary)
+                                Spacer()
+                            }
+                            Text(store.pendingOperationCount > 0
+                                 ? "Changes will sync when reconnected. (\(store.pendingOperationCount) pending)"
+                                 : "Changes will sync when reconnected.")
+                                .font(.footnote)
+                                .foregroundColor(theme.textSecondary)
+                        }
+                        .padding(14)
+                        .background(theme.warning.opacity(0.12))
+                        .cornerRadius(14)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14)
+                                .stroke(theme.warning.opacity(0.3), lineWidth: 1)
+                        )
+                        .padding(.horizontal, 24)
+                    }
 
                     // Pending deletion banner
                     if authManager.accountStatus == .pendingDeletion,

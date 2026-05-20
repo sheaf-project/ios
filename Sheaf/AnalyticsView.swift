@@ -331,7 +331,7 @@ struct AnalyticsView: View {
             analytics = try await store.loadFrontingAnalytics(days: timeRange.days)
         } catch {
             if analytics == nil {
-                errorMessage = error.localizedDescription
+                errorMessage = error.userFacingMessage
             }
         }
         isLoading = false

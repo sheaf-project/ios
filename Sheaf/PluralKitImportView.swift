@@ -530,7 +530,7 @@ struct PluralKitImportSheet: View {
     private func handleFilePick(_ result: Result<[URL], Error>) {
         switch result {
         case .failure(let e):
-            errorMessage = e.localizedDescription
+            errorMessage = e.userFacingMessage ?? ""
             step = .failed
         case .success(let urls):
             guard let url = urls.first else { return }
@@ -561,7 +561,7 @@ struct PluralKitImportSheet: View {
             await MainActor.run { isLoading = false }
         } catch {
             await MainActor.run {
-                errorMessage = error.localizedDescription
+                errorMessage = error.userFacingMessage ?? ""
                 isLoading = false
                 step = .failed
             }
@@ -580,7 +580,7 @@ struct PluralKitImportSheet: View {
             await MainActor.run { isLoading = false }
         } catch {
             await MainActor.run {
-                errorMessage = error.localizedDescription
+                errorMessage = error.userFacingMessage ?? ""
                 isLoading = false
                 step = .failed
             }
@@ -622,7 +622,7 @@ struct PluralKitImportSheet: View {
         } catch is CancellationError {
         } catch {
             await MainActor.run {
-                errorMessage = error.localizedDescription
+                errorMessage = error.userFacingMessage ?? ""
                 withAnimation { step = .failed }
             }
         }

@@ -132,7 +132,7 @@ struct NotificationRedemptionSheet: View {
             }
         } catch {
             await MainActor.run {
-                errorMessage = error.localizedDescription
+                errorMessage = error.userFacingMessage
             }
         }
         isRedeeming = false

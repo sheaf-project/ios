@@ -1046,7 +1046,7 @@ struct SettingsView: View {
         } catch {
             await MainActor.run {
                 isExporting = false
-                exportError = error.localizedDescription
+                exportError = error.userFacingMessage
             }
         }
     }

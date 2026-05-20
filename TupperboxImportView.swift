@@ -374,7 +374,7 @@ struct TupperboxImportSheet: View {
     private func handleFilePick(_ result: Result<[URL], Error>) {
         switch result {
         case .failure(let e):
-            errorMessage = e.localizedDescription
+            errorMessage = e.userFacingMessage ?? ""
             step = .failed
         case .success(let urls):
             guard let url = urls.first else { return }
@@ -405,7 +405,7 @@ struct TupperboxImportSheet: View {
             await MainActor.run { isLoading = false }
         } catch {
             await MainActor.run {
-                errorMessage = error.localizedDescription
+                errorMessage = error.userFacingMessage ?? ""
                 isLoading = false
                 step = .failed
             }
@@ -433,7 +433,7 @@ struct TupperboxImportSheet: View {
         } catch is CancellationError {
         } catch {
             await MainActor.run {
-                errorMessage = error.localizedDescription
+                errorMessage = error.userFacingMessage ?? ""
                 withAnimation { step = .failed }
             }
         }

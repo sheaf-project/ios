@@ -406,7 +406,7 @@ struct CreateApiKeySheet: View {
             await MainActor.run { isCreating = false }
         } catch {
             await MainActor.run {
-                self.error = error.localizedDescription
+                self.error = error.userFacingMessage
                 isCreating = false
             }
         }

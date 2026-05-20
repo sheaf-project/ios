@@ -291,7 +291,7 @@ struct SheafImportSheet: View {
     private func handleSheafFilePick(_ result: Result<[URL], Error>) {
         switch result {
         case .failure(let e):
-            errorMessage = e.localizedDescription
+            errorMessage = e.userFacingMessage ?? ""
             step = .failed
         case .success(let urls):
             guard let url = urls.first else { return }
@@ -323,7 +323,7 @@ struct SheafImportSheet: View {
             await MainActor.run { isLoading = false }
         } catch {
             await MainActor.run {
-                errorMessage = error.localizedDescription
+                errorMessage = error.userFacingMessage ?? ""
                 isLoading = false
                 step = .failed
             }
@@ -349,7 +349,7 @@ struct SheafImportSheet: View {
         } catch is CancellationError {
         } catch {
             await MainActor.run {
-                errorMessage = error.localizedDescription
+                errorMessage = error.userFacingMessage ?? ""
                 withAnimation { step = .failed }
             }
         }
@@ -843,7 +843,7 @@ struct SimplyPluralImportSheet: View {
     private func handleFilePick(_ result: Result<[URL], Error>) {
         switch result {
         case .failure(let e):
-            errorMessage = e.localizedDescription
+            errorMessage = e.userFacingMessage ?? ""
             step = .failed
         case .success(let urls):
             guard let url = urls.first else { return }
@@ -875,7 +875,7 @@ struct SimplyPluralImportSheet: View {
             await MainActor.run { isLoading = false }
         } catch {
             await MainActor.run {
-                errorMessage = error.localizedDescription
+                errorMessage = error.userFacingMessage ?? ""
                 isLoading = false
                 step = .failed
             }
@@ -903,7 +903,7 @@ struct SimplyPluralImportSheet: View {
         } catch is CancellationError {
         } catch {
             await MainActor.run {
-                errorMessage = error.localizedDescription
+                errorMessage = error.userFacingMessage ?? ""
                 withAnimation { step = .failed }
             }
         }

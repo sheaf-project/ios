@@ -745,7 +745,7 @@ struct RevisionDetailView: View {
             let response = try await store.api?.unpinJournalRevision(entryID: entry.id, revisionID: revision.id)
             handleUnpinResponse(response)
         } catch {
-            pinError = error.localizedDescription
+            pinError = error.userFacingMessage
         }
         isPinLoading = false
     }
@@ -770,7 +770,7 @@ struct RevisionDetailView: View {
             isPinned = true
             if let updated { onPinChanged?(updated) }
         } catch {
-            pinError = error.localizedDescription
+            pinError = error.userFacingMessage
         }
         isPinLoading = false
     }

@@ -3,28 +3,11 @@ import SwiftUI
 struct ContentView: View {
     @EnvironmentObject var authManager: AuthManager
     @EnvironmentObject var systemStore: SystemStore
-    @EnvironmentObject var networkMonitor: NetworkMonitor
     @Environment(\.theme) private var theme
 
     var body: some View {
         VStack(spacing: 0) {
-            if !networkMonitor.isOnline {
-                HStack(spacing: 8) {
-                    Image(systemName: "wifi.slash")
-                        .font(.caption)
-                    Text("Offline — changes will sync when reconnected")
-                        .font(.caption)
-                    if systemStore.pendingOperationCount > 0 {
-                        Text("(\(systemStore.pendingOperationCount) pending)")
-                            .font(.caption2)
-                            .foregroundColor(theme.textSecondary)
-                    }
-                }
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 6)
-                .background(theme.warning)
-            } else if systemStore.isSyncing {
+            if systemStore.isSyncing {
                 HStack(spacing: 8) {
                     ProgressView()
                         .tint(.white)

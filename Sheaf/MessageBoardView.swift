@@ -1063,7 +1063,7 @@ struct MessageRevisionDetailView: View {
             let response = try await store.api?.unpinMessageRevision(messageID: message.id, revisionID: revision.id)
             handleUnpinResponse(response)
         } catch {
-            pinError = error.localizedDescription
+            pinError = error.userFacingMessage
         }
         isPinLoading = false
     }
@@ -1088,7 +1088,7 @@ struct MessageRevisionDetailView: View {
             isPinned = true
             if let updated { onPinChanged?(updated) }
         } catch {
-            pinError = error.localizedDescription
+            pinError = error.userFacingMessage
         }
         isPinLoading = false
     }

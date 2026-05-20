@@ -384,7 +384,7 @@ struct SystemSafetyView: View {
             if draft == nil { draft = response.settings }
             errorMessage = nil
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = error.userFacingMessage
         }
         isLoading = false
     }
@@ -431,7 +431,7 @@ struct SystemSafetyView: View {
             // Reload to get fresh pending lists
             await load()
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = error.userFacingMessage
         }
     }
 
@@ -441,7 +441,7 @@ struct SystemSafetyView: View {
             try await api.cancelPendingAction(id: id)
             safety?.pendingActions.removeAll { $0.id == id }
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = error.userFacingMessage
         }
     }
 
@@ -451,7 +451,7 @@ struct SystemSafetyView: View {
             try await api.cancelPendingChange(id: id)
             safety?.pendingChanges.removeAll { $0.id == id }
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = error.userFacingMessage
         }
     }
 
@@ -653,7 +653,7 @@ struct UnpinRevisionSheet: View {
             onSuccess(response)
             dismiss()
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = error.userFacingMessage
         }
         isUnpinning = false
     }

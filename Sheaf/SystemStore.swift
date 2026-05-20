@@ -82,7 +82,7 @@ actor CacheManager {
     }
 
     func clearAll() {
-        let keys = ["members", "groups", "tags", "fields", "currentFronts", "frontHistory", "systemProfile", "journalEntries"]
+        let keys = ["members", "groups", "tags", "fields", "currentFronts", "frontHistory", "systemProfile", "journalEntries", "polls", "safetySettings"]
         for key in keys {
             let url = container.appendingPathComponent("\(key).json")
             try? FileManager.default.removeItem(at: url)
@@ -103,6 +103,7 @@ enum OperationType: String, Codable {
     case createField, updateField, deleteField
     case setMemberFieldValues
     case createJournal, updateJournal, deleteJournal
+    case createPoll, deletePoll, castVote, withdrawVote
 }
 
 struct OfflineOperation: Codable, Identifiable {
@@ -139,6 +140,38 @@ class SystemStore: ObservableObject {
     private var journalCursor: Date?
     @Published var pendingSafetyActions: [PendingAction] = []
     @Published var pendingSafetyChanges: [SafetyChangeRequest] = []
+    @Published var safetySettings: SystemSafetySettings?
+
+    /// Resources guarded by System Safety. Used to block destructive offline ops
+    /// when the user has Safety toggled for that resource type — those deletions
+    /// require server-side auth (grace period + step-up) that can't be satisfied
+    /// from the offline queue.
+    enum SafetyResource {
+        case members, groups, tags, fields, fronts, journals
+    }
+
+    /// Returns true if System Safety is enabled for `resource`. When offline and
+    /// `safetySettings` is nil (never fetched), defaults to true — fail closed so
+    /// we don't accidentally let a queued delete bypass safety.
+    func safetyApplies(to resource: SafetyResource) -> Bool {
+        guard let s = safetySettings else { return true }
+        switch resource {
+        case .members:  return s.appliesToMembers
+        case .groups:   return s.appliesToGroups
+        case .tags:     return s.appliesToTags
+        case .fields:   return s.appliesToFields
+        case .fronts:   return s.appliesToFronts
+        case .journals: return s.appliesToJournals
+        }
+    }
+
+    /// If Safety guards `resource`, records a user-facing message and returns
+    /// true so the caller can bail out of an offline deletion path.
+    private func blockOfflineDeletion(for resource: SafetyResource, label: String) -> Bool {
+        guard safetyApplies(to: resource) else { return false }
+        errorMessage = "Can't delete \(label) while offline. System Safety requires authentication. Reconnect and try again."
+        return true
+    }
 
     var visibleAnnouncements: [Announcement] {
         let dismissed = dismissedAnnouncementIDs
@@ -161,12 +194,66 @@ class SystemStore: ObservableObject {
     weak var themeManager: ThemeManager?
     private let cache = CacheManager.shared
 
-    /// Sets errorMessage unless the error is a 403 (handled by gate views).
+    /// Sets errorMessage unless the error is a 403 (handled by gate views) or a
+    /// connectivity failure (handled by offline mode).
     private func showError(_ error: Error) {
         if error is CancellationError || (error as NSError).code == NSURLErrorCancelled { return }
         let ns = error as NSError
         if ns.domain == "APIError" && ns.code == 403 { return }
+        // Connectivity failures (no network, TLS, connection reset, DNS, timeout, …)
+        // flip the store into offline mode instead of surfacing a raw error; the cached
+        // data already shown remains correct and replay happens on connectivity restore.
+        if Self.isOfflineLikeError(error) {
+            isOnline = false
+            return
+        }
         errorMessage = error.localizedDescription
+    }
+
+    /// Returns true if `error` indicates the request never reached / completed against
+    /// the server: no internet, lost connection, DNS / host unreachable, timeout, TLS
+    /// failures, certificate problems, or POSIX-level connection reset / pipe errors.
+    /// These should be treated identically to `NetworkMonitor.shared.isOnline == false`.
+    static func isOfflineLikeError(_ error: Error) -> Bool {
+        let ns = error as NSError
+        if ns.domain == NSURLErrorDomain {
+            let codes: Set<Int> = [
+                NSURLErrorNotConnectedToInternet,
+                NSURLErrorNetworkConnectionLost,
+                NSURLErrorTimedOut,
+                NSURLErrorCannotConnectToHost,
+                NSURLErrorCannotFindHost,
+                NSURLErrorDNSLookupFailed,
+                NSURLErrorSecureConnectionFailed,
+                NSURLErrorServerCertificateUntrusted,
+                NSURLErrorServerCertificateHasUnknownRoot,
+                NSURLErrorServerCertificateHasBadDate,
+                NSURLErrorServerCertificateNotYetValid,
+                NSURLErrorClientCertificateRejected,
+                NSURLErrorClientCertificateRequired,
+                NSURLErrorCannotLoadFromNetwork,
+                NSURLErrorInternationalRoamingOff,
+                NSURLErrorCallIsActive,
+                NSURLErrorDataNotAllowed,
+                NSURLErrorResourceUnavailable,
+            ]
+            return codes.contains(ns.code)
+        }
+        if ns.domain == NSPOSIXErrorDomain {
+            // ECONNRESET=54, EPIPE=32, ENETDOWN=50, ENETUNREACH=51,
+            // ETIMEDOUT=60, ECONNREFUSED=61, EHOSTDOWN=64, EHOSTUNREACH=65
+            return [32, 50, 51, 54, 60, 61, 64, 65].contains(ns.code)
+        }
+        return false
+    }
+
+    /// If `error` is offline-like, flip the store to offline and return true so the
+    /// caller can fall through to its offline branch (enqueue + optimistic update).
+    /// Otherwise return false — the caller should surface the error normally.
+    private func fallThroughToOffline(_ error: Error) -> Bool {
+        guard Self.isOfflineLikeError(error) else { return false }
+        isOnline = false
+        return true
     }
     private var offlineQueue: [OfflineOperation] = []
     private var connectivityObserver: Any?
@@ -223,6 +310,12 @@ class SystemStore: ObservableObject {
         if let cached = await cache.load(key: "journalEntries", as: [JournalEntry].self), journalEntries.isEmpty {
             journalEntries = cached
         }
+        if let cached = await cache.load(key: "polls", as: [Poll].self), polls.isEmpty {
+            polls = cached
+        }
+        if let cached = await cache.load(key: "safetySettings", as: SystemSafetySettings.self), safetySettings == nil {
+            safetySettings = cached
+        }
     }
 
     private func saveAllToCache() {
@@ -237,6 +330,10 @@ class SystemStore: ObservableObject {
                 await cache.save(systemProfile, key: "systemProfile")
             }
             await cache.save(journalEntries, key: "journalEntries")
+            await cache.save(polls, key: "polls")
+            if let safetySettings {
+                await cache.save(safetySettings, key: "safetySettings")
+            }
         }
     }
 
@@ -315,6 +412,8 @@ class SystemStore: ObservableObject {
                 if let safety = try? await api.getSystemSafety() {
                     pendingSafetyActions = safety.pendingActions
                     pendingSafetyChanges = safety.pendingChanges
+                    safetySettings = safety.settings
+                    saveAllToCache()
                 }
             }
 
@@ -366,6 +465,8 @@ class SystemStore: ObservableObject {
         defer { isSyncing = false }
 
         var tempIDMap: [String: String] = [:]
+        var touchedPolls = false
+        var touchedJournals = false
 
         while !offlineQueue.isEmpty {
             let op = offlineQueue[0]
@@ -470,15 +571,47 @@ class SystemStore: ObservableObject {
                     if let tempID = op.tempID {
                         tempIDMap[tempID] = created.id
                     }
+                    touchedJournals = true
                 case .updateJournal:
                     if let rid = resolveID(op.resourceID) {
                         let update = try JSONDecoder.iso.decode(JournalEntryUpdate.self, from: op.bodyData)
                         _ = try await api.updateJournal(id: rid, update: update)
                     }
+                    touchedJournals = true
                 case .deleteJournal:
                     if let rid = resolveID(op.resourceID) {
                         try await api.deleteJournal(id: rid)
                     }
+                    touchedJournals = true
+                case .createPoll:
+                    let create = try JSONDecoder.iso.decode(PollCreate.self, from: op.bodyData)
+                    let created = try await api.createPoll(create)
+                    if let tempID = op.tempID {
+                        tempIDMap[tempID] = created.id
+                    }
+                    touchedPolls = true
+                case .deletePoll:
+                    if let rid = resolveID(op.resourceID) {
+                        _ = try await api.deletePoll(id: rid)
+                    }
+                    touchedPolls = true
+                case .castVote:
+                    if let rid = resolveID(op.resourceID) {
+                        let vote = try JSONDecoder.iso.decode(VoteCast.self, from: op.bodyData)
+                        var resolved = vote
+                        if let mapped = tempIDMap[vote.votedAsMemberID] {
+                            resolved = VoteCast(votedAsMemberID: mapped, optionIDs: vote.optionIDs)
+                        }
+                        _ = try await api.castVote(pollID: rid, vote: resolved)
+                    }
+                    touchedPolls = true
+                case .withdrawVote:
+                    if let rid = resolveID(op.resourceID) {
+                        let memberID = try JSONDecoder.iso.decode(String.self, from: op.bodyData)
+                        let resolved = tempIDMap[memberID] ?? memberID
+                        try await api.withdrawVote(pollID: rid, memberID: resolved)
+                    }
+                    touchedPolls = true
                 }
 
                 // Success — remove from queue
@@ -492,6 +625,12 @@ class SystemStore: ObservableObject {
                     persistOfflineQueue()
                     continue
                 }
+                // Connectivity blip mid-replay — keep queue intact and wait for
+                // the next .connectivityRestored notification without a banner.
+                if Self.isOfflineLikeError(error) {
+                    isOnline = false
+                    break
+                }
                 // Other error — stop replay, keep remaining ops
                 errorMessage = "Sync failed: \(error.localizedDescription)"
                 break
@@ -500,6 +639,12 @@ class SystemStore: ObservableObject {
 
         // Reconcile with server
         loadAll()
+        if touchedPolls {
+            Task { await loadPolls() }
+        }
+        if touchedJournals {
+            Task { await loadJournals() }
+        }
     }
 
     var regularMemberCount: Int {
@@ -526,24 +671,28 @@ class SystemStore: ObservableObject {
                 currentFronts.append(created)
                 saveAllToCache()
                 updateWatchComplication()
+                return
             } catch {
-                showError(error)
+                if !fallThroughToOffline(error) {
+                    showError(error)
+                    return
+                }
             }
-        } else {
-            let create = FrontCreate(memberIDs: memberIDs, startedAt: now, replaceFronts: false, customStatus: customStatus)
-            let tempID = UUID().uuidString
-            if let body = try? JSONEncoder.iso.encode(create) {
-                enqueue(.createFront, tempID: tempID, body: body)
-            }
-            let optimistic = FrontEntry(
-                id: tempID, systemID: systemProfile?.id ?? "",
-                startedAt: now, endedAt: nil, memberIDs: memberIDs,
-                customStatus: customStatus
-            )
-            currentFronts.append(optimistic)
-            saveAllToCache()
-            updateWatchComplication()
         }
+
+        let create = FrontCreate(memberIDs: memberIDs, startedAt: now, replaceFronts: false, customStatus: customStatus)
+        let tempID = UUID().uuidString
+        if let body = try? JSONEncoder.iso.encode(create) {
+            enqueue(.createFront, tempID: tempID, body: body)
+        }
+        let optimistic = FrontEntry(
+            id: tempID, systemID: systemProfile?.id ?? "",
+            startedAt: now, endedAt: nil, memberIDs: memberIDs,
+            customStatus: customStatus
+        )
+        currentFronts.append(optimistic)
+        saveAllToCache()
+        updateWatchComplication()
     }
 
     func removeMemberFromFront(_ memberID: String) async {
@@ -575,33 +724,37 @@ class SystemStore: ObservableObject {
                 currentFronts = [created]
                 saveAllToCache()
                 updateWatchComplication()
+                return
             } catch {
-                showError(error)
-            }
-        } else {
-            // Offline: queue end-front operations
-            for front in currentFronts where front.endedAt == nil {
-                let update = FrontUpdate(endedAt: now, memberIDs: nil)
-                if let body = try? JSONEncoder.iso.encode(update) {
-                    enqueue(.updateFront, resourceID: front.id, body: body)
+                if !fallThroughToOffline(error) {
+                    showError(error)
+                    return
                 }
             }
-            // Queue create-front
-            let create = FrontCreate(memberIDs: memberIDs, startedAt: now, customStatus: customStatus)
-            let tempID = UUID().uuidString
-            if let body = try? JSONEncoder.iso.encode(create) {
-                enqueue(.createFront, tempID: tempID, body: body)
-            }
-            // Optimistic local update
-            let optimistic = FrontEntry(
-                id: tempID, systemID: systemProfile?.id ?? "",
-                startedAt: now, endedAt: nil, memberIDs: memberIDs,
-                customStatus: customStatus
-            )
-            currentFronts = [optimistic]
-            saveAllToCache()
-            updateWatchComplication()
         }
+
+        // Offline: queue end-front operations
+        for front in currentFronts where front.endedAt == nil {
+            let update = FrontUpdate(endedAt: now, memberIDs: nil)
+            if let body = try? JSONEncoder.iso.encode(update) {
+                enqueue(.updateFront, resourceID: front.id, body: body)
+            }
+        }
+        // Queue create-front
+        let create = FrontCreate(memberIDs: memberIDs, startedAt: now, customStatus: customStatus)
+        let tempID = UUID().uuidString
+        if let body = try? JSONEncoder.iso.encode(create) {
+            enqueue(.createFront, tempID: tempID, body: body)
+        }
+        // Optimistic local update
+        let optimistic = FrontEntry(
+            id: tempID, systemID: systemProfile?.id ?? "",
+            startedAt: now, endedAt: nil, memberIDs: memberIDs,
+            customStatus: customStatus
+        )
+        currentFronts = [optimistic]
+        saveAllToCache()
+        updateWatchComplication()
     }
 
     func loadFrontHistory() async {
@@ -652,26 +805,30 @@ class SystemStore: ObservableObject {
                     currentFronts[idx] = updated
                 }
                 saveAllToCache()
+                return
             } catch {
-                showError(error)
+                if !fallThroughToOffline(error) {
+                    showError(error)
+                    return
+                }
             }
-        } else {
-            if let body = try? JSONEncoder.iso.encode(update) {
-                enqueue(.updateFront, resourceID: id, body: body)
-            }
-            // Optimistic update
-            if let idx = frontHistory.firstIndex(where: { $0.id == id }) {
-                if let endedAt = update.endedAt { frontHistory[idx].endedAt = endedAt }
-                if let memberIDs = update.memberIDs { frontHistory[idx].memberIDs = memberIDs }
-                if let customStatus = update.customStatus { frontHistory[idx].customStatus = customStatus.isEmpty ? nil : customStatus }
-            }
-            if let idx = currentFronts.firstIndex(where: { $0.id == id }) {
-                if let endedAt = update.endedAt { currentFronts[idx].endedAt = endedAt }
-                if let memberIDs = update.memberIDs { currentFronts[idx].memberIDs = memberIDs }
-                if let customStatus = update.customStatus { currentFronts[idx].customStatus = customStatus.isEmpty ? nil : customStatus }
-            }
-            saveAllToCache()
         }
+
+        if let body = try? JSONEncoder.iso.encode(update) {
+            enqueue(.updateFront, resourceID: id, body: body)
+        }
+        // Optimistic update
+        if let idx = frontHistory.firstIndex(where: { $0.id == id }) {
+            if let endedAt = update.endedAt { frontHistory[idx].endedAt = endedAt }
+            if let memberIDs = update.memberIDs { frontHistory[idx].memberIDs = memberIDs }
+            if let customStatus = update.customStatus { frontHistory[idx].customStatus = customStatus.isEmpty ? nil : customStatus }
+        }
+        if let idx = currentFronts.firstIndex(where: { $0.id == id }) {
+            if let endedAt = update.endedAt { currentFronts[idx].endedAt = endedAt }
+            if let memberIDs = update.memberIDs { currentFronts[idx].memberIDs = memberIDs }
+            if let customStatus = update.customStatus { currentFronts[idx].customStatus = customStatus.isEmpty ? nil : customStatus }
+        }
+        saveAllToCache()
     }
 
     @discardableResult
@@ -686,16 +843,19 @@ class SystemStore: ObservableObject {
                 }
                 return queued
             } catch {
-                showError(error)
-                return nil
+                if !fallThroughToOffline(error) {
+                    showError(error)
+                    return nil
+                }
             }
-        } else {
-            enqueue(.deleteFront, resourceID: id)
-            frontHistory.removeAll { $0.id == id }
-            currentFronts.removeAll { $0.id == id }
-            saveAllToCache()
-            return nil
         }
+
+        if blockOfflineDeletion(for: .fronts, label: "front entries") { return nil }
+        enqueue(.deleteFront, resourceID: id)
+        frontHistory.removeAll { $0.id == id }
+        currentFronts.removeAll { $0.id == id }
+        saveAllToCache()
+        return nil
     }
 
     /// End all currently active fronts.
@@ -714,38 +874,43 @@ class SystemStore: ObservableObject {
         guard let api else { throw URLError(.badURL) }
 
         if NetworkMonitor.shared.isOnline {
-            var entry = try await api.createFront(FrontCreate(memberIDs: memberIDs, startedAt: startedAt, customStatus: customStatus))
-            if let endedAt {
-                entry = try await api.updateFront(id: entry.id, update: FrontUpdate(endedAt: endedAt, memberIDs: nil))
-            }
-            frontHistory.insert(entry, at: 0)
-            if entry.endedAt == nil {
-                currentFronts.append(entry)
-            }
-            saveAllToCache()
-        } else {
-            let tempID = UUID().uuidString
-            let create = FrontCreate(memberIDs: memberIDs, startedAt: startedAt, customStatus: customStatus)
-            if let body = try? JSONEncoder.iso.encode(create) {
-                enqueue(.createFront, tempID: tempID, body: body)
-            }
-            if let endedAt {
-                let update = FrontUpdate(endedAt: endedAt, memberIDs: nil)
-                if let body = try? JSONEncoder.iso.encode(update) {
-                    enqueue(.updateFront, resourceID: tempID, body: body)
+            do {
+                var entry = try await api.createFront(FrontCreate(memberIDs: memberIDs, startedAt: startedAt, customStatus: customStatus))
+                if let endedAt {
+                    entry = try await api.updateFront(id: entry.id, update: FrontUpdate(endedAt: endedAt, memberIDs: nil))
                 }
+                frontHistory.insert(entry, at: 0)
+                if entry.endedAt == nil {
+                    currentFronts.append(entry)
+                }
+                saveAllToCache()
+                return
+            } catch {
+                if !fallThroughToOffline(error) { throw error }
             }
-            let optimistic = FrontEntry(
-                id: tempID, systemID: systemProfile?.id ?? "",
-                startedAt: startedAt, endedAt: endedAt, memberIDs: memberIDs,
-                customStatus: customStatus
-            )
-            frontHistory.insert(optimistic, at: 0)
-            if endedAt == nil {
-                currentFronts.append(optimistic)
-            }
-            saveAllToCache()
         }
+
+        let tempID = UUID().uuidString
+        let create = FrontCreate(memberIDs: memberIDs, startedAt: startedAt, customStatus: customStatus)
+        if let body = try? JSONEncoder.iso.encode(create) {
+            enqueue(.createFront, tempID: tempID, body: body)
+        }
+        if let endedAt {
+            let update = FrontUpdate(endedAt: endedAt, memberIDs: nil)
+            if let body = try? JSONEncoder.iso.encode(update) {
+                enqueue(.updateFront, resourceID: tempID, body: body)
+            }
+        }
+        let optimistic = FrontEntry(
+            id: tempID, systemID: systemProfile?.id ?? "",
+            startedAt: startedAt, endedAt: endedAt, memberIDs: memberIDs,
+            customStatus: customStatus
+        )
+        frontHistory.insert(optimistic, at: 0)
+        if endedAt == nil {
+            currentFronts.append(optimistic)
+        }
+        saveAllToCache()
     }
 
     // MARK: - Members
@@ -771,53 +936,59 @@ class SystemStore: ObservableObject {
                     members.append(created)
                 }
                 saveAllToCache()
-            } catch { showError(error) }
-        } else {
-            if let existing {
-                let update = MemberUpdate(
-                    name: create.name, displayName: create.displayName,
-                    description: create.description, pronouns: create.pronouns,
-                    avatarURL: create.avatarURL, color: create.color,
-                    birthday: create.birthday, emoji: create.emoji,
-                    isCustomFront: create.isCustomFront, privacy: create.privacy,
-                    note: create.note
-                )
-                if let body = try? JSONEncoder.iso.encode(update) {
-                    enqueue(.updateMember, resourceID: existing.id, body: body)
+                return
+            } catch {
+                if !fallThroughToOffline(error) {
+                    showError(error)
+                    return
                 }
-                // Optimistic update
-                if let idx = members.firstIndex(where: { $0.id == existing.id }) {
-                    members[idx].name = create.name
-                    members[idx].displayName = create.displayName
-                    members[idx].description = create.description
-                    members[idx].pronouns = create.pronouns
-                    members[idx].avatarURL = create.avatarURL
-                    members[idx].color = create.color
-                    members[idx].birthday = create.birthday
-                    members[idx].emoji = create.emoji
-                    members[idx].isCustomFront = create.isCustomFront ?? false
-                    if let privacy = create.privacy { members[idx].privacy = privacy }
-                    members[idx].note = create.note
-                }
-            } else {
-                let tempID = UUID().uuidString
-                if let body = try? JSONEncoder.iso.encode(create) {
-                    enqueue(.createMember, tempID: tempID, body: body)
-                }
-                let optimistic = Member(
-                    id: tempID, systemID: systemProfile?.id ?? "",
-                    name: create.name, displayName: create.displayName,
-                    description: create.description, pronouns: create.pronouns,
-                    avatarURL: create.avatarURL, color: create.color,
-                    birthday: create.birthday, emoji: create.emoji,
-                    isCustomFront: create.isCustomFront ?? false,
-                    privacy: create.privacy ?? .private,
-                    createdAt: Date(), updatedAt: Date()
-                )
-                members.append(optimistic)
             }
-            saveAllToCache()
         }
+
+        if let existing {
+            let update = MemberUpdate(
+                name: create.name, displayName: create.displayName,
+                description: create.description, pronouns: create.pronouns,
+                avatarURL: create.avatarURL, color: create.color,
+                birthday: create.birthday, emoji: create.emoji,
+                isCustomFront: create.isCustomFront, privacy: create.privacy,
+                note: create.note
+            )
+            if let body = try? JSONEncoder.iso.encode(update) {
+                enqueue(.updateMember, resourceID: existing.id, body: body)
+            }
+            // Optimistic update
+            if let idx = members.firstIndex(where: { $0.id == existing.id }) {
+                members[idx].name = create.name
+                members[idx].displayName = create.displayName
+                members[idx].description = create.description
+                members[idx].pronouns = create.pronouns
+                members[idx].avatarURL = create.avatarURL
+                members[idx].color = create.color
+                members[idx].birthday = create.birthday
+                members[idx].emoji = create.emoji
+                members[idx].isCustomFront = create.isCustomFront ?? false
+                if let privacy = create.privacy { members[idx].privacy = privacy }
+                members[idx].note = create.note
+            }
+        } else {
+            let tempID = UUID().uuidString
+            if let body = try? JSONEncoder.iso.encode(create) {
+                enqueue(.createMember, tempID: tempID, body: body)
+            }
+            let optimistic = Member(
+                id: tempID, systemID: systemProfile?.id ?? "",
+                name: create.name, displayName: create.displayName,
+                description: create.description, pronouns: create.pronouns,
+                avatarURL: create.avatarURL, color: create.color,
+                birthday: create.birthday, emoji: create.emoji,
+                isCustomFront: create.isCustomFront ?? false,
+                privacy: create.privacy ?? .private,
+                createdAt: Date(), updatedAt: Date()
+            )
+            members.append(optimistic)
+        }
+        saveAllToCache()
     }
 
     func refreshMember(_ updated: Member) {
@@ -837,13 +1008,19 @@ class SystemStore: ObservableObject {
                     saveAllToCache()
                 }
                 return queued
-            } catch { showError(error); return nil }
-        } else {
-            enqueue(.deleteMember, resourceID: id)
-            members.removeAll { $0.id == id }
-            saveAllToCache()
-            return nil
+            } catch {
+                if !fallThroughToOffline(error) {
+                    showError(error)
+                    return nil
+                }
+            }
         }
+
+        if blockOfflineDeletion(for: .members, label: "members") { return nil }
+        enqueue(.deleteMember, resourceID: id)
+        members.removeAll { $0.id == id }
+        saveAllToCache()
+        return nil
     }
 
     // MARK: - Groups
@@ -863,45 +1040,58 @@ class SystemStore: ObservableObject {
                     groups.append(created)
                 }
                 saveAllToCache()
-            } catch { showError(error) }
-        } else {
-            if let existing {
-                let update = GroupUpdate(name: create.name, description: create.description,
-                                        color: create.color, parentID: create.parentID)
-                if let body = try? JSONEncoder.iso.encode(update) {
-                    enqueue(.updateGroup, resourceID: existing.id, body: body)
+                return
+            } catch {
+                if !fallThroughToOffline(error) {
+                    showError(error)
+                    return
                 }
-                if let idx = groups.firstIndex(where: { $0.id == existing.id }) {
-                    groups[idx].name = create.name
-                    groups[idx].description = create.description
-                    groups[idx].color = create.color
-                    groups[idx].parentID = create.parentID
-                }
-            } else {
-                let tempID = UUID().uuidString
-                if let body = try? JSONEncoder.iso.encode(create) {
-                    enqueue(.createGroup, tempID: tempID, body: body)
-                }
-                let optimistic = SystemGroup(
-                    id: tempID, systemID: systemProfile?.id ?? "",
-                    name: create.name, description: create.description,
-                    color: create.color, parentID: create.parentID,
-                    createdAt: Date(), updatedAt: Date()
-                )
-                groups.append(optimistic)
             }
-            saveAllToCache()
         }
+
+        if let existing {
+            let update = GroupUpdate(name: create.name, description: create.description,
+                                    color: create.color, parentID: create.parentID)
+            if let body = try? JSONEncoder.iso.encode(update) {
+                enqueue(.updateGroup, resourceID: existing.id, body: body)
+            }
+            if let idx = groups.firstIndex(where: { $0.id == existing.id }) {
+                groups[idx].name = create.name
+                groups[idx].description = create.description
+                groups[idx].color = create.color
+                groups[idx].parentID = create.parentID
+            }
+        } else {
+            let tempID = UUID().uuidString
+            if let body = try? JSONEncoder.iso.encode(create) {
+                enqueue(.createGroup, tempID: tempID, body: body)
+            }
+            let optimistic = SystemGroup(
+                id: tempID, systemID: systemProfile?.id ?? "",
+                name: create.name, description: create.description,
+                color: create.color, parentID: create.parentID,
+                createdAt: Date(), updatedAt: Date()
+            )
+            groups.append(optimistic)
+        }
+        saveAllToCache()
     }
 
     func setGroupMembers(groupID: String, memberIDs: [String]) async {
         if NetworkMonitor.shared.isOnline, let api {
-            do { _ = try await api.setGroupMembers(groupID: groupID, memberIDs: memberIDs) }
-            catch { showError(error) }
-        } else {
-            if let body = try? JSONEncoder.iso.encode(memberIDs) {
-                enqueue(.setGroupMembers, resourceID: groupID, body: body)
+            do {
+                _ = try await api.setGroupMembers(groupID: groupID, memberIDs: memberIDs)
+                return
+            } catch {
+                if !fallThroughToOffline(error) {
+                    showError(error)
+                    return
+                }
             }
+        }
+
+        if let body = try? JSONEncoder.iso.encode(memberIDs) {
+            enqueue(.setGroupMembers, resourceID: groupID, body: body)
         }
     }
 
@@ -915,13 +1105,19 @@ class SystemStore: ObservableObject {
                     saveAllToCache()
                 }
                 return queued
-            } catch { showError(error); return nil }
-        } else {
-            enqueue(.deleteGroup, resourceID: id)
-            groups.removeAll { $0.id == id }
-            saveAllToCache()
-            return nil
+            } catch {
+                if !fallThroughToOffline(error) {
+                    showError(error)
+                    return nil
+                }
+            }
         }
+
+        if blockOfflineDeletion(for: .groups, label: "groups") { return nil }
+        enqueue(.deleteGroup, resourceID: id)
+        groups.removeAll { $0.id == id }
+        saveAllToCache()
+        return nil
     }
 
     // MARK: - System Profile (consolidated for views)
@@ -931,23 +1127,27 @@ class SystemStore: ObservableObject {
             do {
                 systemProfile = try await api.updateMySystem(update)
                 saveAllToCache()
+                return
             } catch {
-                showError(error)
+                if !fallThroughToOffline(error) {
+                    showError(error)
+                    return
+                }
             }
-        } else {
-            if let body = try? JSONEncoder.iso.encode(update) {
-                enqueue(.updateSystem, body: body)
-            }
-            // Optimistic update
-            if let name = update.name { systemProfile?.name = name }
-            if let desc = update.description { systemProfile?.description = desc }
-            if let note = update.note { systemProfile?.note = note }
-            if let tag = update.tag { systemProfile?.tag = tag }
-            if let url = update.avatarURL { systemProfile?.avatarURL = url }
-            if let color = update.color { systemProfile?.color = color }
-            if let privacy = update.privacy { systemProfile?.privacy = privacy }
-            saveAllToCache()
         }
+
+        if let body = try? JSONEncoder.iso.encode(update) {
+            enqueue(.updateSystem, body: body)
+        }
+        // Optimistic update
+        if let name = update.name { systemProfile?.name = name }
+        if let desc = update.description { systemProfile?.description = desc }
+        if let note = update.note { systemProfile?.note = note }
+        if let tag = update.tag { systemProfile?.tag = tag }
+        if let url = update.avatarURL { systemProfile?.avatarURL = url }
+        if let color = update.color { systemProfile?.color = color }
+        if let privacy = update.privacy { systemProfile?.privacy = privacy }
+        saveAllToCache()
     }
 
     // MARK: - Custom Fields (consolidated for views)
@@ -963,15 +1163,18 @@ class SystemStore: ObservableObject {
                 }
                 return queued
             } catch {
-                showError(error)
-                return nil
+                if !fallThroughToOffline(error) {
+                    showError(error)
+                    return nil
+                }
             }
-        } else {
-            enqueue(.deleteField, resourceID: id)
-            fields.removeAll { $0.id == id }
-            saveAllToCache()
-            return nil
         }
+
+        if blockOfflineDeletion(for: .fields, label: "custom fields") { return nil }
+        enqueue(.deleteField, resourceID: id)
+        fields.removeAll { $0.id == id }
+        saveAllToCache()
+        return nil
     }
 
     func updateField(id: String, name: String, privacy: PrivacyLevel) async {
@@ -982,20 +1185,24 @@ class SystemStore: ObservableObject {
                     fields[idx] = updated
                 }
                 saveAllToCache()
+                return
             } catch {
-                showError(error)
+                if !fallThroughToOffline(error) {
+                    showError(error)
+                    return
+                }
             }
-        } else {
-            struct FieldUpdatePayload: Codable { let name: String; let privacy: PrivacyLevel }
-            if let body = try? JSONEncoder.iso.encode(FieldUpdatePayload(name: name, privacy: privacy)) {
-                enqueue(.updateField, resourceID: id, body: body)
-            }
-            if let idx = fields.firstIndex(where: { $0.id == id }) {
-                fields[idx].name = name
-                fields[idx].privacy = privacy
-            }
-            saveAllToCache()
         }
+
+        struct FieldUpdatePayload: Codable { let name: String; let privacy: PrivacyLevel }
+        if let body = try? JSONEncoder.iso.encode(FieldUpdatePayload(name: name, privacy: privacy)) {
+            enqueue(.updateField, resourceID: id, body: body)
+        }
+        if let idx = fields.firstIndex(where: { $0.id == id }) {
+            fields[idx].name = name
+            fields[idx].privacy = privacy
+        }
+        saveAllToCache()
     }
 
     func createField(_ create: CustomFieldCreate) async -> CustomField? {
@@ -1006,25 +1213,27 @@ class SystemStore: ObservableObject {
                 saveAllToCache()
                 return created
             } catch {
-                showError(error)
-                return nil
+                if !fallThroughToOffline(error) {
+                    showError(error)
+                    return nil
+                }
             }
-        } else {
-            let tempID = UUID().uuidString
-            if let body = try? JSONEncoder.iso.encode(create) {
-                enqueue(.createField, tempID: tempID, body: body)
-            }
-            let optimistic = CustomField(
-                id: tempID, systemID: systemProfile?.id ?? "",
-                name: create.name, fieldType: create.fieldType,
-                options: create.options, order: create.order ?? fields.count,
-                privacy: create.privacy ?? .private,
-                createdAt: Date(), updatedAt: Date()
-            )
-            fields.append(optimistic)
-            saveAllToCache()
-            return optimistic
         }
+
+        let tempID = UUID().uuidString
+        if let body = try? JSONEncoder.iso.encode(create) {
+            enqueue(.createField, tempID: tempID, body: body)
+        }
+        let optimistic = CustomField(
+            id: tempID, systemID: systemProfile?.id ?? "",
+            name: create.name, fieldType: create.fieldType,
+            options: create.options, order: create.order ?? fields.count,
+            privacy: create.privacy ?? .private,
+            createdAt: Date(), updatedAt: Date()
+        )
+        fields.append(optimistic)
+        saveAllToCache()
+        return optimistic
     }
 
     func reloadFields() async {
@@ -1044,23 +1253,25 @@ class SystemStore: ObservableObject {
                 saveAllToCache()
                 return created
             } catch {
-                showError(error)
-                return nil
+                if !fallThroughToOffline(error) {
+                    showError(error)
+                    return nil
+                }
             }
-        } else {
-            let tempID = UUID().uuidString
-            if let body = try? JSONEncoder.iso.encode(create) {
-                enqueue(.createTag, tempID: tempID, body: body)
-            }
-            let optimistic = Tag(
-                id: tempID, systemID: systemProfile?.id ?? "",
-                name: create.name, color: create.color,
-                createdAt: Date(), updatedAt: Date()
-            )
-            tags.append(optimistic)
-            saveAllToCache()
-            return optimistic
         }
+
+        let tempID = UUID().uuidString
+        if let body = try? JSONEncoder.iso.encode(create) {
+            enqueue(.createTag, tempID: tempID, body: body)
+        }
+        let optimistic = Tag(
+            id: tempID, systemID: systemProfile?.id ?? "",
+            name: create.name, color: create.color,
+            createdAt: Date(), updatedAt: Date()
+        )
+        tags.append(optimistic)
+        saveAllToCache()
+        return optimistic
     }
 
     @discardableResult
@@ -1074,15 +1285,18 @@ class SystemStore: ObservableObject {
                 }
                 return queued
             } catch {
-                showError(error)
-                return nil
+                if !fallThroughToOffline(error) {
+                    showError(error)
+                    return nil
+                }
             }
-        } else {
-            enqueue(.deleteTag, resourceID: id)
-            tags.removeAll { $0.id == id }
-            saveAllToCache()
-            return nil
         }
+
+        if blockOfflineDeletion(for: .tags, label: "tags") { return nil }
+        enqueue(.deleteTag, resourceID: id)
+        tags.removeAll { $0.id == id }
+        saveAllToCache()
+        return nil
     }
 
     // MARK: - Journals
@@ -1096,23 +1310,35 @@ class SystemStore: ObservableObject {
                 journalCursor = response.nextCursor
                 hasMoreJournals = response.nextCursor != nil
                 await cache.save(journalEntries, key: "journalEntries")
+                return
             } catch {
-                showError(error)
+                if !fallThroughToOffline(error) {
+                    showError(error)
+                    return
+                }
             }
         }
+        // Offline: cached journalEntries (loaded by loadFromCache) remain visible.
     }
 
     func loadMoreJournals() async {
-        guard hasMoreJournals, let cursor = journalCursor, NetworkMonitor.shared.isOnline, let api else { return }
-        do {
-            let response = try await api.getJournals(before: cursor)
-            journalEntries.append(contentsOf: response.items)
-            journalCursor = response.nextCursor
-            hasMoreJournals = response.nextCursor != nil
-            await cache.save(journalEntries, key: "journalEntries")
-        } catch {
-            showError(error)
+        guard hasMoreJournals, let cursor = journalCursor else { return }
+        if NetworkMonitor.shared.isOnline, let api {
+            do {
+                let response = try await api.getJournals(before: cursor)
+                journalEntries.append(contentsOf: response.items)
+                journalCursor = response.nextCursor
+                hasMoreJournals = response.nextCursor != nil
+                await cache.save(journalEntries, key: "journalEntries")
+                return
+            } catch {
+                if !fallThroughToOffline(error) {
+                    showError(error)
+                    return
+                }
+            }
         }
+        // Offline: pagination is server-driven, nothing more to surface locally.
     }
 
     func createJournal(_ create: JournalEntryCreate) async -> JournalEntry? {
@@ -1123,26 +1349,28 @@ class SystemStore: ObservableObject {
                 saveAllToCache()
                 return created
             } catch {
-                showError(error)
-                return nil
+                if !fallThroughToOffline(error) {
+                    showError(error)
+                    return nil
+                }
             }
-        } else {
-            let tempID = UUID().uuidString
-            if let body = try? JSONEncoder.iso.encode(create) {
-                enqueue(.createJournal, tempID: tempID, body: body)
-            }
-            let optimistic = JournalEntry(
-                id: tempID, systemID: systemProfile?.id ?? "",
-                memberID: create.memberID, title: create.title, body: create.body,
-                visibility: create.visibility, authorUserID: nil,
-                authorMemberIDs: create.authorMemberIDs ?? [],
-                authorMemberNames: [],
-                createdAt: Date(), updatedAt: Date()
-            )
-            journalEntries.insert(optimistic, at: 0)
-            saveAllToCache()
-            return optimistic
         }
+
+        let tempID = UUID().uuidString
+        if let body = try? JSONEncoder.iso.encode(create) {
+            enqueue(.createJournal, tempID: tempID, body: body)
+        }
+        let optimistic = JournalEntry(
+            id: tempID, systemID: systemProfile?.id ?? "",
+            memberID: create.memberID, title: create.title, body: create.body,
+            visibility: create.visibility, authorUserID: nil,
+            authorMemberIDs: create.authorMemberIDs ?? [],
+            authorMemberNames: [],
+            createdAt: Date(), updatedAt: Date()
+        )
+        journalEntries.insert(optimistic, at: 0)
+        saveAllToCache()
+        return optimistic
     }
 
     func updateJournal(id: String, update: JournalEntryUpdate) async {
@@ -1153,19 +1381,23 @@ class SystemStore: ObservableObject {
                     journalEntries[idx] = updated
                 }
                 saveAllToCache()
+                return
             } catch {
-                showError(error)
+                if !fallThroughToOffline(error) {
+                    showError(error)
+                    return
+                }
             }
-        } else {
-            if let body = try? JSONEncoder.iso.encode(update) {
-                enqueue(.updateJournal, resourceID: id, body: body)
-            }
-            if let idx = journalEntries.firstIndex(where: { $0.id == id }) {
-                if let title = update.title { journalEntries[idx].title = title }
-                if let body = update.body { journalEntries[idx].body = body }
-            }
-            saveAllToCache()
         }
+
+        if let body = try? JSONEncoder.iso.encode(update) {
+            enqueue(.updateJournal, resourceID: id, body: body)
+        }
+        if let idx = journalEntries.firstIndex(where: { $0.id == id }) {
+            if let title = update.title { journalEntries[idx].title = title }
+            if let body = update.body { journalEntries[idx].body = body }
+        }
+        saveAllToCache()
     }
 
     @discardableResult
@@ -1179,15 +1411,18 @@ class SystemStore: ObservableObject {
                 }
                 return queued
             } catch {
-                showError(error)
-                return nil
+                if !fallThroughToOffline(error) {
+                    showError(error)
+                    return nil
+                }
             }
-        } else {
-            enqueue(.deleteJournal, resourceID: id)
-            journalEntries.removeAll { $0.id == id }
-            saveAllToCache()
-            return nil
         }
+
+        if blockOfflineDeletion(for: .journals, label: "journal entries") { return nil }
+        enqueue(.deleteJournal, resourceID: id)
+        journalEntries.removeAll { $0.id == id }
+        saveAllToCache()
+        return nil
     }
 
     // MARK: - Member Field Values (consolidated for views)
@@ -1203,13 +1438,17 @@ class SystemStore: ObservableObject {
         if NetworkMonitor.shared.isOnline, let api {
             do {
                 _ = try await api.setMemberFieldValues(memberID: memberID, values: values)
+                return
             } catch {
-                showError(error)
+                if !fallThroughToOffline(error) {
+                    showError(error)
+                    return
+                }
             }
-        } else {
-            if let body = try? JSONEncoder.iso.encode(values) {
-                enqueue(.setMemberFieldValues, resourceID: memberID, body: body)
-            }
+        }
+
+        if let body = try? JSONEncoder.iso.encode(values) {
+            enqueue(.setMemberFieldValues, resourceID: memberID, body: body)
         }
     }
 
@@ -1277,74 +1516,197 @@ class SystemStore: ObservableObject {
     @Published var polls: [Poll] = []
 
     func loadPolls() async {
-        guard NetworkMonitor.shared.isOnline, let api else { return }
-        do {
-            polls = try await api.getPolls()
-        } catch {
-            showError(error)
+        if NetworkMonitor.shared.isOnline, let api {
+            do {
+                polls = try await api.getPolls()
+                saveAllToCache()
+                return
+            } catch {
+                if !fallThroughToOffline(error) {
+                    showError(error)
+                    return
+                }
+            }
         }
+        // Offline: cached polls (loaded by loadFromCache) remain visible.
     }
 
     func createPoll(_ create: PollCreate) async -> Poll? {
-        guard NetworkMonitor.shared.isOnline, let api else { return nil }
-        do {
-            let created = try await api.createPoll(create)
-            polls.insert(created, at: 0)
-            return created
-        } catch {
-            showError(error)
-            return nil
+        if NetworkMonitor.shared.isOnline, let api {
+            do {
+                let created = try await api.createPoll(create)
+                polls.insert(created, at: 0)
+                saveAllToCache()
+                return created
+            } catch {
+                if !fallThroughToOffline(error) {
+                    showError(error)
+                    return nil
+                }
+            }
         }
+
+        let tempID = UUID().uuidString
+        if let body = try? JSONEncoder.iso.encode(create) {
+            enqueue(.createPoll, tempID: tempID, body: body)
+        }
+        let now = Date()
+        let optimistic = Poll(
+            id: tempID,
+            systemID: systemProfile?.id ?? "",
+            question: create.question,
+            description: create.description,
+            kind: create.kind,
+            resultsVisibility: create.resultsVisibility,
+            closesAt: create.closesAt,
+            retentionDays: create.retentionDays ?? 30,
+            includeCustomFronts: create.includeCustomFronts ?? false,
+            options: create.options.enumerated().map { (idx, opt) in
+                PollOption(id: "\(tempID)-opt-\(idx)", text: opt.text, position: idx)
+            },
+            isClosed: false,
+            closedSince: nil,
+            purgesAt: create.closesAt,
+            totalVotes: 0,
+            tally: [],
+            votes: [],
+            createdAt: now,
+            updatedAt: now
+        )
+        polls.insert(optimistic, at: 0)
+        saveAllToCache()
+        return optimistic
     }
 
     func refreshPoll(id: String) async -> Poll? {
-        guard NetworkMonitor.shared.isOnline, let api else { return nil }
-        do {
-            let poll = try await api.getPoll(id: id)
-            if let idx = polls.firstIndex(where: { $0.id == id }) {
-                polls[idx] = poll
+        if NetworkMonitor.shared.isOnline, let api {
+            do {
+                let poll = try await api.getPoll(id: id)
+                if let idx = polls.firstIndex(where: { $0.id == id }) {
+                    polls[idx] = poll
+                }
+                saveAllToCache()
+                return poll
+            } catch {
+                if !fallThroughToOffline(error) {
+                    showError(error)
+                    return nil
+                }
             }
-            return poll
-        } catch {
-            showError(error)
-            return nil
         }
+        // Offline: return whatever local copy we have so the caller can keep rendering.
+        return polls.first { $0.id == id }
     }
 
     @discardableResult
     func deletePoll(id: String, confirmation: MemberDeleteConfirm? = nil) async -> DeleteQueued? {
-        guard NetworkMonitor.shared.isOnline, let api else { return nil }
-        do {
-            let queued = try await api.deletePoll(id: id, confirmation: confirmation)
-            if queued == nil {
-                polls.removeAll { $0.id == id }
+        if NetworkMonitor.shared.isOnline, let api {
+            do {
+                let queued = try await api.deletePoll(id: id, confirmation: confirmation)
+                if queued == nil {
+                    polls.removeAll { $0.id == id }
+                    saveAllToCache()
+                }
+                return queued
+            } catch {
+                if !fallThroughToOffline(error) {
+                    showError(error)
+                    return nil
+                }
             }
-            return queued
-        } catch {
-            showError(error)
-            return nil
         }
+
+        enqueue(.deletePoll, resourceID: id)
+        polls.removeAll { $0.id == id }
+        saveAllToCache()
+        return nil
     }
 
     func castVote(pollID: String, vote: VoteCast) async -> PollVoteRead? {
-        guard NetworkMonitor.shared.isOnline, let api else { return nil }
-        do {
-            return try await api.castVote(pollID: pollID, vote: vote)
-        } catch {
-            showError(error)
-            return nil
+        if NetworkMonitor.shared.isOnline, let api {
+            do {
+                let read = try await api.castVote(pollID: pollID, vote: vote)
+                saveAllToCache()
+                return read
+            } catch {
+                if !fallThroughToOffline(error) {
+                    showError(error)
+                    return nil
+                }
+            }
         }
+
+        if let body = try? JSONEncoder.iso.encode(vote) {
+            enqueue(.castVote, resourceID: pollID, body: body)
+        }
+        let now = Date()
+        applyVoteOptimistically(pollID: pollID, vote: vote, at: now)
+        saveAllToCache()
+        return PollVoteRead(
+            votedAsMemberID: vote.votedAsMemberID,
+            optionIDs: vote.optionIDs,
+            createdAt: now,
+            updatedAt: now
+        )
     }
 
     func withdrawVote(pollID: String, memberID: String) async -> Bool {
-        guard NetworkMonitor.shared.isOnline, let api else { return false }
-        do {
-            try await api.withdrawVote(pollID: pollID, memberID: memberID)
-            return true
-        } catch {
-            showError(error)
-            return false
+        if NetworkMonitor.shared.isOnline, let api {
+            do {
+                try await api.withdrawVote(pollID: pollID, memberID: memberID)
+                saveAllToCache()
+                return true
+            } catch {
+                if !fallThroughToOffline(error) {
+                    showError(error)
+                    return false
+                }
+            }
         }
+
+        if let body = try? JSONEncoder.iso.encode(memberID) {
+            enqueue(.withdrawVote, resourceID: pollID, body: body)
+        }
+        applyWithdrawOptimistically(pollID: pollID, memberID: memberID)
+        saveAllToCache()
+        return true
+    }
+
+    /// Applies an offline-cast vote to the local poll: replaces any prior vote
+    /// from the same member, then updates the cached vote list, total, and tally.
+    private func applyVoteOptimistically(pollID: String, vote: VoteCast, at now: Date) {
+        guard let idx = polls.firstIndex(where: { $0.id == pollID }) else { return }
+        var votes = polls[idx].votes ?? []
+        votes.removeAll { $0.votedAsMemberID == vote.votedAsMemberID }
+        votes.append(PollVote(
+            votedAsMemberID: vote.votedAsMemberID,
+            optionIDs: vote.optionIDs,
+            createdAt: now,
+            updatedAt: now
+        ))
+        polls[idx].votes = votes
+        polls[idx].totalVotes = votes.count
+        polls[idx].tally = recomputeTally(votes: votes)
+    }
+
+    /// Reverses an offline-cast vote in the local cached poll.
+    private func applyWithdrawOptimistically(pollID: String, memberID: String) {
+        guard let idx = polls.firstIndex(where: { $0.id == pollID }) else { return }
+        var votes = polls[idx].votes ?? []
+        votes.removeAll { $0.votedAsMemberID == memberID }
+        polls[idx].votes = votes
+        polls[idx].totalVotes = votes.count
+        polls[idx].tally = recomputeTally(votes: votes)
+    }
+
+    private func recomputeTally(votes: [PollVote]) -> [PollTallyEntry] {
+        var counts: [String: Int] = [:]
+        for vote in votes {
+            for optID in vote.optionIDs {
+                counts[optID, default: 0] += 1
+            }
+        }
+        return counts.map { PollTallyEntry(optionID: $0.key, count: $0.value) }
     }
 
     // MARK: - Message Boards
@@ -1475,5 +1837,15 @@ class SystemStore: ObservableObject {
         #endif
 
         PhoneConnectivityManager.shared.syncCredentials()
+    }
+}
+
+extension Error {
+    /// `localizedDescription` unless this is a connectivity error (no network, lost
+    /// connection, TLS / certificate failure, connection reset, DNS / host issue, …).
+    /// For those, returns `nil` so view-local error state can stay empty — the offline
+    /// banner already communicates this to the user and a redundant alert is noise.
+    var userFacingMessage: String? {
+        SystemStore.isOfflineLikeError(self) ? nil : localizedDescription
     }
 }
