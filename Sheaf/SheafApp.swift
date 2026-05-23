@@ -115,6 +115,8 @@ struct RootView: View {
             if authManager.isAuthenticated, let pending = pendingRedemption {
                 presentedRedemption = pending
                 pendingRedemption = nil
+            } else if !authManager.isAuthenticated {
+                systemStore.clearState()
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)) { _ in

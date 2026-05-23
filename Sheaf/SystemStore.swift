@@ -283,6 +283,38 @@ class SystemStore: ObservableObject {
         }
     }
 
+    /// Wipes all in-memory state and the on-disk cache. Called on logout so a
+    /// subsequent login into a different account doesn't see stale data from
+    /// the previous one — without this, references like a previous account's
+    /// fronting member id leak into requests against the new system.
+    func clearState() {
+        members = []
+        groups = []
+        tags = []
+        fields = []
+        currentFronts = []
+        frontHistory = []
+        hasMoreHistory = true
+        historyOffset = 0
+        systemProfile = nil
+        isLoading = false
+        errorMessage = nil
+        isSyncing = false
+        announcements = []
+        journalEntries = []
+        hasMoreJournals = true
+        journalCursor = nil
+        pendingSafetyActions = []
+        pendingSafetyChanges = []
+        safetySettings = nil
+        polls = []
+        boardSummaries = []
+        totalUnreadMessages = 0
+        offlineQueue = []
+        pendingOperationCount = 0
+        Task { await cache.clearAll() }
+    }
+
     // MARK: - Cache Loading/Saving
 
     private func loadFromCache() async {
