@@ -1052,29 +1052,35 @@ struct SettingsView: View {
     }
     
     private func presentShareSheet(url: URL) {
-        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-              let window = windowScene.windows.first,
+        let scene = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first(where: { $0.activationState == .foregroundActive })
+            ?? UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
+        guard let windowScene = scene,
+              let window = windowScene.windows.first(where: { $0.isKeyWindow }) ?? windowScene.windows.first,
               let rootViewController = window.rootViewController else {
             return
         }
-        
+
+        var presenter = rootViewController
+        while let presented = presenter.presentedViewController {
+            presenter = presented
+        }
+
         let activityVC = UIActivityViewController(
             activityItems: [url],
             applicationActivities: nil
         )
-        
-        // For iPad - set popover source
+
         if let popover = activityVC.popoverPresentationController {
-            popover.sourceView = rootViewController.view
-            popover.sourceRect = CGRect(x: rootViewController.view.bounds.midX,
-                                       y: rootViewController.view.bounds.midY,
+            popover.sourceView = presenter.view
+            popover.sourceRect = CGRect(x: presenter.view.bounds.midX,
+                                       y: presenter.view.bounds.midY,
                                        width: 0, height: 0)
             popover.permittedArrowDirections = []
         }
-        
-        rootViewController.present(activityVC, animated: true) {
-            // File will be cleaned up automatically by the system after sharing
-        }
+
+        presenter.present(activityVC, animated: true)
     }
 
     private func formatTier(_ tier: String) -> String {
