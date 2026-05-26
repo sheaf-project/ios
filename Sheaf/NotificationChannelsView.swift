@@ -828,6 +828,8 @@ struct ChannelDetailView: View {
     @State private var deleteQueuedInfo: DeleteQueued?
     @State private var showDeleteQueued = false
     @State private var isDeleting = false
+    @State private var isReissuing = false
+    @State private var activationShare: CreateChannelSheet.ActivationShareInfo?
     @State private var errorMessage: String?
     @State private var hasUnsavedChanges = false
 
@@ -969,6 +971,26 @@ struct ChannelDetailView: View {
                             }
                             .disabled(channel.destinationState != .active || isTesting)
 
+                            if channel.destinationType.isMobilePush {
+                                Divider().background(theme.divider)
+
+                                Button { Task { await reissueActivation() } } label: {
+                                    HStack {
+                                        Image(systemName: "link.badge.plus")
+                                            .foregroundColor(theme.accentLight).frame(width: 20)
+                                        Text("Reissue Activation Link")
+                                            .font(.subheadline).fontWeight(.medium)
+                                            .foregroundColor(theme.accentLight)
+                                        Spacer()
+                                        if isReissuing {
+                                            ProgressView().tint(theme.accentLight).scaleEffect(0.7)
+                                        }
+                                    }
+                                    .padding(.horizontal, 16).padding(.vertical, 14)
+                                }
+                                .disabled(isReissuing)
+                            }
+
                             Divider().background(theme.divider)
 
                             Button { requestDelete() } label: {
@@ -1028,6 +1050,11 @@ struct ChannelDetailView: View {
             if let info = deleteQueuedInfo {
                 Text("This deletion has been queued and will finalize \(info.finalizeAfter, style: .relative). You can cancel it from System Safety settings.")
             }
+        }
+        .sheet(item: $activationShare) { info in
+            ActivationShareSheet(info: info, title: "Reissued")
+                .environmentObject(authManager)
+                .environmentObject(store)
         }
         .alert("Error", isPresented: .constant(errorMessage != nil)) {
             Button("OK") { errorMessage = nil }
@@ -1105,6 +1132,22 @@ struct ChannelDetailView: View {
         }
         isTesting = false
         showTestResult = true
+    }
+
+    private func reissueActivation() async {
+        guard let api = store.api else { return }
+        isReissuing = true
+        defer { isReissuing = false }
+        do {
+            let response = try await api.reissueChannelActivation(id: channel.id)
+            activationShare = CreateChannelSheet.ActivationShareInfo(
+                channelName: channel.name,
+                url: response.activationURL,
+                expiresAt: response.activationExpiresAt
+            )
+        } catch {
+            errorMessage = error.userFacingMessage
+        }
     }
 
     private func requestDelete() {
@@ -1230,6 +1273,7 @@ struct ActivationShareSheet: View {
     @Environment(\.theme) var theme
     @Environment(\.dismiss) var dismiss
     let info: CreateChannelSheet.ActivationShareInfo
+    var title: LocalizedStringKey = "Channel Created"
 
     @State private var copied = false
 
@@ -1244,7 +1288,7 @@ struct ActivationShareSheet: View {
                             Image(systemName: "checkmark.circle.fill")
                                 .font(.system(size: 48))
                                 .foregroundColor(theme.success)
-                            Text("Channel Created")
+                            Text(title)
                                 .font(.title3).fontWeight(.bold).fontDesign(.rounded)
                                 .foregroundColor(theme.textPrimary)
                             Text("Share this activation link with whoever should receive notifications. They'll need the Sheaf app installed and an account on this server.")

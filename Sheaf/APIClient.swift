@@ -1790,6 +1790,11 @@ class APIClient {
         return try JSONDecoder.iso.decode(TestDispatchResponse.self, from: data)
     }
 
+    func reissueChannelActivation(id: String) async throws -> ChannelActivationResponse {
+        let data = try await request("/v1/channels/\(id)/reissue-activation", method: "POST")
+        return try JSONDecoder.iso.decode(ChannelActivationResponse.self, from: data)
+    }
+
     // MARK: - Push Device Tokens
 
     func registerPushDevice(_ registration: PushDeviceRegister) async throws {

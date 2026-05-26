@@ -1877,6 +1877,16 @@ struct ChannelCreateResponse: Codable {
     }
 }
 
+struct ChannelActivationResponse: Codable {
+    let activationURL: String
+    var activationExpiresAt: Date?
+
+    enum CodingKeys: String, CodingKey {
+        case activationURL       = "activation_url"
+        case activationExpiresAt = "activation_expires_at"
+    }
+}
+
 struct TestDispatchResponse: Codable {
     let delivered: Bool
     var error: String?
