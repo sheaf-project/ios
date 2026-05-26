@@ -264,6 +264,8 @@ struct CreateApiKeySheet: View {
         "fields:read", "fields:write",
         "tags:read", "tags:write",
         "files:read", "files:write",
+        "polls:read", "polls:write",
+        "messages:read", "messages:write",
     ]
 
     var body: some View {
