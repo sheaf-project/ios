@@ -151,10 +151,11 @@ struct RootView: View {
     }
 
     private var resolvedTheme: Theme {
+        let palette = themeManager.palette
         switch themeManager.mode {
-        case .system: return Theme(isDark: systemScheme == .dark)
-        case .dark:   return Theme(isDark: true)
-        case .light:  return Theme(isDark: false)
+        case .system: return Theme(isDark: systemScheme == .dark, palette: palette)
+        case .dark:   return Theme(isDark: true,  palette: palette)
+        case .light:  return Theme(isDark: false, palette: palette)
         }
     }
 }

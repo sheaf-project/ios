@@ -128,28 +128,31 @@ struct SettingsView: View {
                     // Appearance
                     settingsSection(title: String(localized: "Appearance")) {
                         VStack(spacing: 0) {
-                            ForEach(ThemeMode.allCases, id: \.self) { mode in
-                                Button { themeManager.mode = mode; store.saveClientSettings() } label: {
-                                    HStack(spacing: 12) {
-                                        Image(systemName: mode.icon)
-                                            .foregroundColor(themeManager.mode == mode ? theme.accentLight : theme.textTertiary)
-                                            .frame(width: 20)
-                                        Text(mode.label)
-                                            .font(.subheadline)
+                            NavigationLink {
+                                AppearanceView()
+                                    .environmentObject(store)
+                                    .environmentObject(themeManager)
+                            } label: {
+                                HStack(spacing: 12) {
+                                    Image(systemName: themeManager.mode.icon)
+                                        .foregroundColor(theme.accentLight)
+                                        .frame(width: 20)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("Appearance")
+                                            .font(.subheadline).fontWeight(.medium)
                                             .foregroundColor(theme.textPrimary)
-                                        Spacer()
-                                        if themeManager.mode == mode {
-                                            Image(systemName: "checkmark")
-                                                .font(.footnote).fontWeight(.semibold)
-                                                .foregroundColor(theme.accentLight)
-                                        }
+                                        Text("\(themeManager.mode.label) · \(themeManager.palette.label)")
+                                            .font(.caption)
+                                            .foregroundColor(theme.textTertiary)
                                     }
-                                    .padding(.horizontal, 16).padding(.vertical, 14)
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .font(.caption)
+                                        .foregroundColor(theme.textTertiary)
                                 }
-                                if mode != ThemeMode.allCases.last {
-                                    Divider().background(theme.divider).padding(.leading, 52)
-                                }
+                                .padding(.horizontal, 16).padding(.vertical, 14)
                             }
+                            .buttonStyle(.plain)
                         }
                     }
 
