@@ -999,6 +999,11 @@ class APIClient {
         return try JSONDecoder.iso.decode([Member].self, from: data)
     }
 
+    func getTopFronters(limit: Int) async throws -> [Member] {
+        let data = try await request("/v1/members/top-fronters?limit=\(limit)")
+        return try JSONDecoder.iso.decode([Member].self, from: data)
+    }
+
     func createMember(_ create: MemberCreate) async throws -> Member {
         let body = try JSONEncoder.iso.encode(create)
         let data = try await request("/v1/members", method: "POST", body: body)

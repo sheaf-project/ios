@@ -77,9 +77,11 @@ struct QuickSwitchFrontSheet: View {
         .onAppear {
             // Pre-select current fronters
             selectedIDs = Set(store.frontingMembers.map { $0.id })
-            // Make sure we have history for frequency sort
+            // Refresh server-ranked top fronters; fall back to local history
+            // sort when the endpoint isn't available.
             Task {
-                if store.frontHistory.isEmpty {
+                await store.loadTopFronters()
+                if store.topFronters.isEmpty && store.frontHistory.isEmpty {
                     await store.loadFrontHistory()
                 }
             }

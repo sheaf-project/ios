@@ -255,9 +255,11 @@ struct HomeView: View {
     }
 
     func loadHistoryForFrequency() async {
-        // Load history in background to power the frequency sort —
-        // only fetch if we don't already have it
-        if store.frontHistory.isEmpty {
+        // Refresh the server-ranked top fronters so the quick-switch row
+        // reflects pinning + recent activity. Fall back to a local history
+        // sort when the endpoint is unavailable (offline / older server).
+        await store.loadTopFronters()
+        if store.topFronters.isEmpty && store.frontHistory.isEmpty {
             await store.loadFrontHistory()
         }
     }

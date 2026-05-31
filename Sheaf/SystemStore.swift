@@ -128,6 +128,10 @@ class SystemStore: ObservableObject {
     @Published var hasMoreHistory = true
     private var historyOffset = 0
     private let historyPageSize = 50
+    /// Server-ranked top fronters (pinned first, then recency-weighted score).
+    /// Empty until `loadTopFronters` returns; `membersByFrontFrequency` falls
+    /// back to a local frequency sort when this is empty (e.g., offline).
+    @Published var topFronters: [Member] = []
     @Published var systemProfile: SystemProfile?
     @Published var isLoading = false
     @Published var errorMessage: String?
@@ -296,6 +300,7 @@ class SystemStore: ObservableObject {
         frontHistory = []
         hasMoreHistory = true
         historyOffset = 0
+        topFronters = []
         systemProfile = nil
         isLoading = false
         errorMessage = nil
@@ -336,6 +341,9 @@ class SystemStore: ObservableObject {
         if let cached = await cache.load(key: "frontHistory", as: [FrontEntry].self), frontHistory.isEmpty {
             frontHistory = cached
         }
+        if let cached = await cache.load(key: "topFronters", as: [Member].self), topFronters.isEmpty {
+            topFronters = cached
+        }
         if let cached = await cache.load(key: "systemProfile", as: SystemProfile.self), systemProfile == nil {
             systemProfile = cached
         }
@@ -358,6 +366,7 @@ class SystemStore: ObservableObject {
             await cache.save(fields, key: "fields")
             await cache.save(currentFronts, key: "currentFronts")
             await cache.save(frontHistory, key: "frontHistory")
+            await cache.save(topFronters, key: "topFronters")
             if let systemProfile {
                 await cache.save(systemProfile, key: "systemProfile")
             }
@@ -465,6 +474,9 @@ class SystemStore: ObservableObject {
             if let newMode = ThemeMode(rawValue: settings.themeMode) {
                 themeManager?.applyFromServer(newMode)
             }
+            if let newPalette = Palette(rawValue: settings.palette) {
+                themeManager?.applyFromServer(palette: newPalette)
+            }
         } catch {
             // Non-fatal — local settings remain in effect
         }
@@ -472,7 +484,10 @@ class SystemStore: ObservableObject {
 
     func saveClientSettings() {
         guard NetworkMonitor.shared.isOnline, let api else { return }
-        let settings = ClientSettings(themeMode: themeManager?.mode.rawValue ?? "system")
+        let settings = ClientSettings(
+            themeMode: themeManager?.mode.rawValue ?? "system",
+            palette:   themeManager?.palette.rawValue ?? "purple"
+        )
         Task {
             try? await api.saveClientSettings(settings.toDict())
         }
@@ -802,6 +817,21 @@ class SystemStore: ObservableObject {
             }
         }
         // If offline, frontHistory is already loaded from cache
+    }
+
+    /// Fetches server-ranked top fronters (pinned first, then recency-weighted
+    /// score). Used to power the home quick-switch row and the sorted member
+    /// list in the switch / add-entry sheets. Falls through silently on offline
+    /// or other errors; consumers fall back to the local frequency sort.
+    func loadTopFronters(limit: Int = 50) async {
+        guard NetworkMonitor.shared.isOnline, let api else { return }
+        do {
+            let ranked = try await api.getTopFronters(limit: limit)
+            topFronters = ranked
+            await cache.save(topFronters, key: "topFronters")
+        } catch {
+            showError(error)
+        }
     }
 
     func loadMoreFrontHistory() async {
@@ -1809,6 +1839,19 @@ class SystemStore: ObservableObject {
     // MARK: - Helpers
 
     var membersByFrontFrequency: [Member] {
+        // Prefer the server-ranked top fronters (pinned + recency-weighted).
+        // Append any members not in that ranking so views that show all
+        // members (edit sheets, search) still see the full roster.
+        if !topFronters.isEmpty {
+            let rankedIDs = Set(topFronters.map(\.id))
+            let byID = Dictionary(uniqueKeysWithValues: members.map { ($0.id, $0) })
+            // Use the fresh member objects from `members` (server-ranked list
+            // can be slightly stale relative to a just-edited member).
+            let ranked = topFronters.compactMap { byID[$0.id] ?? $0 }
+            let rest = members.filter { !rankedIDs.contains($0.id) }
+            return ranked + rest
+        }
+
         guard !frontHistory.isEmpty else { return members }
 
         var counts: [String: Int] = [:]

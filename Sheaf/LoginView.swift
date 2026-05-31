@@ -1,6 +1,10 @@
 import SwiftUI
 import SafariServices
 
+/// Used when the user leaves the API Base URL field blank on the sign-in /
+/// register forms — most users are connecting to the hosted instance.
+private let defaultLoginBaseURL = "https://app.sheaf.sh"
+
 struct LoginView: View {
     @EnvironmentObject var authManager: AuthManager
     @Environment(\.theme) var theme
@@ -164,7 +168,7 @@ struct SignInForm: View {
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
             .tint(theme.accentLight)
-            .disabled(baseURL.isEmpty || email.isEmpty || password.isEmpty || isLoading || (needsTOTP && totpCode.count != 6))
+            .disabled(email.isEmpty || password.isEmpty || isLoading || (needsTOTP && totpCode.count != 6))
 
             // Forgot password
             Button { openForgotPassword() } label: {
@@ -172,7 +176,6 @@ struct SignInForm: View {
                     .font(.subheadline)
                     .foregroundColor(theme.accentLight)
             }
-            .disabled(baseURL.isEmpty)
 
             // Switch to register
             Button(action: onSwitch) {
@@ -200,6 +203,7 @@ struct SignInForm: View {
     private func signIn() {
         error = ""
         var cleanURL = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        if cleanURL.isEmpty { cleanURL = defaultLoginBaseURL }
         if cleanURL.hasSuffix("/") { cleanURL = String(cleanURL.dropLast()) }
         guard cleanURL.lowercased().hasPrefix("http") else { error = String(localized: "URL must start with http:// or https://"); return }
         guard URL(string: cleanURL + "/v1/auth/login") != nil else { error = String(localized: "Invalid URL"); return }
@@ -264,8 +268,8 @@ struct SignInForm: View {
 
     private func openForgotPassword() {
         var cleanURL = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        if cleanURL.isEmpty { cleanURL = defaultLoginBaseURL }
         if cleanURL.hasSuffix("/") { cleanURL = String(cleanURL.dropLast()) }
-        guard !cleanURL.isEmpty else { return }
         let tempAuth = AuthManager()
         tempAuth.baseURL = cleanURL
         let api = APIClient(auth: tempAuth)
@@ -400,7 +404,7 @@ struct RegisterForm: View {
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
             .tint(theme.accentLight)
-            .disabled(isClosed || baseURL.isEmpty || email.isEmpty || password.isEmpty || confirmPassword.isEmpty || isLoading)
+            .disabled(isClosed || email.isEmpty || password.isEmpty || confirmPassword.isEmpty || isLoading)
 
             // Switch to sign in
             Button(action: onSwitch) {
@@ -427,10 +431,17 @@ struct RegisterForm: View {
                 await fetchAuthConfig()
             }
         }
+        .task {
+            // Probe the default host once on appear so the registration mode
+            // (invite / open / closed) is known even before the user types
+            // anything into the URL field.
+            if baseURL.isEmpty { await fetchAuthConfig() }
+        }
     }
 
     private func fetchAuthConfig() async {
         var cleanURL = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        if cleanURL.isEmpty { cleanURL = defaultLoginBaseURL }
         if cleanURL.hasSuffix("/") { cleanURL = String(cleanURL.dropLast()) }
         guard cleanURL.lowercased().hasPrefix("http"),
               URL(string: cleanURL + "/v1/auth/config") != nil else { return }
@@ -449,6 +460,7 @@ struct RegisterForm: View {
         guard password == confirmPassword else { error = String(localized: "Passwords don't match"); return }
         guard password.count >= 8 else { error = String(localized: "Password must be at least 8 characters"); return }
         var cleanURL = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        if cleanURL.isEmpty { cleanURL = defaultLoginBaseURL }
         if cleanURL.hasSuffix("/") { cleanURL = String(cleanURL.dropLast()) }
         guard cleanURL.lowercased().hasPrefix("http") else { error = String(localized: "URL must start with http:// or https://"); return }
         guard URL(string: cleanURL + "/v1/auth/register") != nil else { error = String(localized: "Invalid URL"); return }
