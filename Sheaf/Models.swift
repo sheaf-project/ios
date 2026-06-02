@@ -1299,6 +1299,176 @@ struct TBImportResult: Codable {
     }
 }
 
+// MARK: - Async Import Jobs
+//
+// The backend retired the synchronous per-source import endpoints in favour of
+// a unified async job runner: submit returns a job, and the client polls until
+// it reaches a terminal state. The legacy *ImportResult / *PreviewSummary models
+// above are still used for the preview step (unchanged, still synchronous) and
+// for presenting the final counts once a job completes.
+
+enum ImportJobStatus: String, Codable {
+    case pending
+    case running
+    case complete
+    case failed
+    case cancelled
+
+    var isTerminal: Bool {
+        self == .complete || self == .failed || self == .cancelled
+    }
+}
+
+struct ImportJobEvent: Codable, Identifiable {
+    // The backend doesn't assign event IDs; synthesize one for SwiftUI lists.
+    let id = UUID()
+    var level: String
+    var stage: String
+    var message: String
+    var recordRef: String?
+
+    enum CodingKeys: String, CodingKey {
+        case level, stage, message
+        case recordRef = "record_ref"
+    }
+}
+
+struct ImportJobRead: Codable, Identifiable {
+    let id: String
+    let source: String
+    var status: ImportJobStatus
+    var counts: [String: Int]
+    var events: [ImportJobEvent]
+    var startedAt: Date?
+    var finishedAt: Date?
+    var lastError: String?
+    var archivedAt: Date?
+    var createdAt: Date
+    var updatedAt: Date
+
+    enum CodingKeys: String, CodingKey {
+        case id, source, status, counts, events
+        case startedAt  = "started_at"
+        case finishedAt = "finished_at"
+        case lastError  = "last_error"
+        case archivedAt = "archived_at"
+        case createdAt  = "created_at"
+        case updatedAt  = "updated_at"
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id         = try c.decode(String.self, forKey: .id)
+        source     = try c.decode(String.self, forKey: .source)
+        status     = try c.decode(ImportJobStatus.self, forKey: .status)
+        counts     = try c.decodeIfPresent([String: Int].self, forKey: .counts) ?? [:]
+        events     = try c.decodeIfPresent([ImportJobEvent].self, forKey: .events) ?? []
+        startedAt  = try c.decodeIfPresent(Date.self, forKey: .startedAt)
+        finishedAt = try c.decodeIfPresent(Date.self, forKey: .finishedAt)
+        lastError  = try c.decodeIfPresent(String.self, forKey: .lastError)
+        archivedAt = try c.decodeIfPresent(Date.self, forKey: .archivedAt)
+        createdAt  = try c.decode(Date.self, forKey: .createdAt)
+        updatedAt  = try c.decode(Date.self, forKey: .updatedAt)
+    }
+
+    /// Warnings surfaced by the runner, formatted for display.
+    var warnings: [String] {
+        events
+            .filter { $0.level == "warning" }
+            .map { ev in
+                if let ref = ev.recordRef, !ref.isEmpty { return "\(ref): \(ev.message)" }
+                return ev.message
+            }
+    }
+}
+
+/// Lighter list-row version of `ImportJobRead` — drops the (potentially huge)
+/// `events` array. Used by the import history list; fetch the full
+/// `ImportJobRead` for the detail view.
+struct ImportJobSummary: Codable, Identifiable {
+    let id: String
+    let source: String
+    var status: ImportJobStatus
+    var counts: [String: Int]
+    var startedAt: Date?
+    var finishedAt: Date?
+    var archivedAt: Date?
+    var createdAt: Date
+
+    enum CodingKeys: String, CodingKey {
+        case id, source, status, counts
+        case startedAt  = "started_at"
+        case finishedAt = "finished_at"
+        case archivedAt = "archived_at"
+        case createdAt  = "created_at"
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id         = try c.decode(String.self, forKey: .id)
+        source     = try c.decode(String.self, forKey: .source)
+        status     = try c.decode(ImportJobStatus.self, forKey: .status)
+        counts     = try c.decodeIfPresent([String: Int].self, forKey: .counts) ?? [:]
+        startedAt  = try c.decodeIfPresent(Date.self, forKey: .startedAt)
+        finishedAt = try c.decodeIfPresent(Date.self, forKey: .finishedAt)
+        archivedAt = try c.decodeIfPresent(Date.self, forKey: .archivedAt)
+        createdAt  = try c.decode(Date.self, forKey: .createdAt)
+    }
+}
+
+struct ImportJobList: Codable {
+    var items: [ImportJobSummary]
+    var nextCursor: String?
+
+    enum CodingKeys: String, CodingKey {
+        case items
+        case nextCursor = "next_cursor"
+    }
+}
+
+// MARK: Mapping job counts back to the legacy result models
+//
+// The runner emits the same `counts` keys the old synchronous *ImportResult
+// schemas used, so we keep those models and read keys from the dict.
+
+extension SPImportResult {
+    init(job: ImportJobRead) {
+        let c = job.counts
+        self.init(
+            membersImported:      c["members_imported"]       ?? 0,
+            customFrontsImported: c["custom_fronts_imported"] ?? 0,
+            frontsImported:       c["fronts_imported"]        ?? 0,
+            groupsImported:       c["groups_imported"]        ?? 0,
+            customFieldsImported: c["custom_fields_imported"] ?? 0,
+            notesSkipped:         c["notes_skipped"]          ?? 0,
+            warnings:             job.warnings
+        )
+    }
+}
+
+extension PKImportResult {
+    init(job: ImportJobRead) {
+        let c = job.counts
+        self.init(
+            membersImported: c["members_imported"] ?? 0,
+            groupsImported:  c["groups_imported"]  ?? 0,
+            frontsImported:  c["fronts_imported"]  ?? 0,
+            warnings:        job.warnings
+        )
+    }
+}
+
+extension TBImportResult {
+    init(job: ImportJobRead) {
+        let c = job.counts
+        self.init(
+            membersImported: c["members_imported"] ?? 0,
+            groupsImported:  c["groups_imported"]  ?? 0,
+            warnings:        job.warnings
+        )
+    }
+}
+
 // MARK: - Announcements
 
 enum AnnouncementSeverity: String, Codable {

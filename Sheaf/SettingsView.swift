@@ -14,6 +14,7 @@ struct SettingsView: View {
     @State private var showSheafImport = false
     @State private var showPKImport = false
     @State private var showTBImport = false
+    @State private var showImportHistory = false
     @State private var showTOTPSetup = false
     @State private var showTOTPManage = false
     @State private var me: UserRead?
@@ -476,9 +477,28 @@ struct SettingsView: View {
                             }
 
                             Divider().background(theme.divider)
-                            
+
+                            // Import History
+                            Button { showImportHistory = true } label: {
+                                HStack {
+                                    Image(systemName: "clock.arrow.circlepath")
+                                        .foregroundColor(theme.accentLight)
+                                        .frame(width: 20)
+                                    Text("Import History")
+                                        .font(.subheadline).fontWeight(.medium)
+                                        .foregroundColor(theme.textPrimary)
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .font(.caption)
+                                        .foregroundColor(theme.textTertiary)
+                                }
+                                .padding(.horizontal, 16).padding(.vertical, 14)
+                            }
+
+                            Divider().background(theme.divider)
+
                             // Export
-                            Button { 
+                            Button {
                                 Task { await exportData() }
                             } label: {
                                 HStack {
@@ -872,6 +892,10 @@ struct SettingsView: View {
         }
         .sheet(isPresented: $showTBImport) {
             TupperboxImportSheet()
+                .environmentObject(store)
+        }
+        .sheet(isPresented: $showImportHistory) {
+            ImportHistoryView()
                 .environmentObject(store)
         }
         .sheet(isPresented: $showTOTPSetup, onDismiss: { Task { await loadMe() } }) {

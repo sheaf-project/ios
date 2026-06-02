@@ -951,11 +951,21 @@ class APIClient {
         tags: Bool = true,
         customFields: Bool = true
     ) async throws -> Data {
-        var path = "/v1/import/sheaf?system_profile=\(systemProfile)&fronts=\(fronts)&groups=\(groups)&tags=\(tags)&custom_fields=\(customFields)"
-        if let ids = memberIds, !ids.isEmpty {
-            path += "&member_ids=\(ids.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ids)"
-        }
-        return try await multipartRequest(path: path, fileData: fileData, filename: filename)
+        let ids = memberIds?
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        let options = SheafImportOptions(
+            system_profile: systemProfile,
+            member_ids: (ids?.isEmpty == false) ? ids : nil,
+            fronts: fronts,
+            groups: groups,
+            tags: tags,
+            custom_fields: customFields
+        )
+        let job = try await runFileImport(source: "sheaf_file", fileData: fileData, filename: filename, options: options)
+        // The caller discards this payload; hand back the counts dict as JSON for parity.
+        return (try? JSONSerialization.data(withJSONObject: job.counts)) ?? Data()
     }
 
     // MARK: - System
@@ -1533,12 +1543,17 @@ class APIClient {
         frontHistory: Bool = false,
         notes: Bool = false
     ) async throws -> SPImportResult {
-        var path = "/v1/import/simplyplural?system_profile=\(systemProfile)&custom_fronts=\(customFronts)&custom_fields=\(customFields)&groups=\(groups)&front_history=\(frontHistory)&notes=\(notes)"
-        if let ids = memberIDs, !ids.isEmpty {
-            path += "&member_ids=\(ids.joined(separator: ","))"
-        }
-        let data = try await multipartRequest(path: path, fileData: fileData, filename: filename)
-        return try JSONDecoder.iso.decode(SPImportResult.self, from: data)
+        let options = SPImportOptions(
+            system_profile: systemProfile,
+            member_ids: (memberIDs?.isEmpty == false) ? memberIDs : nil,
+            custom_fronts: customFronts,
+            custom_fields: customFields,
+            groups: groups,
+            front_history: frontHistory,
+            notes: notes
+        )
+        let job = try await runFileImport(source: "simplyplural_file", fileData: fileData, filename: filename, options: options)
+        return SPImportResult(job: job)
     }
 
     /// Shared multipart/form-data helper for file uploads
@@ -1569,6 +1584,179 @@ class APIClient {
         return data
     }
 
+    // MARK: - Async Import Engine
+    //
+    // The backend retired the synchronous per-source submit endpoints in favour
+    // of a unified async job runner. Submit returns an ImportJobRead immediately
+    // (HTTP 202, status "pending"); we poll GET /v1/imports/{id} until the job
+    // reaches a terminal state. The legacy do*Import methods wrap this so their
+    // callers keep working against the same *ImportResult models.
+    //
+    // Polling lives on the foreground Task that drives the import screen, so it
+    // does not survive the app being backgrounded mid-import. The import history
+    // viewer is the recovery path: the user can reopen a running/finished job
+    // from there. (Android has the same limitation today.)
+
+    private struct SPImportOptions: Encodable {
+        let system_profile: Bool
+        let member_ids: [String]?
+        let custom_fronts: Bool
+        let custom_fields: Bool
+        let groups: Bool
+        let front_history: Bool
+        let notes: Bool
+    }
+
+    private struct SheafImportOptions: Encodable {
+        let system_profile: Bool
+        let member_ids: [String]?
+        let fronts: Bool
+        let groups: Bool
+        let tags: Bool
+        let custom_fields: Bool
+    }
+
+    private struct PKImportOptions: Encodable {
+        let system_profile: Bool
+        let member_ids: [String]?
+        let groups: Bool
+        let front_history: Bool
+    }
+
+    // Matches the backend TBImportOptions (schemas/tb_import.py): just
+    // member_ids + groups. Tupperbox has no system metadata / fronting / custom
+    // fields, so its option surface is smaller than the other sources.
+    private struct TBImportOptions: Encodable {
+        let member_ids: [String]?
+        let groups: Bool
+    }
+
+    /// JSON body for POST /v1/imports/api.
+    private struct APIImportBody<Opts: Encodable>: Encodable {
+        let source: String
+        let idempotency_key: String
+        let pk_token: String
+        let options: Opts?
+    }
+
+    /// Submits a file-based import and waits for it to finish.
+    private func runFileImport<O: Encodable>(source: String, fileData: Data, filename: String, options: O?) async throws -> ImportJobRead {
+        let submitted = try await submitFileImport(source: source, fileData: fileData, filename: filename, options: options)
+        return try await awaitTerminalImport(submitted)
+    }
+
+    /// Submits an API-token import (PluralKit) and waits for it to finish.
+    private func runAPIImport<O: Encodable>(source: String, pkToken: String, options: O?) async throws -> ImportJobRead {
+        let submitted = try await submitAPIImport(source: source, pkToken: pkToken, options: options)
+        return try await awaitTerminalImport(submitted)
+    }
+
+    /// Polls a submitted job until terminal, mapping failed/cancelled outcomes
+    /// onto a thrown error so existing call sites keep their do/catch flow.
+    private func awaitTerminalImport(_ submitted: ImportJobRead) async throws -> ImportJobRead {
+        var job = submitted
+        while !job.status.isTerminal {
+            try await Task.sleep(nanoseconds: 1_500_000_000) // 1500ms, matches Android
+            job = try await getImportJob(id: job.id)
+        }
+        switch job.status {
+        case .complete:
+            return job
+        case .failed:
+            throw NSError(domain: "APIError", code: -1,
+                          userInfo: [NSLocalizedDescriptionKey: job.lastError ?? "The import failed. Please try again."])
+        case .cancelled:
+            throw NSError(domain: "APIError", code: -1,
+                          userInfo: [NSLocalizedDescriptionKey: "The import was cancelled."])
+        default:
+            throw NSError(domain: "APIError", code: -1,
+                          userInfo: [NSLocalizedDescriptionKey: "The import did not finish."])
+        }
+    }
+
+    /// POST /v1/imports/file (multipart): file + source + idempotency_key + options.
+    private func submitFileImport<O: Encodable>(source: String, fileData: Data, filename: String, options: O?) async throws -> ImportJobRead {
+        guard let url = URL(string: auth.baseURL + "/v1/imports/file") else { throw URLError(.badURL) }
+        let boundary = "Boundary-\(UUID().uuidString)"
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("Bearer \(auth.accessToken)", forHTTPHeaderField: "Authorization")
+        req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        req.setValue(clientIdentifier, forHTTPHeaderField: "X-Sheaf-Client")
+        applyCFHeaders(to: &req)
+
+        var body = Data()
+        // file
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"file\"; filename=\"\(filename)\"\r\n".data(using: .utf8)!)
+        body.append("Content-Type: application/octet-stream\r\n\r\n".data(using: .utf8)!)
+        body.append(fileData)
+        body.append("\r\n".data(using: .utf8)!)
+        // source
+        appendFormField(&body, boundary: boundary, name: "source", value: source)
+        // idempotency_key — fresh per submit; backend dedupes on (user, key)
+        appendFormField(&body, boundary: boundary, name: "idempotency_key", value: UUID().uuidString)
+        // options (JSON) — omit entirely for backend defaults
+        if let options, let json = try? JSONEncoder().encode(options),
+           let jsonString = String(data: json, encoding: .utf8) {
+            body.append("--\(boundary)\r\n".data(using: .utf8)!)
+            body.append("Content-Disposition: form-data; name=\"options\"\r\n".data(using: .utf8)!)
+            body.append("Content-Type: application/json\r\n\r\n".data(using: .utf8)!)
+            body.append(jsonString.data(using: .utf8)!)
+            body.append("\r\n".data(using: .utf8)!)
+        }
+        body.append("--\(boundary)--\r\n".data(using: .utf8)!)
+        req.httpBody = body
+
+        let (data, response) = try await urlSession.data(for: req)
+        guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
+        if (200...299).contains(http.statusCode) {
+            try detectCloudflareInterception(data)
+        } else {
+            throw NSError(domain: "APIError", code: http.statusCode,
+                          userInfo: [NSLocalizedDescriptionKey: friendlyErrorMessage(statusCode: http.statusCode, data: data)])
+        }
+        return try JSONDecoder.iso.decode(ImportJobRead.self, from: data)
+    }
+
+    /// POST /v1/imports/api (JSON): source + idempotency_key + pk_token + options.
+    private func submitAPIImport<O: Encodable>(source: String, pkToken: String, options: O?) async throws -> ImportJobRead {
+        let payload = APIImportBody(source: source, idempotency_key: UUID().uuidString, pk_token: pkToken, options: options)
+        let body = try JSONEncoder().encode(payload)
+        let data = try await request("/v1/imports/api", method: "POST", body: body)
+        return try JSONDecoder.iso.decode(ImportJobRead.self, from: data)
+    }
+
+    private func appendFormField(_ body: inout Data, boundary: String, name: String, value: String) {
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"\(name)\"\r\n\r\n".data(using: .utf8)!)
+        body.append(value.data(using: .utf8)!)
+        body.append("\r\n".data(using: .utf8)!)
+    }
+
+    // MARK: - Import Job Lifecycle (history + polling)
+
+    func getImportJob(id: String) async throws -> ImportJobRead {
+        let data = try await request("/v1/imports/\(id)")
+        return try JSONDecoder.iso.decode(ImportJobRead.self, from: data)
+    }
+
+    func listImportJobs(limit: Int = 25, includeArchived: Bool = false, cursor: String? = nil) async throws -> ImportJobList {
+        var path = "/v1/imports?limit=\(limit)&include_archived=\(includeArchived)"
+        if let cursor, !cursor.isEmpty {
+            path += "&cursor=\(cursor.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? cursor)"
+        }
+        let data = try await request(path)
+        return try JSONDecoder.iso.decode(ImportJobList.self, from: data)
+    }
+
+    /// DELETE /v1/imports/{id}: pending -> cancel, terminal -> archive (both 204).
+    /// A running job returns 409, surfaced as an NSError with code 409 so the
+    /// caller can tell the user to wait rather than retrying.
+    func deleteImportJob(id: String) async throws {
+        _ = try await request("/v1/imports/\(id)", method: "DELETE")
+    }
+
     // MARK: - PluralKit Import (File)
 
     func previewPluralKitFileImport(fileData: Data, filename: String) async throws -> PKPreviewSummary {
@@ -1588,12 +1776,14 @@ class APIClient {
         groups: Bool = true,
         frontHistory: Bool = false
     ) async throws -> PKImportResult {
-        var path = "/v1/import/pluralkit?system_profile=\(systemProfile)&groups=\(groups)&front_history=\(frontHistory)"
-        if let ids = memberIDs, !ids.isEmpty {
-            path += "&member_ids=\(ids.joined(separator: ","))"
-        }
-        let data = try await multipartRequest(path: path, fileData: fileData, filename: filename)
-        return try JSONDecoder.iso.decode(PKImportResult.self, from: data)
+        let options = PKImportOptions(
+            system_profile: systemProfile,
+            member_ids: (memberIDs?.isEmpty == false) ? memberIDs : nil,
+            groups: groups,
+            front_history: frontHistory
+        )
+        let job = try await runFileImport(source: "pluralkit_file", fileData: fileData, filename: filename, options: options)
+        return PKImportResult(job: job)
     }
 
     // MARK: - PluralKit Import (API Token)
@@ -1611,28 +1801,14 @@ class APIClient {
         groups: Bool = true,
         frontHistory: Bool = false
     ) async throws -> PKImportResult {
-        struct PKApiImportBody: Encodable {
-            let token: String
-            let options: Options
-            struct Options: Encodable {
-                let system_profile: Bool
-                let member_ids: [String]?
-                let groups: Bool
-                let front_history: Bool
-            }
-        }
-        let payload = PKApiImportBody(
-            token: token,
-            options: .init(
-                system_profile: systemProfile,
-                member_ids: memberIDs,
-                groups: groups,
-                front_history: frontHistory
-            )
+        let options = PKImportOptions(
+            system_profile: systemProfile,
+            member_ids: (memberIDs?.isEmpty == false) ? memberIDs : nil,
+            groups: groups,
+            front_history: frontHistory
         )
-        let body = try JSONEncoder().encode(payload)
-        let data = try await request("/v1/import/pluralkit-api", method: "POST", body: body)
-        return try JSONDecoder.iso.decode(PKImportResult.self, from: data)
+        let job = try await runAPIImport(source: "pluralkit_api", pkToken: token, options: options)
+        return PKImportResult(job: job)
     }
 
     // MARK: - Tupperbox Import (File)
@@ -1652,12 +1828,12 @@ class APIClient {
         memberIDs: [String]? = nil,
         groups: Bool = true
     ) async throws -> TBImportResult {
-        var path = "/v1/import/tupperbox?groups=\(groups)"
-        if let ids = memberIDs, !ids.isEmpty {
-            path += "&member_ids=\(ids.joined(separator: ","))"
-        }
-        let data = try await multipartRequest(path: path, fileData: fileData, filename: filename)
-        return try JSONDecoder.iso.decode(TBImportResult.self, from: data)
+        let options = TBImportOptions(
+            member_ids: (memberIDs?.isEmpty == false) ? memberIDs : nil,
+            groups: groups
+        )
+        let job = try await runFileImport(source: "tupperbox_file", fileData: fileData, filename: filename, options: options)
+        return TBImportResult(job: job)
     }
 
     func uploadFile(imageData: Data, mimeType: String = "image/jpeg") async throws -> String {
