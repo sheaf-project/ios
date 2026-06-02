@@ -470,7 +470,6 @@ struct SimplyPluralImportSheet: View {
 
     // Member selection for selective import
     @State private var selectedMemberIDs: Set<String> = []
-    @State private var selectAllMembers = true
 
     var body: some View {
         NavigationStack {
@@ -886,7 +885,8 @@ struct SimplyPluralImportSheet: View {
         guard let api = store.api, let data = fileData else { return }
         withAnimation { step = .importing }
         do {
-            let ids = selectAllMembers ? nil : Array(selectedMemberIDs)
+            let allSelected = preview.map { selectedMemberIDs.count == $0.members.count } ?? true
+            let ids: [String]? = allSelected ? nil : Array(selectedMemberIDs)
             let importResult = try await api.doSimplyPluralImport(
                 fileData: data,
                 filename: fileName,
