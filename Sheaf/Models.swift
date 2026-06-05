@@ -2191,6 +2191,7 @@ struct Poll: Identifiable, Codable {
     let closesAt: Date
     let retentionDays: Int
     let includeCustomFronts: Bool
+    let restrictVotingToFronters: Bool
     let options: [PollOption]
     let isClosed: Bool
     let closedSince: Date?
@@ -2208,6 +2209,7 @@ struct Poll: Identifiable, Codable {
         case closesAt = "closes_at"
         case retentionDays = "retention_days"
         case includeCustomFronts = "include_custom_fronts"
+        case restrictVotingToFronters = "restrict_voting_to_fronters"
         case isClosed = "is_closed"
         case closedSince = "closed_since"
         case purgesAt = "purges_at"
@@ -2228,6 +2230,7 @@ struct Poll: Identifiable, Codable {
         closesAt            = try c.decode(Date.self, forKey: .closesAt)
         retentionDays       = try c.decode(Int.self, forKey: .retentionDays)
         includeCustomFronts = try c.decodeIfPresent(Bool.self, forKey: .includeCustomFronts) ?? false
+        restrictVotingToFronters = try c.decodeIfPresent(Bool.self, forKey: .restrictVotingToFronters) ?? false
         options             = try c.decode([PollOption].self, forKey: .options)
         isClosed            = try c.decode(Bool.self, forKey: .isClosed)
         closedSince         = try c.decodeIfPresent(Date.self, forKey: .closedSince)
@@ -2246,6 +2249,7 @@ struct Poll: Identifiable, Codable {
         id: String, systemID: String, question: String, description: String?,
         kind: PollKind, resultsVisibility: PollResultsVisibility,
         closesAt: Date, retentionDays: Int, includeCustomFronts: Bool,
+        restrictVotingToFronters: Bool,
         options: [PollOption], isClosed: Bool, closedSince: Date?,
         purgesAt: Date, totalVotes: Int,
         tally: [PollTallyEntry]?, votes: [PollVote]?,
@@ -2260,6 +2264,7 @@ struct Poll: Identifiable, Codable {
         self.closesAt = closesAt
         self.retentionDays = retentionDays
         self.includeCustomFronts = includeCustomFronts
+        self.restrictVotingToFronters = restrictVotingToFronters
         self.options = options
         self.isClosed = isClosed
         self.closedSince = closedSince
@@ -2284,6 +2289,7 @@ struct PollCreate: Codable {
     var closesAt: Date
     var retentionDays: Int?
     var includeCustomFronts: Bool?
+    var restrictVotingToFronters: Bool?
     var options: [PollOptionCreate]
 
     enum CodingKeys: String, CodingKey {
@@ -2292,6 +2298,7 @@ struct PollCreate: Codable {
         case closesAt = "closes_at"
         case retentionDays = "retention_days"
         case includeCustomFronts = "include_custom_fronts"
+        case restrictVotingToFronters = "restrict_voting_to_fronters"
     }
 }
 

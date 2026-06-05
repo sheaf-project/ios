@@ -1643,6 +1643,7 @@ class SystemStore: ObservableObject {
             closesAt: create.closesAt,
             retentionDays: create.retentionDays ?? 30,
             includeCustomFronts: create.includeCustomFronts ?? false,
+            restrictVotingToFronters: create.restrictVotingToFronters ?? false,
             options: create.options.enumerated().map { (idx, opt) in
                 PollOption(id: "\(tempID)-opt-\(idx)", text: opt.text, position: idx)
             },

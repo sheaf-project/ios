@@ -294,6 +294,20 @@ struct PollDetailSheet: View {
         }
     }
 
+    /// Members who may be selected as voters in the picker. When the poll
+    /// restricts voting to fronters, only currently-fronting members are
+    /// eligible; otherwise any system member may vote (custom fronts
+    /// included only when the poll allows them).
+    private var eligibleVoterIDs: [String] {
+        if activePoll.restrictVotingToFronters {
+            return frontingMemberIDs
+        }
+        if activePoll.includeCustomFronts {
+            return store.members.map(\.id)
+        }
+        return store.members.filter { !$0.isCustomFront }.map(\.id)
+    }
+
     private var myVote: PollVote? {
         guard let memberID = votingAsMemberID else { return nil }
         return activePoll.votes?.first(where: { $0.votedAsMemberID == memberID })
@@ -316,7 +330,7 @@ struct PollDetailSheet: View {
                             .padding(.top, 40)
                     } else {
                         questionSection
-                        if !activePoll.isClosed && !frontingMemberIDs.isEmpty {
+                        if !activePoll.isClosed && !eligibleVoterIDs.isEmpty {
                             votingSection
                         }
                         resultsSection
@@ -455,14 +469,28 @@ struct PollDetailSheet: View {
                 .font(.subheadline).fontWeight(.semibold)
                 .foregroundColor(theme.textPrimary)
 
-            if frontingMemberIDs.count > 1 {
+            if activePoll.restrictVotingToFronters {
+                HStack(spacing: 6) {
+                    Image(systemName: "person.2.fill")
+                        .font(.caption2)
+                    Text("Only fronting members may vote")
+                        .font(.caption).fontWeight(.medium)
+                }
+                .foregroundColor(theme.accentLight)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(theme.accentLight.opacity(0.12))
+                .cornerRadius(8)
+            }
+
+            if eligibleVoterIDs.count > 1 {
                 Text("Voting as:")
                     .font(.caption)
                     .foregroundColor(theme.textTertiary)
 
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
-                        ForEach(frontingMemberIDs, id: \.self) { memberID in
+                        ForEach(eligibleVoterIDs, id: \.self) { memberID in
                             if let member = store.members.first(where: { $0.id == memberID }) {
                                 Button {
                                     selectVoter(memberID)
@@ -653,8 +681,8 @@ struct PollDetailSheet: View {
         if let refreshed = await store.refreshPoll(id: poll.id) {
             livePoll = refreshed
         }
-        if let firstFronting = frontingMemberIDs.first, votingAsMemberID == nil {
-            selectVoter(firstFronting)
+        if let firstEligible = eligibleVoterIDs.first, votingAsMemberID == nil {
+            selectVoter(firstEligible)
         }
         if firstLoad { isLoading = false }
     }
@@ -804,6 +832,7 @@ struct CreatePollSheet: View {
     @State private var resultsVisibility: PollResultsVisibility = .live
     @State private var closesIn: TimeInterval = 24 * 3600
     @State private var includeCustomFronts = false
+    @State private var restrictVotingToFronters = false
     @State private var optionTexts: [String] = ["", ""]
     @State private var isSaving = false
     @State private var errorMessage: String?
@@ -907,6 +936,19 @@ struct CreatePollSheet: View {
                         .listRowBackground(theme.backgroundCard)
                 }
 
+                Section {
+                    Toggle("Only currently-fronting members", isOn: $restrictVotingToFronters)
+                        .tint(theme.accentLight)
+                        .listRowBackground(theme.backgroundCard)
+                } header: {
+                    Text("Who can vote")
+                } footer: {
+                    Text(restrictVotingToFronters
+                         ? "Members can only cast or withdraw a vote while they're in the active front."
+                         : "Any system member can vote regardless of whether they're fronting.")
+                        .foregroundColor(theme.textTertiary)
+                }
+
                 if let error = errorMessage {
                     Section {
                         Text(error)
@@ -954,6 +996,7 @@ struct CreatePollSheet: View {
                 resultsVisibility: resultsVisibility,
                 closesAt: Date().addingTimeInterval(closesIn),
                 includeCustomFronts: includeCustomFronts,
+                restrictVotingToFronters: restrictVotingToFronters,
                 options: validOptions.map { PollOptionCreate(text: $0) }
             )
             if await store.createPoll(create) != nil {
