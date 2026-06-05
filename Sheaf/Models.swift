@@ -449,13 +449,22 @@ enum FieldType: String, Codable, CaseIterable {
     case multiselect = "multiselect"
 }
 
+// MARK: - CustomFieldOptions
+// Per-field-type options. For select / multiselect, `choices` carries
+// the predefined values the user can pick from; nil = freeform tag
+// mode (any string accepted server-side). Other field types don't
+// carry options today.
+struct CustomFieldOptions: Codable, Equatable {
+    var choices: [String]?
+}
+
 // MARK: - CustomFieldRead
 struct CustomField: Identifiable, Codable {
     let id: String
     let systemID: String
     var name: String
     var fieldType: FieldType
-    var options: [String: AnyCodable]?
+    var options: CustomFieldOptions?
     var order: Int
     var privacy: PrivacyLevel
     let createdAt: Date
@@ -474,7 +483,7 @@ struct CustomField: Identifiable, Codable {
 struct CustomFieldCreate: Codable {
     var name: String
     var fieldType: FieldType
-    var options: [String: AnyCodable]?
+    var options: CustomFieldOptions?
     var order: Int?
     var privacy: PrivacyLevel?
 
@@ -741,21 +750,26 @@ struct AnyCodable: Codable, Hashable {
 
     init(from decoder: Decoder) throws {
         let c = try decoder.singleValueContainer()
-        if let v = try? c.decode(String.self)  { value = v; return }
-        if let v = try? c.decode(Int.self)     { value = v; return }
-        if let v = try? c.decode(Double.self)  { value = v; return }
-        if let v = try? c.decode(Bool.self)    { value = v; return }
-        value = ""
+        if c.decodeNil()                          { value = NSNull(); return }
+        // Bool before Int so JSON true/false doesn't get mistaken for a number.
+        if let v = try? c.decode(Bool.self)       { value = v; return }
+        if let v = try? c.decode(Int.self)        { value = v; return }
+        if let v = try? c.decode(Double.self)     { value = v; return }
+        if let v = try? c.decode(String.self)     { value = v; return }
+        if let v = try? c.decode([String].self)   { value = v; return }
+        value = NSNull()
     }
 
     func encode(to encoder: Encoder) throws {
         var c = encoder.singleValueContainer()
         switch value {
-        case let v as String:  try c.encode(v)
-        case let v as Int:     try c.encode(v)
-        case let v as Double:  try c.encode(v)
-        case let v as Bool:    try c.encode(v)
-        default:               try c.encode("")
+        case is NSNull:          try c.encodeNil()
+        case let v as Bool:      try c.encode(v)
+        case let v as Int:       try c.encode(v)
+        case let v as Double:    try c.encode(v)
+        case let v as String:    try c.encode(v)
+        case let v as [String]:  try c.encode(v)
+        default:                 try c.encodeNil()
         }
     }
 }
@@ -1100,7 +1114,7 @@ struct UnpinRevisionResponse: Codable {
 // MARK: - Custom Field Update
 struct CustomFieldUpdate: Codable {
     var name: String?
-    var options: [String: String]?
+    var options: CustomFieldOptions?
     var order: Int?
     var privacy: PrivacyLevel?
 }

@@ -128,6 +128,67 @@ struct CustomFieldsView: View {
     }
 }
 
+// MARK: - Choices Editor
+// Per-choice list editor for select / multiselect custom fields. Each
+// row is a text field with a remove (×) button; "Add choice" appends an
+// empty row. An empty list is treated as freeform tag mode — the
+// backend accepts any string for the field.
+struct ChoicesEditor: View {
+    @Environment(\.theme) var theme
+    @Binding var choices: [String]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Choices")
+                .font(.footnote).fontWeight(.semibold)
+                .foregroundColor(theme.textSecondary)
+            Text(choices.isEmpty
+                 ? "Leave empty for a freeform tag input (any value accepted)."
+                 : "Pick from this list.")
+                .font(.caption)
+                .foregroundColor(theme.textTertiary)
+
+            ForEach(Array(choices.enumerated()), id: \.offset) { idx, _ in
+                HStack(spacing: 8) {
+                    TextField("Choice \(idx + 1)", text: Binding(
+                        get: { idx < choices.count ? choices[idx] : "" },
+                        set: { newVal in
+                            guard idx < choices.count else { return }
+                            choices[idx] = newVal
+                        }
+                    ))
+                    .autocorrectionDisabled()
+                    .padding(10)
+                    .background(theme.backgroundCard)
+                    .cornerRadius(10)
+                    .foregroundColor(theme.textPrimary)
+
+                    Button {
+                        guard idx < choices.count else { return }
+                        choices.remove(at: idx)
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(theme.textTertiary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            Button {
+                choices.append("")
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "plus")
+                    Text(choices.isEmpty ? "Add a choice" : "Add another")
+                }
+                .font(.subheadline).fontWeight(.medium)
+                .foregroundColor(theme.accentLight)
+            }
+            .buttonStyle(.plain)
+        }
+    }
+}
+
 // MARK: - Edit Custom Field Sheet
 struct EditCustomFieldSheet: View {
     @EnvironmentObject var store: SystemStore
@@ -137,8 +198,13 @@ struct EditCustomFieldSheet: View {
     let field: CustomField
     @State private var name    = ""
     @State private var privacy: PrivacyLevel = .private
+    @State private var choices: [String] = []
     @State private var isSaving = false
     @State private var error: String?
+
+    private var isChoiceField: Bool {
+        field.fieldType == .select || field.fieldType == .multiselect
+    }
 
     var body: some View {
         NavigationStack {
@@ -166,6 +232,13 @@ struct EditCustomFieldSheet: View {
                     }
                     .foregroundColor(theme.textPrimary)
                     .listRowBackground(theme.backgroundCard)
+                }
+
+                if isChoiceField {
+                    Section {
+                        ChoicesEditor(choices: $choices)
+                            .listRowBackground(theme.backgroundCard)
+                    }
                 }
 
                 if let error {
@@ -204,13 +277,20 @@ struct EditCustomFieldSheet: View {
         .onAppear {
             name    = field.name
             privacy = field.privacy
+            choices = field.options?.choices ?? []
         }
     }
 
     private func save() async {
         isSaving = true
         error = nil
-        await store.updateField(id: field.id, name: name, privacy: privacy)
+        await store.updateField(
+            id: field.id,
+            name: name,
+            privacy: privacy,
+            choices: isChoiceField ? choices : nil,
+            fieldType: field.fieldType
+        )
         isSaving = false
         dismiss()
     }
@@ -225,8 +305,13 @@ struct AddCustomFieldSheet: View {
     @State private var name = ""
     @State private var fieldType: FieldType = .text
     @State private var privacy: PrivacyLevel = .private
+    @State private var choices: [String] = []
     @State private var isSaving = false
     @State private var error: String?
+
+    private var isChoiceField: Bool {
+        fieldType == .select || fieldType == .multiselect
+    }
 
     var body: some View {
         NavigationStack {
@@ -253,6 +338,13 @@ struct AddCustomFieldSheet: View {
                     }
                     .listRowBackground(theme.backgroundCard)
                     .foregroundColor(theme.textPrimary)
+                }
+
+                if isChoiceField {
+                    Section {
+                        ChoicesEditor(choices: $choices)
+                            .listRowBackground(theme.backgroundCard)
+                    }
                 }
 
                 if let error {
@@ -294,10 +386,17 @@ struct AddCustomFieldSheet: View {
         guard !name.isEmpty else { return }
         isSaving = true
         error = nil
+        let options: CustomFieldOptions? = {
+            guard isChoiceField else { return nil }
+            let cleaned = choices
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+                .filter { !$0.isEmpty }
+            return cleaned.isEmpty ? nil : CustomFieldOptions(choices: cleaned)
+        }()
         _ = await store.createField(CustomFieldCreate(
             name: name,
             fieldType: fieldType,
-            options: nil,
+            options: options,
             order: store.fields.count,
             privacy: privacy
         ))

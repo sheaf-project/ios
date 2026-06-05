@@ -475,11 +475,25 @@ struct MemberDetailSheet: View {
     }
 
     private func displayValue(_ value: AnyCodable, field: CustomField) -> String {
+        if value.value is NSNull { return "—" }
         switch field.fieldType {
         case .boolean:
             if let b = value.value as? Bool { return b ? "Yes" : "No" }
         case .date:
-            if let s = value.value as? String { return s }
+            if let s = value.value as? String, !s.isEmpty {
+                let inFmt = DateFormatter()
+                inFmt.dateFormat = "yyyy-MM-dd"
+                if let d = inFmt.date(from: s) {
+                    let outFmt = DateFormatter()
+                    outFmt.dateStyle = .medium
+                    return outFmt.string(from: d)
+                }
+                return s
+            }
+        case .multiselect:
+            if let arr = value.value as? [String] {
+                return arr.isEmpty ? "—" : arr.joined(separator: ", ")
+            }
         default: break
         }
         if let s = value.value as? String, !s.isEmpty { return s }
@@ -520,7 +534,12 @@ struct MemberEditSheet: View {
     @State private var isCustomFront = false
     @State private var privacy: PrivacyLevel = .private
     @State private var isSaving = false
-    @State private var fieldValues: [String: String] = [:]  // fieldID -> string value
+    // Staged per-field values; AnyCodable wraps the type-erased server
+    // value (Bool / Int / Double / String / [String] / NSNull-for-cleared).
+    // Save() diffs against `fieldValuesBaseline` so unchanged fields don't
+    // re-rotate server-side ciphertext or audit history.
+    @State private var fieldValues: [String: AnyCodable] = [:]
+    @State private var fieldValuesBaseline: [String: AnyCodable] = [:]
     @State private var selectedPhoto: PhotosPickerItem?
     @State private var isUploadingAvatar = false
     @State private var avatarMode: AvatarInputMode = .url
@@ -701,17 +720,16 @@ struct MemberEditSheet: View {
         note          = m.note ?? ""
         isCustomFront = m.isCustomFront
         privacy       = m.privacy
-        // Load existing field values
+        // Load existing field values. Server omits fields the viewer
+        // isn't allowed to see — those keys won't be in the map.
         Task {
             guard let memberID = member?.id else { return }
             let values = await store.getMemberFieldValues(memberID: memberID)
             await MainActor.run {
-                for v in values {
-                    if let s = v.value.value as? String { fieldValues[v.fieldID] = s }
-                    else if let n = v.value.value as? Int { fieldValues[v.fieldID] = "\(n)" }
-                    else if let d = v.value.value as? Double { fieldValues[v.fieldID] = String(format: "%g", d) }
-                    else if let b = v.value.value as? Bool { fieldValues[v.fieldID] = b ? "true" : "false" }
-                }
+                var byID: [String: AnyCodable] = [:]
+                for v in values { byID[v.fieldID] = v.value }
+                fieldValues = byID
+                fieldValuesBaseline = byID
             }
         }
     }
@@ -748,73 +766,414 @@ struct MemberEditSheet: View {
         )
         Task {
             await store.saveMember(existing: member, create: create)
-            // Save custom field values
-            if let memberID = member?.id ?? store.members.last?.id,
-               !fieldValues.isEmpty {
-                let sets: [CustomFieldValueSet] = store.fields.compactMap { field in
-                    guard let val = fieldValues[field.id], !val.isEmpty else { return nil }
-                    return CustomFieldValueSet(
-                        fieldID: field.id,
-                        value: AnyCodable(val)
-                    )
+            // Diff staged values against the load-time baseline so an
+            // unchanged field doesn't re-rotate its server-side ciphertext
+            // or audit row. Editor stores NSNull to signal "clear".
+            if let memberID = member?.id ?? store.members.last?.id {
+                var sets: [CustomFieldValueSet] = []
+                for (fieldID, value) in fieldValues {
+                    if !customFieldValuesEqual(value, fieldValuesBaseline[fieldID]) {
+                        sets.append(CustomFieldValueSet(fieldID: fieldID, value: value))
+                    }
                 }
-                // Always send the PUT even with an empty array to clear removed values
-                await store.setMemberFieldValues(memberID: memberID, values: sets)
+                if !sets.isEmpty {
+                    await store.setMemberFieldValues(memberID: memberID, values: sets)
+                }
             }
             isSaving = false
             dismiss()
         }
     }
 
+    // Equality across the type-erased values the wire carries. An
+    // explicit NSNull stage compared to an absent baseline reads as
+    // "no change" so we don't ping the server for a no-op clear.
+    private func customFieldValuesEqual(_ a: AnyCodable?, _ b: AnyCodable?) -> Bool {
+        let av: Any? = a?.value
+        let bv: Any? = b?.value
+        let aIsNullish = av == nil || av is NSNull
+        let bIsNullish = bv == nil || bv is NSNull
+        if aIsNullish && bIsNullish { return true }
+        if aIsNullish != bIsNullish { return false }
+        switch (av, bv) {
+        case let (l as Bool, r as Bool):       return l == r
+        case let (l as Int, r as Int):         return l == r
+        case let (l as Double, r as Double):   return l == r
+        case let (l as String, r as String):   return l == r
+        case let (l as [String], r as [String]): return l == r
+        default: return false
+        }
+    }
+
+    // Dispatch to the right input widget per field type. Mirrors the
+    // Android `CustomFieldEditor` composable. Choices on a select /
+    // multiselect collapse to nil = freeform input.
     @ViewBuilder
     func customFieldEditor(_ field: CustomField) -> some View {
+        let choices = field.options?.choices
+        let hasChoices = !(choices?.isEmpty ?? true)
+
         VStack(alignment: .leading, spacing: 6) {
-            Text(field.name)
-                .font(.footnote).fontWeight(.semibold)
-                .foregroundColor(theme.textSecondary)
-            switch field.fieldType {
-            case .boolean:
-                Toggle("", isOn: Binding(
-                    get: { fieldValues[field.id] == "true" },
-                    set: { fieldValues[field.id] = $0 ? "true" : "false" }
-                ))
-                .tint(theme.accentLight)
-                .labelsHidden()
-            case .number:
-                TextField("0", text: Binding(
-                    get: { fieldValues[field.id] ?? "" },
-                    set: { fieldValues[field.id] = $0 }
-                ))
-                .keyboardType(.decimalPad)
-                .padding(12).background(theme.backgroundCard).cornerRadius(12).foregroundColor(theme.textPrimary)
-            case .date:
-                DatePicker(
-                    "",
-                    selection: Binding(
-                        get: {
-                            let fmt = DateFormatter()
-                            fmt.dateFormat = "yyyy-MM-dd"
-                            return fmt.date(from: fieldValues[field.id] ?? "") ?? Date()
-                        },
-                        set: {
-                            let fmt = DateFormatter()
-                            fmt.dateFormat = "yyyy-MM-dd"
-                            fieldValues[field.id] = fmt.string(from: $0)
-                        }
-                    ),
-                    displayedComponents: .date
-                )
-                .datePickerStyle(.compact)
-                .tint(theme.accentLight)
-                .labelsHidden()
-            default:
-                TextField(field.name, text: Binding(
-                    get: { fieldValues[field.id] ?? "" },
-                    set: { fieldValues[field.id] = $0 }
-                ))
-                .autocorrectionDisabled()
-                .padding(12).background(theme.backgroundCard).cornerRadius(12).foregroundColor(theme.textPrimary)
+            // Boolean shows the label inline with the switch — every
+            // other type gets the label above its input.
+            if field.fieldType != .boolean {
+                Text(field.name)
+                    .font(.footnote).fontWeight(.semibold)
+                    .foregroundColor(theme.textSecondary)
             }
+
+            switch field.fieldType {
+            case .text:
+                cfTextEditor(field: field)
+            case .number:
+                cfNumberEditor(field: field)
+            case .date:
+                cfDateEditor(field: field)
+            case .boolean:
+                cfBooleanEditor(field: field)
+            case .select:
+                if hasChoices, let choices {
+                    cfSelectChoiceEditor(field: field, choices: choices)
+                } else {
+                    cfTextEditor(field: field)
+                }
+            case .multiselect:
+                if hasChoices, let choices {
+                    cfMultiselectChoiceEditor(field: field, choices: choices)
+                } else {
+                    MultiselectFreeformEditor(field: field, values: $fieldValues)
+                }
+            }
+        }
+    }
+
+    // MARK: Per-type custom field editors
+
+    private func cfTextEditor(field: CustomField) -> some View {
+        TextField(field.name, text: Binding(
+            get: { (fieldValues[field.id]?.value as? String) ?? "" },
+            set: { newVal in
+                if newVal.isEmpty { fieldValues[field.id] = AnyCodable(NSNull()) }
+                else { fieldValues[field.id] = AnyCodable(newVal) }
+            }
+        ))
+        .autocorrectionDisabled()
+        .padding(12).background(theme.backgroundCard).cornerRadius(12)
+        .foregroundColor(theme.textPrimary)
+    }
+
+    private func cfNumberEditor(field: CustomField) -> some View {
+        TextField("0", text: Binding(
+            get: {
+                switch fieldValues[field.id]?.value {
+                case let v as Int:    return "\(v)"
+                case let v as Double: return String(format: "%g", v)
+                case let v as String: return v
+                default: return ""
+                }
+            },
+            set: { raw in
+                let trimmed = raw.trimmingCharacters(in: .whitespaces)
+                if trimmed.isEmpty {
+                    fieldValues[field.id] = AnyCodable(NSNull())
+                } else if let i = Int(trimmed) {
+                    fieldValues[field.id] = AnyCodable(i)
+                } else if let d = Double(trimmed) {
+                    fieldValues[field.id] = AnyCodable(d)
+                } else {
+                    // Keep the raw string while the user types intermediates
+                    // ("3.", "-", "1e"). Server would 422 these, but save()
+                    // path won't fire until they finish typing.
+                    fieldValues[field.id] = AnyCodable(trimmed)
+                }
+            }
+        ))
+        .keyboardType(.decimalPad)
+        .padding(12).background(theme.backgroundCard).cornerRadius(12)
+        .foregroundColor(theme.textPrimary)
+    }
+
+    private func cfDateEditor(field: CustomField) -> some View {
+        let isoFmt: DateFormatter = {
+            let f = DateFormatter()
+            f.dateFormat = "yyyy-MM-dd"
+            return f
+        }()
+        let current = fieldValues[field.id]?.value as? String
+        let parsed = current.flatMap { isoFmt.date(from: $0) }
+
+        return HStack {
+            DatePicker(
+                "",
+                selection: Binding(
+                    get: { parsed ?? Date() },
+                    set: { fieldValues[field.id] = AnyCodable(isoFmt.string(from: $0)) }
+                ),
+                displayedComponents: .date
+            )
+            .datePickerStyle(.compact)
+            .tint(theme.accentLight)
+            .labelsHidden()
+            .disabled(parsed == nil)
+            .opacity(parsed == nil ? 0.4 : 1)
+
+            Spacer()
+
+            if parsed == nil {
+                Button("Set") {
+                    fieldValues[field.id] = AnyCodable(isoFmt.string(from: Date()))
+                }
+                .font(.subheadline).fontWeight(.medium)
+                .foregroundColor(theme.accentLight)
+            } else {
+                Button("Clear") {
+                    fieldValues[field.id] = AnyCodable(NSNull())
+                }
+                .font(.subheadline).fontWeight(.medium)
+                .foregroundColor(theme.textSecondary)
+            }
+        }
+        .padding(12).background(theme.backgroundCard).cornerRadius(12)
+    }
+
+    private func cfBooleanEditor(field: CustomField) -> some View {
+        HStack {
+            Text(field.name)
+                .font(.subheadline).fontWeight(.medium)
+                .foregroundColor(theme.textPrimary)
+            Spacer()
+            Toggle("", isOn: Binding(
+                get: { (fieldValues[field.id]?.value as? Bool) == true },
+                set: { fieldValues[field.id] = AnyCodable($0) }
+            ))
+            .tint(theme.accentLight)
+            .labelsHidden()
+        }
+        .padding(12).background(theme.backgroundCard).cornerRadius(12)
+    }
+
+    private func cfSelectChoiceEditor(field: CustomField, choices: [String]) -> some View {
+        let current = fieldValues[field.id]?.value as? String
+        return Menu {
+            // Sentinel "(none)" row clears the value — matches the
+            // explicit-clear convention used elsewhere.
+            Button("(none)") {
+                fieldValues[field.id] = AnyCodable(NSNull())
+            }
+            ForEach(choices, id: \.self) { choice in
+                Button(choice) {
+                    fieldValues[field.id] = AnyCodable(choice)
+                }
+            }
+        } label: {
+            HStack {
+                Text(current?.isEmpty == false ? current! : "(none)")
+                    .foregroundColor(current?.isEmpty == false ? theme.textPrimary : theme.textTertiary)
+                Spacer()
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.caption)
+                    .foregroundColor(theme.textTertiary)
+            }
+            .padding(12).background(theme.backgroundCard).cornerRadius(12)
+        }
+    }
+
+    private func cfMultiselectChoiceEditor(field: CustomField, choices: [String]) -> some View {
+        let selected = Set((fieldValues[field.id]?.value as? [String]) ?? [])
+        return ChipWrapLayout(spacing: 6) {
+            ForEach(choices, id: \.self) { choice in
+                let isSelected = selected.contains(choice)
+                Button {
+                    var next = selected
+                    if isSelected { next.remove(choice) } else { next.insert(choice) }
+                    // Empty -> nil so the server clears rather than persisting [].
+                    if next.isEmpty {
+                        fieldValues[field.id] = AnyCodable(NSNull())
+                    } else {
+                        // Preserve choices order rather than Set's arbitrary order.
+                        let ordered = choices.filter { next.contains($0) }
+                        fieldValues[field.id] = AnyCodable(ordered)
+                    }
+                } label: {
+                    Text(choice)
+                        .font(.subheadline).fontWeight(.medium)
+                        .padding(.horizontal, 12).padding(.vertical, 6)
+                        .background(isSelected ? theme.accentSoft : theme.backgroundCard)
+                        .foregroundColor(isSelected ? theme.accent : theme.textPrimary)
+                        .cornerRadius(14)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14)
+                                .stroke(isSelected ? theme.accent.opacity(0.25) : theme.border, lineWidth: 1)
+                        )
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+}
+
+// MARK: - Chip Wrap Layout
+// Simple wrap layout for chip rows — places subviews left-to-right and
+// breaks to the next line when out of width. iOS 16+ Layout protocol.
+private struct ChipWrapLayout: Layout {
+    var spacing: CGFloat = 6
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = proposal.width ?? .infinity
+        var lineWidth: CGFloat = 0
+        var lineHeight: CGFloat = 0
+        var totalHeight: CGFloat = 0
+        for sv in subviews {
+            let size = sv.sizeThatFits(.unspecified)
+            if lineWidth + size.width > width, lineWidth > 0 {
+                totalHeight += lineHeight + spacing
+                lineWidth = 0
+                lineHeight = 0
+            }
+            lineWidth += size.width + (lineWidth > 0 ? spacing : 0)
+            lineHeight = max(lineHeight, size.height)
+        }
+        totalHeight += lineHeight
+        return CGSize(width: width.isFinite ? width : lineWidth, height: totalHeight)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var x = bounds.minX
+        var y = bounds.minY
+        var lineHeight: CGFloat = 0
+        for sv in subviews {
+            let size = sv.sizeThatFits(.unspecified)
+            if x + size.width > bounds.maxX, x > bounds.minX {
+                x = bounds.minX
+                y += lineHeight + spacing
+                lineHeight = 0
+            }
+            sv.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
+            x += size.width + spacing
+            lineHeight = max(lineHeight, size.height)
+        }
+    }
+}
+
+// MARK: - Multiselect Freeform Editor
+// Chip group + inline TextField for freeform multiselect fields (no
+// predefined choices). Three ways to commit a tag: Return key, tap +,
+// or type a comma. Empty state shows a visible "No tags yet" hint so
+// the editor doesn't look like a plain text field. Empty list collapses
+// to NSNull on save so the server clears the value rather than
+// persisting [].
+private struct MultiselectFreeformEditor: View {
+    @Environment(\.theme) var theme
+    let field: CustomField
+    @Binding var values: [String: AnyCodable]
+    @State private var draft = ""
+    @FocusState private var inputFocused: Bool
+
+    private var currentTags: [String] {
+        (values[field.id]?.value as? [String]) ?? []
+    }
+
+    private func commit(_ raw: String) {
+        let tag = raw.trimmingCharacters(in: .whitespaces)
+        guard !tag.isEmpty else { draft = ""; return }
+        if currentTags.contains(tag) { draft = ""; return }
+        values[field.id] = AnyCodable(currentTags + [tag])
+        draft = ""
+        // Re-focus so chained "type tag, Done, type tag, Done" stays smooth
+        // — without this, the keyboard hides between submits on some setups.
+        inputFocused = true
+    }
+
+    private func remove(_ tag: String) {
+        let next = currentTags.filter { $0 != tag }
+        values[field.id] = next.isEmpty ? AnyCodable(NSNull()) : AnyCodable(next)
+    }
+
+    // Comma triggers commit so users can rapid-fire "alpha, beta, gamma".
+    // We strip the comma before committing so it doesn't end up inside
+    // the tag.
+    private func onDraftChange(_ newValue: String) {
+        guard newValue.contains(",") else { return }
+        let parts = newValue.split(separator: ",", omittingEmptySubsequences: false)
+        let trailing = String(parts.last ?? "")
+        for part in parts.dropLast() {
+            commit(String(part))
+        }
+        draft = trailing
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // Chip strip — always visible, with an empty-state hint so the
+            // editor looks like a tag input from the moment it opens
+            // rather than a plain text field.
+            if currentTags.isEmpty {
+                HStack(spacing: 6) {
+                    Image(systemName: "tag")
+                        .font(.caption)
+                        .foregroundColor(theme.textTertiary)
+                    Text("No tags yet")
+                        .font(.caption).italic()
+                        .foregroundColor(theme.textTertiary)
+                }
+                .padding(.vertical, 6)
+            } else {
+                ChipWrapLayout(spacing: 6) {
+                    ForEach(currentTags, id: \.self) { tag in
+                        Button { remove(tag) } label: {
+                            HStack(spacing: 4) {
+                                Text(tag)
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(.caption)
+                            }
+                            .font(.subheadline).fontWeight(.medium)
+                            .padding(.horizontal, 10).padding(.vertical, 5)
+                            .background(theme.accentSoft)
+                            .foregroundColor(theme.accent)
+                            .cornerRadius(14)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14)
+                                    .stroke(theme.accent.opacity(0.25), lineWidth: 1)
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+
+            // Input row. Leading + icon makes the affordance explicit even
+            // before the user types anything; the trailing Add button
+            // becomes the prominent action once a draft exists.
+            HStack(spacing: 8) {
+                Image(systemName: "plus.circle.fill")
+                    .font(.title3)
+                    .foregroundColor(theme.accentLight)
+                TextField("Type a tag, press return", text: $draft)
+                    .autocorrectionDisabled()
+                    .textInputAutocapitalization(.never)
+                    .submitLabel(.done)
+                    .focused($inputFocused)
+                    .onSubmit { commit(draft) }
+                    .onChange(of: draft) { _, new in onDraftChange(new) }
+                    .foregroundColor(theme.textPrimary)
+                if !draft.trimmingCharacters(in: .whitespaces).isEmpty {
+                    Button {
+                        commit(draft)
+                    } label: {
+                        Text("Add")
+                            .font(.subheadline).fontWeight(.semibold)
+                            .foregroundColor(theme.accentLight)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(12)
+            .background(theme.backgroundCard)
+            .cornerRadius(12)
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(inputFocused ? theme.accentLight : theme.border, lineWidth: 1)
+            )
         }
     }
 }

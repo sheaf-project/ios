@@ -599,9 +599,8 @@ class SystemStore: ObservableObject {
                     }
                 case .updateField:
                     if let rid = resolveID(op.resourceID) {
-                        struct FieldUpdatePayload: Codable { let name: String; let privacy: PrivacyLevel }
-                        let payload = try JSONDecoder.iso.decode(FieldUpdatePayload.self, from: op.bodyData)
-                        _ = try await api.updateField(id: rid, update: CustomFieldUpdate(name: payload.name, privacy: payload.privacy))
+                        let update = try JSONDecoder.iso.decode(CustomFieldUpdate.self, from: op.bodyData)
+                        _ = try await api.updateField(id: rid, update: update)
                     }
                 case .deleteField:
                     if let rid = resolveID(op.resourceID) {
@@ -1239,10 +1238,22 @@ class SystemStore: ObservableObject {
         return nil
     }
 
-    func updateField(id: String, name: String, privacy: PrivacyLevel) async {
+    func updateField(
+        id: String,
+        name: String,
+        privacy: PrivacyLevel,
+        choices: [String]? = nil,
+        fieldType: FieldType? = nil
+    ) async {
+        // Mirror the Android contract: options dict is only carried for
+        // select / multiselect; other types must omit it (backend 422s
+        // on a non-null options for text/number/date/boolean). Empty /
+        // all-blank choices collapse to nil = freeform tag mode.
+        let options = optionsForUpdate(choices: choices, fieldType: fieldType)
+        let update = CustomFieldUpdate(name: name, options: options, privacy: privacy)
         if NetworkMonitor.shared.isOnline, let api {
             do {
-                let updated = try await api.updateField(id: id, update: CustomFieldUpdate(name: name, privacy: privacy))
+                let updated = try await api.updateField(id: id, update: update)
                 if let idx = fields.firstIndex(where: { $0.id == id }) {
                     fields[idx] = updated
                 }
@@ -1256,15 +1267,24 @@ class SystemStore: ObservableObject {
             }
         }
 
-        struct FieldUpdatePayload: Codable { let name: String; let privacy: PrivacyLevel }
-        if let body = try? JSONEncoder.iso.encode(FieldUpdatePayload(name: name, privacy: privacy)) {
+        if let body = try? JSONEncoder.iso.encode(update) {
             enqueue(.updateField, resourceID: id, body: body)
         }
         if let idx = fields.firstIndex(where: { $0.id == id }) {
             fields[idx].name = name
             fields[idx].privacy = privacy
+            if fieldType == .select || fieldType == .multiselect {
+                fields[idx].options = options
+            }
         }
         saveAllToCache()
+    }
+
+    private func optionsForUpdate(choices: [String]?, fieldType: FieldType?) -> CustomFieldOptions? {
+        guard fieldType == .select || fieldType == .multiselect else { return nil }
+        let cleaned = (choices ?? []).map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        if cleaned.isEmpty { return nil }
+        return CustomFieldOptions(choices: cleaned)
     }
 
     func createField(_ create: CustomFieldCreate) async -> CustomField? {
