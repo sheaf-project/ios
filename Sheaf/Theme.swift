@@ -32,9 +32,15 @@ enum Palette: String, CaseIterable {
     case mint      = "mint"
     case ocean     = "ocean"
     case sepia     = "sepia"
+    case crimson   = "crimson"
+    case goldenrod = "goldenrod"
+    case plural    = "plural"
     case pride     = "pride"
     case trans     = "trans"
     case nonbinary = "nonbinary"
+    case bi        = "bi"
+    case pan       = "pan"
+    case asexual   = "asexual"
 
     var label: String {
         switch self {
@@ -44,9 +50,15 @@ enum Palette: String, CaseIterable {
         case .mint:      return "Mint"
         case .ocean:     return "Ocean"
         case .sepia:     return "Sepia"
+        case .crimson:   return "Crimson"
+        case .goldenrod: return "Goldenrod"
+        case .plural:    return "Plural"
         case .pride:     return "Pride"
         case .trans:     return "Trans"
         case .nonbinary: return "Non-binary"
+        case .bi:        return "Bi"
+        case .pan:       return "Pan"
+        case .asexual:   return "Asexual"
         }
     }
 
@@ -59,9 +71,15 @@ enum Palette: String, CaseIterable {
         case .mint:      return [Color(hex: "#10B981")!, Color(hex: "#34D399")!, Color(hex: "#6EE7B7")!]
         case .ocean:     return [Color(hex: "#3B82F6")!, Color(hex: "#60A5FA")!, Color(hex: "#93C5FD")!]
         case .sepia:     return [Color(hex: "#D97706")!, Color(hex: "#F59E0B")!, Color(hex: "#FBBF24")!]
+        case .crimson:   return [Color(hex: "#DC2626")!, Color(hex: "#F43F5E")!, Color(hex: "#F97316")!]
+        case .goldenrod: return [Color(hex: "#FACC15")!, Color(hex: "#D97706")!, Color(hex: "#1E40AF")!]
+        case .plural:    return [Color(hex: "#543576")!, Color(hex: "#7674C2")!, Color(hex: "#89C8B0")!]
         case .pride:     return [Color(hex: "#EF4444")!, Color(hex: "#FB923C")!, Color(hex: "#FBBF24")!]
         case .trans:     return [Color(hex: "#F5A9B8")!, Color(hex: "#FFFFFF")!, Color(hex: "#5BCEFA")!]
         case .nonbinary: return [Color(hex: "#FCF434")!, Color(hex: "#FFFFFF")!, Color(hex: "#9C59D1")!]
+        case .bi:        return [Color(hex: "#D60270")!, Color(hex: "#9B4F96")!, Color(hex: "#0038A8")!]
+        case .pan:       return [Color(hex: "#FF1B8D")!, Color(hex: "#FFD800")!, Color(hex: "#1BB3FF")!]
+        case .asexual:   return [Color(hex: "#810081")!, Color(hex: "#A4A4A4")!, Color(hex: "#1A1A1A")!]
         }
     }
 
@@ -74,9 +92,15 @@ enum Palette: String, CaseIterable {
         case .mint:      return Color(hex: "#0F2A20")!
         case .ocean:     return Color(hex: "#0F1F35")!
         case .sepia:     return Color(hex: "#241A12")!
+        case .crimson:   return Color(hex: "#1A0F0F")!
+        case .goldenrod: return Color(hex: "#1F1A0A")!
+        case .plural:    return Color(hex: "#2E0525")!
         case .pride:     return Color(hex: "#1F1422")!
         case .trans:     return Color(hex: "#2B1A24")!
         case .nonbinary: return Color(hex: "#1A1A1A")!
+        case .bi:        return Color(hex: "#1A0F1A")!
+        case .pan:       return Color(hex: "#1A0E16")!
+        case .asexual:   return Color(hex: "#1A1A1A")!
         }
     }
 
@@ -90,9 +114,15 @@ enum Palette: String, CaseIterable {
         case .mint:      return isDark ? Color(hex: "#34D399")! : Color(hex: "#059669")!
         case .ocean:     return Color(hex: "#3B82F6")!
         case .sepia:     return isDark ? Color(hex: "#F59E0B")! : Color(hex: "#D97706")!
+        case .crimson:   return isDark ? Color(hex: "#F87171")! : Color(hex: "#DC2626")!
+        case .goldenrod: return isDark ? Color(hex: "#FACC15")! : Color(hex: "#A16207")!
+        case .plural:    return isDark ? Color(hex: "#7674C2")! : Color(hex: "#543576")!
         case .pride:     return Color(hex: "#EC4899")!
         case .trans:     return Color(hex: "#5BCEFA")!
         case .nonbinary: return isDark ? Color(hex: "#9C59D1")! : Color(hex: "#7C3AED")!
+        case .bi:        return isDark ? Color(hex: "#EF4D8E")! : Color(hex: "#A8025A")!
+        case .pan:       return isDark ? Color(hex: "#FF6BB0")! : Color(hex: "#C8005F")!
+        case .asexual:   return isDark ? Color(hex: "#B233B2")! : Color(hex: "#5C005C")!
         }
     }
 
@@ -104,9 +134,15 @@ enum Palette: String, CaseIterable {
         case .mint:      return isDark ? Color(hex: "#6EE7B7")! : Color(hex: "#34D399")!
         case .ocean:     return Color(hex: "#60A5FA")!
         case .sepia:     return Color(hex: "#FBBF24")!
+        case .crimson:   return isDark ? Color(hex: "#FB7185")! : Color(hex: "#F87171")!
+        case .goldenrod: return isDark ? Color(hex: "#FDE047")! : Color(hex: "#FACC15")!
+        case .plural:    return isDark ? Color(hex: "#89C8B0")! : Color(hex: "#7674C2")!
         case .pride:     return Color(hex: "#F472B6")!
         case .trans:     return Color(hex: "#F5A9B8")!
         case .nonbinary: return isDark ? Color(hex: "#FCF434")! : Color(hex: "#9C59D1")!
+        case .bi:        return Color(hex: "#D60270")!
+        case .pan:       return Color(hex: "#FF1B8D")!
+        case .asexual:   return Color(hex: "#810081")!
         }
     }
 
@@ -119,9 +155,15 @@ enum Palette: String, CaseIterable {
             case .mint:      return Color(hex: "#ECFDF5")!
             case .ocean:     return Color(hex: "#EFF6FF")!
             case .sepia:     return Color(hex: "#FBF4E4")!
+            case .crimson:   return Color(hex: "#FEF8F8")!
+            case .goldenrod: return Color(hex: "#FFFEF0")!
+            case .plural:    return Color(hex: "#FFFDF5")!
             case .pride:     return Color(hex: "#FFF3F3")!
             case .trans:     return Color(hex: "#FFF1F5")!
             case .nonbinary: return Color(hex: "#FFFCE5")!
+            case .bi:        return Color(hex: "#FFF8FC")!
+            case .pan:       return Color(hex: "#FFFAFC")!
+            case .asexual:   return Color(hex: "#FAFAFA")!
             }
         }
         switch self {
@@ -131,9 +173,15 @@ enum Palette: String, CaseIterable {
         case .mint:      return Color(hex: "#0A1F18")!
         case .ocean:     return Color(hex: "#0A1929")!
         case .sepia:     return Color(hex: "#1F1611")!
+        case .crimson:   return Color(hex: "#1A0F0F")!
+        case .goldenrod: return Color(hex: "#1F1A0A")!
+        case .plural:    return Color(hex: "#2E0525")!
         case .pride:     return Color(hex: "#1A1020")!
         case .trans:     return Color(hex: "#21111B")!
         case .nonbinary: return Color(hex: "#141414")!
+        case .bi:        return Color(hex: "#1A0F1A")!
+        case .pan:       return Color(hex: "#1A0E16")!
+        case .asexual:   return Color(hex: "#1A1A1A")!
         }
     }
 
@@ -151,9 +199,15 @@ enum Palette: String, CaseIterable {
         case .mint:      return Color(hex: "#112B22")!
         case .ocean:     return Color(hex: "#112942")!
         case .sepia:     return Color(hex: "#2B1E14")!
+        case .crimson:   return Color(hex: "#261515")!
+        case .goldenrod: return Color(hex: "#2A2410")!
+        case .plural:    return Color(hex: "#3A1234")!
         case .pride:     return Color(hex: "#26172D")!
         case .trans:     return Color(hex: "#2B1A24")!
         case .nonbinary: return Color(hex: "#1C1C1C")!
+        case .bi:        return Color(hex: "#261426")!
+        case .pan:       return Color(hex: "#261424")!
+        case .asexual:   return Color(hex: "#242424")!
         }
     }
 
@@ -186,6 +240,9 @@ enum Palette: String, CaseIterable {
         case .ocean:     return Color(hex: "#0B1F3A")!
         case .mint:      return Color(hex: "#0B2A1E")!
         case .sepia:     return Color(hex: "#3A2410")!
+        case .crimson:   return Color(hex: "#1F0F0F")!
+        case .goldenrod: return Color(hex: "#1F1812")!
+        case .plural:    return Color(hex: "#2E0525")!
         case .oled:      return Color(hex: "#0A0A0A")!
         default:         return Color(hex: "#1A1035")!
         }
