@@ -470,11 +470,13 @@ class SystemStore: ObservableObject {
         do {
             let dict = try await api.getClientSettings()
             guard !dict.isEmpty else { return }
-            let settings = ClientSettings(from: dict)
-            if let newMode = ThemeMode(rawValue: settings.themeMode) {
+            let source = (dict["settings"] as? [String: Any]) ?? dict
+            if let rawMode = source["theme_mode"] as? String,
+               let newMode = ThemeMode(rawValue: rawMode) {
                 themeManager?.applyFromServer(newMode)
             }
-            if let newPalette = Palette(rawValue: settings.palette) {
+            if let rawPalette = source["palette"] as? String,
+               let newPalette = Palette(rawValue: rawPalette) {
                 themeManager?.applyFromServer(palette: newPalette)
             }
         } catch {

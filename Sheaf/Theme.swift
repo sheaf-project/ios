@@ -263,8 +263,9 @@ struct ClientSettings: Codable, Equatable {
     }
 
     init(from dict: [String: Any]) {
-        self.themeMode = dict["theme_mode"] as? String ?? ThemeMode.system.rawValue
-        self.palette   = dict["palette"]    as? String ?? Palette.purple.rawValue
+        let source = (dict["settings"] as? [String: Any]) ?? dict
+        self.themeMode = source["theme_mode"] as? String ?? ThemeMode.system.rawValue
+        self.palette   = source["palette"]    as? String ?? Palette.purple.rawValue
     }
 
     func toDict() -> [String: Any] {
