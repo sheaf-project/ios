@@ -1321,6 +1321,10 @@ struct AdminUserEditSheet: View {
     @State private var moderationDays: String = "7"
     @State private var isModerating = false
 
+    // Explain: fetched lazily so the row open is snappy. Holds the extra data
+    // (API key count, system name + safety/grace) that AdminUserRead doesn't.
+    @State private var explain: ExplainAccountResponse?
+
     init(user: AdminUserRead, onSave: @escaping (AdminUserRead) -> Void) {
         self.user = user
         self.onSave = onSave
@@ -1429,7 +1433,13 @@ struct AdminUserEditSheet: View {
                 moderationPromptSheet(for: action)
                     .presentationDetents([.medium])
             }
+            .task { await loadExplain() }
         }
+    }
+
+    private func loadExplain() async {
+        guard let api = store.api else { return }
+        explain = try? await api.adminExplainAccount(userID: user.id)
     }
 
     private var userInfoSection: some View {
@@ -1447,6 +1457,20 @@ struct AdminUserEditSheet: View {
                 Divider().background(theme.divider)
                 infoRow(label: "Storage", value: formatBytes(user.storageUsedBytes))
                 Divider().background(theme.divider)
+                infoRow(label: "TOTP", value: user.totpEnabled ? "Enabled" : "Disabled")
+                if let explain {
+                    Divider().background(theme.divider)
+                    infoRow(label: "API Keys", value: "\(explain.apiKeyCount)")
+                    if let system = explain.system {
+                        Divider().background(theme.divider)
+                        infoRow(label: "System", value: system.name.isEmpty ? "(unnamed)" : system.name)
+                        Divider().background(theme.divider)
+                        infoRow(label: "Delete Auth", value: formatDeleteConfirmation(system.deleteConfirmation))
+                        Divider().background(theme.divider)
+                        infoRow(label: "Grace Period", value: "\(system.gracePeriodDays) day\(system.gracePeriodDays == 1 ? "" : "s")")
+                    }
+                }
+                Divider().background(theme.divider)
                 infoRow(label: "Created", value: user.createdAt.formatted(date: .abbreviated, time: .shortened))
                 if let lastLogin = user.lastLoginAt {
                     Divider().background(theme.divider)
@@ -1455,6 +1479,15 @@ struct AdminUserEditSheet: View {
             }
             .background(theme.backgroundCard)
             .cornerRadius(14)
+        }
+    }
+
+    private func formatDeleteConfirmation(_ raw: String) -> String {
+        switch raw {
+        case "none":         return "None"
+        case "password":     return "Password"
+        case "password_totp": return "Password + TOTP"
+        default:             return raw.replacingOccurrences(of: "_", with: " ").capitalized
         }
     }
 

@@ -955,6 +955,51 @@ struct AdminRotateApiKeysResult: Codable {
     }
 }
 
+struct ExplainAccountSystem: Codable {
+    let id: String
+    let name: String
+    let memberCount: Int
+    let deleteConfirmation: String
+    let gracePeriodDays: Int
+
+    enum CodingKeys: String, CodingKey {
+        case id, name
+        case memberCount        = "member_count"
+        case deleteConfirmation = "delete_confirmation"
+        case gracePeriodDays    = "grace_period_days"
+    }
+}
+
+struct ExplainAccountResponse: Codable {
+    let userId: String
+    let email: String
+    let tier: String
+    let isAdmin: Bool
+    let accountStatus: AccountStatus
+    let emailVerified: Bool
+    let totpEnabled: Bool
+    let signupIp: String?
+    let createdAt: Date
+    let lastLoginAt: Date?
+    let activeSessionCount: Int
+    let apiKeyCount: Int
+    let system: ExplainAccountSystem?
+
+    enum CodingKeys: String, CodingKey {
+        case userId             = "user_id"
+        case email, tier, system
+        case isAdmin            = "is_admin"
+        case accountStatus      = "account_status"
+        case emailVerified      = "email_verified"
+        case totpEnabled        = "totp_enabled"
+        case signupIp           = "signup_ip"
+        case createdAt          = "created_at"
+        case lastLoginAt        = "last_login_at"
+        case activeSessionCount = "active_session_count"
+        case apiKeyCount        = "api_key_count"
+    }
+}
+
 struct AdminUserUpdate: Codable {
     var tier: UserTier?
     var isAdmin: Bool?

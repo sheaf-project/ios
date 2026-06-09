@@ -1510,6 +1510,11 @@ class APIClient {
         return try await request("/v1/admin/users/\(userID)/dossier", method: "POST", body: body)
     }
 
+    func adminExplainAccount(userID: String) async throws -> ExplainAccountResponse {
+        let data = try await request("/v1/admin/users/\(userID)/explain")
+        return try JSONDecoder.iso.decode(ExplainAccountResponse.self, from: data)
+    }
+
     // MARK: - Announcements
 
     func getAnnouncements() async throws -> [Announcement] {
