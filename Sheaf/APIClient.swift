@@ -1453,6 +1453,63 @@ class APIClient {
         _ = try await request("/v1/admin/users/\(userID)/verify-email", method: "POST")
     }
 
+    // MARK: - Admin Moderation
+
+    func adminSuspendUser(userID: String, reason: String, durationDays: Int?) async throws -> AdminSuspendResult {
+        let req = AdminSuspendRequest(reason: reason, durationDays: durationDays)
+        let body = try JSONEncoder.iso.encode(req)
+        let data = try await request("/v1/admin/users/\(userID)/suspend", method: "POST", body: body)
+        return try JSONDecoder.iso.decode(AdminSuspendResult.self, from: data)
+    }
+
+    func adminUnsuspendUser(userID: String, reason: String) async throws -> AdminUnsuspendResult {
+        let req = AdminReasonRequest(reason: reason)
+        let body = try JSONEncoder.iso.encode(req)
+        let data = try await request("/v1/admin/users/\(userID)/unsuspend", method: "POST", body: body)
+        return try JSONDecoder.iso.decode(AdminUnsuspendResult.self, from: data)
+    }
+
+    func adminBanUser(userID: String, reason: String) async throws -> AdminBanResult {
+        let req = AdminReasonRequest(reason: reason)
+        let body = try JSONEncoder.iso.encode(req)
+        let data = try await request("/v1/admin/users/\(userID)/ban", method: "POST", body: body)
+        return try JSONDecoder.iso.decode(AdminBanResult.self, from: data)
+    }
+
+    func adminUnbanUser(userID: String, reason: String) async throws -> AdminUnbanResult {
+        let req = AdminReasonRequest(reason: reason)
+        let body = try JSONEncoder.iso.encode(req)
+        let data = try await request("/v1/admin/users/\(userID)/unban", method: "POST", body: body)
+        return try JSONDecoder.iso.decode(AdminUnbanResult.self, from: data)
+    }
+
+    func adminResetSystemSafety(userID: String, reason: String) async throws -> AdminResetSafetyResult {
+        let req = AdminReasonRequest(reason: reason)
+        let body = try JSONEncoder.iso.encode(req)
+        let data = try await request("/v1/admin/users/\(userID)/reset-safety", method: "POST", body: body)
+        return try JSONDecoder.iso.decode(AdminResetSafetyResult.self, from: data)
+    }
+
+    func adminBypassPending(userID: String, reason: String) async throws -> AdminBypassPendingResult {
+        let req = AdminReasonRequest(reason: reason)
+        let body = try JSONEncoder.iso.encode(req)
+        let data = try await request("/v1/admin/users/\(userID)/bypass-pending", method: "POST", body: body)
+        return try JSONDecoder.iso.decode(AdminBypassPendingResult.self, from: data)
+    }
+
+    func adminForceRotateApiKeys(userID: String, reason: String) async throws -> AdminRotateApiKeysResult {
+        let req = AdminReasonRequest(reason: reason)
+        let body = try JSONEncoder.iso.encode(req)
+        let data = try await request("/v1/admin/users/\(userID)/api-keys/rotate-all", method: "POST", body: body)
+        return try JSONDecoder.iso.decode(AdminRotateApiKeysResult.self, from: data)
+    }
+
+    func adminDownloadDossier(userID: String, reason: String) async throws -> Data {
+        let req = AdminReasonRequest(reason: reason)
+        let body = try JSONEncoder.iso.encode(req)
+        return try await request("/v1/admin/users/\(userID)/dossier", method: "POST", body: body)
+    }
+
     // MARK: - Announcements
 
     func getAnnouncements() async throws -> [Announcement] {

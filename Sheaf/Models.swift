@@ -859,6 +859,8 @@ struct AdminUserRead: Codable, Identifiable {
     let memberCount: Int
     let createdAt: Date
     let lastLoginAt: Date?
+    let suspendedUntil: Date?
+    let suspendedReason: String?
 
     enum CodingKeys: String, CodingKey {
         case id, email, tier
@@ -872,6 +874,84 @@ struct AdminUserRead: Codable, Identifiable {
         case memberCount      = "member_count"
         case createdAt        = "created_at"
         case lastLoginAt      = "last_login_at"
+        case suspendedUntil   = "suspended_until"
+        case suspendedReason  = "suspended_reason"
+    }
+}
+
+// MARK: - Admin Moderation Requests / Responses
+
+struct AdminReasonRequest: Codable {
+    let reason: String
+}
+
+struct AdminSuspendRequest: Codable {
+    let reason: String
+    let durationDays: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case reason
+        case durationDays = "duration_days"
+    }
+}
+
+struct AdminSuspendResult: Codable {
+    let suspended: Bool
+    let suspendedUntil: Date?
+    let sessionsRevoked: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case suspended
+        case suspendedUntil = "suspended_until"
+        case sessionsRevoked = "sessions_revoked"
+    }
+}
+
+struct AdminUnsuspendResult: Codable {
+    let unsuspended: Bool
+    let reason: String?
+}
+
+struct AdminBanResult: Codable {
+    let banned: Bool
+    let sessionsRevoked: Int
+
+    enum CodingKeys: String, CodingKey {
+        case banned
+        case sessionsRevoked = "sessions_revoked"
+    }
+}
+
+struct AdminUnbanResult: Codable {
+    let unbanned: Bool
+    let reason: String?
+}
+
+struct AdminResetSafetyResult: Codable {
+    let reset: Bool
+    let changedFields: [String]
+
+    enum CodingKeys: String, CodingKey {
+        case reset
+        case changedFields = "changed_fields"
+    }
+}
+
+struct AdminBypassPendingResult: Codable {
+    let finalizedCount: Int
+    let byType: [String: Int]
+
+    enum CodingKeys: String, CodingKey {
+        case finalizedCount = "finalized_count"
+        case byType = "by_type"
+    }
+}
+
+struct AdminRotateApiKeysResult: Codable {
+    let revokedCount: Int
+
+    enum CodingKeys: String, CodingKey {
+        case revokedCount = "revoked_count"
     }
 }
 

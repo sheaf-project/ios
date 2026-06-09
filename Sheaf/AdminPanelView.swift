@@ -1217,6 +1217,77 @@ struct AdminPanelView: View {
     }
 }
 
+// MARK: - Admin Moderation Action
+
+enum ModerationAction: String, Identifiable, CaseIterable {
+    case resetSafety
+    case drainPending
+    case rotateApiKeys
+    case dossier
+    case suspend
+    case unsuspend
+    case ban
+    case unban
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .resetSafety:   return "Reset System Safety"
+        case .drainPending:  return "Drain Pending Actions"
+        case .rotateApiKeys: return "Rotate API Keys"
+        case .dossier:       return "Export Dossier"
+        case .suspend:       return "Suspend User"
+        case .unsuspend:     return "Unsuspend User"
+        case .ban:           return "Ban User"
+        case .unban:         return "Unban User"
+        }
+    }
+
+    var bodyText: String {
+        switch self {
+        case .resetSafety:
+            return "Clears every System Safety toggle and resets the grace period to zero. The user will no longer have pending-action safeguards."
+        case .drainPending:
+            return "Finalizes every pending action queued on this account right now, bypassing remaining grace windows."
+        case .rotateApiKeys:
+            return "Revokes every API key on this account. The user will need to mint new keys."
+        case .dossier:
+            return "Generates and downloads a GDPR Article 15 metadata bundle for this user."
+        case .suspend:
+            return "Soft-bans this account. Sessions are revoked; access is restored automatically once the duration elapses (or never, if left indefinite)."
+        case .unsuspend:
+            return "Lifts an active suspension early and restores account access."
+        case .ban:
+            return "Permanently bans this account. No auto-restore — use Unban to lift."
+        case .unban:
+            return "Lifts a permanent ban and restores account access."
+        }
+    }
+
+    var reasonPlaceholder: String {
+        switch self {
+        case .dossier:      return "Reason (e.g. DSAR request)"
+        case .rotateApiKeys: return "Reason (e.g. reported key leak)"
+        default:            return "Reason (e.g. support ticket #123)"
+        }
+    }
+
+    var confirmLabel: String {
+        switch self {
+        case .dossier: return "Download"
+        default:       return "Confirm"
+        }
+    }
+
+    var isDestructive: Bool {
+        switch self {
+        case .dossier, .unsuspend, .unban: return false
+        default:                           return true
+        }
+    }
+}
+
 // MARK: - Admin User Edit Sheet
 struct AdminUserEditSheet: View {
     @Environment(\.theme) var theme
@@ -1242,12 +1313,21 @@ struct AdminUserEditSheet: View {
     @State private var showVerifyEmail = false
     @State private var showCancelDeletion = false
 
+    // Moderation: live status so suspend/ban toggles flip after an action without
+    // reloading the list. Seeded from the AdminUserRead the row was opened with.
+    @State private var currentAccountStatus: AccountStatus
+    @State private var moderationAction: ModerationAction?
+    @State private var moderationReason: String = ""
+    @State private var moderationDays: String = "7"
+    @State private var isModerating = false
+
     init(user: AdminUserRead, onSave: @escaping (AdminUserRead) -> Void) {
         self.user = user
         self.onSave = onSave
         _selectedTier = State(initialValue: user.tier)
         _isAdmin = State(initialValue: user.isAdmin)
         _memberLimitText = State(initialValue: user.memberLimit.map { "\($0)" } ?? "")
+        _currentAccountStatus = State(initialValue: user.accountStatus)
     }
 
     var body: some View {
@@ -1260,6 +1340,7 @@ struct AdminUserEditSheet: View {
                         userInfoSection
                         editableFieldsSection
                         recoveryToolsSection
+                        moderationSection
 
                         if let recoveryMessage {
                             Text(recoveryMessage)
@@ -1343,6 +1424,10 @@ struct AdminUserEditSheet: View {
                 Button("Cancel", role: .cancel) {}
             } message: {
                 Text("This will cancel the pending account deletion for this user.")
+            }
+            .sheet(item: $moderationAction) { action in
+                moderationPromptSheet(for: action)
+                    .presentationDetents([.medium])
             }
         }
     }
@@ -1491,6 +1576,274 @@ struct AdminUserEditSheet: View {
             .background(theme.backgroundCard)
             .cornerRadius(14)
         }
+    }
+
+    private var moderationSection: some View {
+        let isSuspended = currentAccountStatus == .suspended
+        let isBanned = currentAccountStatus == .banned
+
+        return VStack(alignment: .leading, spacing: 10) {
+            Text("MODERATION")
+                .font(.caption).fontWeight(.semibold)
+                .foregroundColor(theme.textSecondary)
+                .textCase(.uppercase)
+                .kerning(0.8)
+
+            VStack(spacing: 0) {
+                recoveryButton(
+                    icon: "shield.slash.fill",
+                    title: "Reset System Safety",
+                    desc: "Clear safety toggles and zero grace period"
+                ) { startModeration(.resetSafety) }
+
+                Divider().background(theme.divider)
+
+                recoveryButton(
+                    icon: "tray.and.arrow.down.fill",
+                    title: "Drain Pending Actions",
+                    desc: "Finalize all queued pending actions now"
+                ) { startModeration(.drainPending) }
+
+                Divider().background(theme.divider)
+
+                recoveryButton(
+                    icon: "key.horizontal.fill",
+                    title: "Rotate API Keys",
+                    desc: "Revoke every API key on this account"
+                ) { startModeration(.rotateApiKeys) }
+
+                Divider().background(theme.divider)
+
+                recoveryButton(
+                    icon: "doc.text.magnifyingglass",
+                    title: "Export Dossier",
+                    desc: "Download GDPR Article 15 metadata bundle"
+                ) { startModeration(.dossier) }
+
+                if !user.isAdmin && !isBanned {
+                    Divider().background(theme.divider)
+
+                    if isSuspended {
+                        recoveryButton(
+                            icon: "play.circle.fill",
+                            title: "Unsuspend",
+                            desc: user.suspendedReason.map { "Currently suspended: \($0)" }
+                                ?? "Lift suspension early"
+                        ) { startModeration(.unsuspend) }
+                    } else {
+                        recoveryButton(
+                            icon: "pause.circle.fill",
+                            title: "Suspend",
+                            desc: "Soft-ban with optional duration (auto-restores)"
+                        ) { startModeration(.suspend) }
+                    }
+                }
+
+                if !user.isAdmin {
+                    Divider().background(theme.divider)
+
+                    if isBanned {
+                        recoveryButton(
+                            icon: "checkmark.shield.fill",
+                            title: "Unban",
+                            desc: "Lift permanent ban"
+                        ) { startModeration(.unban) }
+                    } else if !isSuspended {
+                        recoveryButton(
+                            icon: "nosign",
+                            title: "Ban",
+                            desc: "Permanent ban (no auto-restore)"
+                        ) { startModeration(.ban) }
+                    }
+                }
+            }
+            .background(theme.backgroundCard)
+            .cornerRadius(14)
+        }
+    }
+
+    private func moderationPromptSheet(for action: ModerationAction) -> some View {
+        NavigationStack {
+            ZStack {
+                theme.backgroundPrimary.ignoresSafeArea()
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text(action.bodyText)
+                            .font(.subheadline)
+                            .foregroundColor(theme.textSecondary)
+
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Reason")
+                                .font(.footnote).fontWeight(.semibold)
+                                .foregroundColor(theme.textSecondary)
+                            TextField(action.reasonPlaceholder, text: $moderationReason)
+                                .autocorrectionDisabled()
+                                .padding(12)
+                                .background(theme.backgroundCard)
+                                .cornerRadius(12)
+                                .foregroundColor(theme.textPrimary)
+                        }
+
+                        if action == .suspend {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("Duration (days)")
+                                    .font(.footnote).fontWeight(.semibold)
+                                    .foregroundColor(theme.textSecondary)
+                                TextField("Leave blank for indefinite", text: $moderationDays)
+                                    .keyboardType(.numberPad)
+                                    .padding(12)
+                                    .background(theme.backgroundCard)
+                                    .cornerRadius(12)
+                                    .foregroundColor(theme.textPrimary)
+                                Text("Empty = indefinite (manual unsuspend required)")
+                                    .font(.caption2)
+                                    .foregroundColor(theme.textTertiary)
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 24)
+                    .padding(.top, 20)
+                    .padding(.bottom, 40)
+                }
+            }
+            .navigationTitle(action.title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        moderationAction = nil
+                        moderationReason = ""
+                        moderationDays = "7"
+                    }
+                    .foregroundColor(theme.textSecondary)
+                    .disabled(isModerating)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button {
+                        Task { await performModeration(action) }
+                    } label: {
+                        if isModerating {
+                            ProgressView().tint(theme.accentLight).scaleEffect(0.8)
+                        } else {
+                            Text(action.confirmLabel)
+                                .font(.callout).fontWeight(.semibold)
+                                .foregroundColor(action.isDestructive ? theme.danger : theme.accentLight)
+                        }
+                    }
+                    .disabled(isModerating || moderationReason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+        }
+    }
+
+    private func startModeration(_ action: ModerationAction) {
+        moderationReason = ""
+        moderationDays = "7"
+        moderationAction = action
+    }
+
+    private func performModeration(_ action: ModerationAction) async {
+        guard let api = store.api else { return }
+        let reason = moderationReason.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !reason.isEmpty else { return }
+        isModerating = true
+        do {
+            switch action {
+            case .resetSafety:
+                let result = try await api.adminResetSystemSafety(userID: user.id, reason: reason)
+                setRecoveryMessage(result.changedFields.isEmpty
+                                   ? "System Safety already at default — no changes."
+                                   : "System Safety reset (\(result.changedFields.count) field\(result.changedFields.count == 1 ? "" : "s") cleared).")
+            case .drainPending:
+                let result = try await api.adminBypassPending(userID: user.id, reason: reason)
+                setRecoveryMessage(result.finalizedCount > 0
+                                   ? "Drained \(result.finalizedCount) pending action\(result.finalizedCount == 1 ? "" : "s")."
+                                   : "No pending actions queued.")
+            case .rotateApiKeys:
+                let result = try await api.adminForceRotateApiKeys(userID: user.id, reason: reason)
+                setRecoveryMessage(result.revokedCount > 0
+                                   ? "Revoked \(result.revokedCount) API key\(result.revokedCount == 1 ? "" : "s")."
+                                   : "No API keys to revoke.")
+            case .dossier:
+                let data = try await api.adminDownloadDossier(userID: user.id, reason: reason)
+                try await saveAndShareDossier(data: data)
+                setRecoveryMessage("Dossier exported.")
+            case .suspend:
+                let days = Int(moderationDays.trimmingCharacters(in: .whitespacesAndNewlines))
+                let result = try await api.adminSuspendUser(userID: user.id, reason: reason, durationDays: days)
+                if result.suspended {
+                    currentAccountStatus = .suspended
+                }
+                if let until = result.suspendedUntil {
+                    setRecoveryMessage("Suspended until \(until.formatted(date: .abbreviated, time: .shortened)).")
+                } else {
+                    setRecoveryMessage("Suspended indefinitely.")
+                }
+            case .unsuspend:
+                let result = try await api.adminUnsuspendUser(userID: user.id, reason: reason)
+                if result.unsuspended {
+                    currentAccountStatus = .active
+                    setRecoveryMessage("Suspension lifted.")
+                } else {
+                    setRecoveryMessage("User was not suspended.")
+                }
+            case .ban:
+                let result = try await api.adminBanUser(userID: user.id, reason: reason)
+                if result.banned {
+                    currentAccountStatus = .banned
+                }
+                setRecoveryMessage("Banned (\(result.sessionsRevoked) session\(result.sessionsRevoked == 1 ? "" : "s") revoked).")
+            case .unban:
+                let result = try await api.adminUnbanUser(userID: user.id, reason: reason)
+                if result.unbanned {
+                    currentAccountStatus = .active
+                    setRecoveryMessage("Ban lifted.")
+                } else {
+                    setRecoveryMessage("User was not banned.")
+                }
+            }
+            moderationAction = nil
+            moderationReason = ""
+            moderationDays = "7"
+        } catch {
+            setRecoveryMessage(error.localizedDescription, isError: true)
+        }
+        isModerating = false
+    }
+
+    private func saveAndShareDossier(data: Data) async throws {
+        let timestamp = ISO8601DateFormatter().string(from: Date())
+            .replacingOccurrences(of: ":", with: "-")
+        let filename = "sheaf-dossier-\(user.id)-\(timestamp).json"
+        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(filename)
+        try data.write(to: tempURL)
+        await MainActor.run { presentDossierShareSheet(url: tempURL) }
+    }
+
+    private func presentDossierShareSheet(url: URL) {
+        let scene = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first(where: { $0.activationState == .foregroundActive })
+            ?? UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
+        guard let windowScene = scene,
+              let window = windowScene.windows.first(where: { $0.isKeyWindow }) ?? windowScene.windows.first,
+              let rootViewController = window.rootViewController else {
+            return
+        }
+        var presenter = rootViewController
+        while let presented = presenter.presentedViewController {
+            presenter = presented
+        }
+        let activityVC = UIActivityViewController(activityItems: [url], applicationActivities: nil)
+        if let popover = activityVC.popoverPresentationController {
+            popover.sourceView = presenter.view
+            popover.sourceRect = CGRect(x: presenter.view.bounds.midX,
+                                        y: presenter.view.bounds.midY,
+                                        width: 0, height: 0)
+            popover.permittedArrowDirections = []
+        }
+        presenter.present(activityVC, animated: true)
     }
 
     private func infoRow(label: String, value: String) -> some View {
