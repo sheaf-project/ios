@@ -970,6 +970,95 @@ struct ExplainAccountSystem: Codable {
     }
 }
 
+// MARK: - JSON Value (for opaque audit diff payloads)
+
+indirect enum JSONValue: Codable {
+    case null
+    case bool(Bool)
+    case number(Double)
+    case string(String)
+    case array([JSONValue])
+    case object([String: JSONValue])
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.singleValueContainer()
+        if c.decodeNil() { self = .null }
+        else if let v = try? c.decode(Bool.self) { self = .bool(v) }
+        else if let v = try? c.decode(Double.self) { self = .number(v) }
+        else if let v = try? c.decode(String.self) { self = .string(v) }
+        else if let v = try? c.decode([JSONValue].self) { self = .array(v) }
+        else if let v = try? c.decode([String: JSONValue].self) { self = .object(v) }
+        else {
+            throw DecodingError.dataCorruptedError(in: c, debugDescription: "Unsupported JSON value")
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.singleValueContainer()
+        switch self {
+        case .null:           try c.encodeNil()
+        case .bool(let v):    try c.encode(v)
+        case .number(let v):  try c.encode(v)
+        case .string(let v):  try c.encode(v)
+        case .array(let v):   try c.encode(v)
+        case .object(let v):  try c.encode(v)
+        }
+    }
+
+    var displayString: String {
+        switch self {
+        case .null:          return "null"
+        case .bool(let v):   return String(v)
+        case .number(let v): return v.truncatingRemainder(dividingBy: 1) == 0 && abs(v) < 1e15
+                                    ? String(Int64(v))
+                                    : String(v)
+        case .string(let v): return v
+        case .array(let arr):
+            return "[" + arr.map(\.displayString).joined(separator: ", ") + "]"
+        case .object(let obj):
+            return "{" + obj.sorted(by: { $0.key < $1.key })
+                .map { "\($0.key): \($0.value.displayString)" }
+                .joined(separator: ", ") + "}"
+        }
+    }
+}
+
+struct AdminAuditEvent: Codable, Identifiable {
+    let id: String
+    let adminUserId: String?
+    let adminEmail: String?
+    let action: String
+    let targetType: String
+    let targetId: String?
+    let targetUserId: String?
+    let reason: String?
+    let beforeJson: [String: JSONValue]?
+    let afterJson: [String: JSONValue]?
+    let createdAt: Date
+
+    enum CodingKeys: String, CodingKey {
+        case id, action, reason
+        case adminUserId  = "admin_user_id"
+        case adminEmail   = "admin_email"
+        case targetType   = "target_type"
+        case targetId     = "target_id"
+        case targetUserId = "target_user_id"
+        case beforeJson   = "before_json"
+        case afterJson    = "after_json"
+        case createdAt    = "created_at"
+    }
+
+    var formattedDiff: String {
+        guard beforeJson != nil || afterJson != nil else { return "" }
+        let keys = Set((beforeJson ?? [:]).keys).union((afterJson ?? [:]).keys).sorted()
+        return keys.map { key in
+            let b = beforeJson?[key]?.displayString ?? "null"
+            let a = afterJson?[key]?.displayString ?? "null"
+            return "\(key): \(b) → \(a)"
+        }.joined(separator: ", ")
+    }
+}
+
 struct ExplainAccountResponse: Codable {
     let userId: String
     let email: String

@@ -215,6 +215,9 @@ struct AdminPanelView: View {
                 // User Management
                 userManagementSection
 
+                // Audit Log
+                auditLogSection
+
                 // Maintenance
                 maintenanceSection
             }
@@ -223,6 +226,48 @@ struct AdminPanelView: View {
         }
         .refreshable {
             await loadAdminData()
+        }
+    }
+
+    private var auditLogSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("AUDIT")
+                .font(.caption).fontWeight(.semibold)
+                .foregroundColor(theme.textSecondary)
+                .textCase(.uppercase)
+                .kerning(0.8)
+                .padding(.horizontal, 24)
+
+            NavigationLink {
+                AdminAuditLogView()
+                    .environmentObject(authManager)
+                    .environmentObject(store)
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "list.bullet.rectangle.portrait")
+                        .font(.body)
+                        .foregroundColor(theme.accentLight)
+                        .frame(width: 28)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Audit Log")
+                            .font(.subheadline).fontWeight(.medium)
+                            .foregroundColor(theme.textPrimary)
+                        Text("Browse state-changing admin actions")
+                            .font(.caption)
+                            .foregroundColor(theme.textTertiary)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.caption)
+                        .foregroundColor(theme.textTertiary)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .background(theme.backgroundCard)
+                .cornerRadius(14)
+                .padding(.horizontal, 24)
+            }
+            .buttonStyle(.plain)
         }
     }
 
@@ -2248,5 +2293,308 @@ struct CreateInviteSheet: View {
                 isCreating = false
             }
         }
+    }
+}
+
+// MARK: - Admin Audit Log
+
+private let auditActionOptions: [String] = [
+    "",
+    "user_update",
+    "user_approve",
+    "user_reject",
+    "user_member_limit_set",
+    "user_safety_reset",
+    "user_pending_bypass",
+    "user_session_revoke",
+    "user_api_keys_rotate_all",
+    "user_suspend",
+    "user_unsuspend",
+    "user_ban",
+    "user_unban",
+    "user_dossier_export",
+    "import_log_view",
+]
+
+struct AdminAuditLogView: View {
+    @Environment(\.theme) var theme
+    @EnvironmentObject var authManager: AuthManager
+    @EnvironmentObject var store: SystemStore
+
+    @State private var events: [AdminAuditEvent] = []
+    @State private var targetUserId: String = ""
+    @State private var selectedAction: String = ""
+    @State private var page: Int = 1
+    @State private var isLoading = false
+    @State private var hasMore = true
+    @State private var loadError: String?
+
+    private let limit = 50
+
+    var body: some View {
+        ZStack {
+            theme.backgroundPrimary.ignoresSafeArea()
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Append-only log of state-changing admin actions. Browsing user data is deliberately not logged so the table stays signal-rich for abuse detection.")
+                        .font(.footnote)
+                        .foregroundColor(theme.textSecondary)
+                        .padding(.horizontal, 24)
+
+                    filtersSection
+                    eventsList
+                    paginationBar
+                }
+                .padding(.top, 16)
+                .padding(.bottom, 40)
+            }
+            .refreshable { await load(reset: true) }
+        }
+        .navigationTitle("Audit Log")
+        .navigationBarTitleDisplayMode(.inline)
+        .task {
+            if events.isEmpty { await load(reset: true) }
+        }
+    }
+
+    private var filtersSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("FILTERS")
+                .font(.caption).fontWeight(.semibold)
+                .foregroundColor(theme.textSecondary)
+                .textCase(.uppercase)
+                .kerning(0.8)
+                .padding(.horizontal, 24)
+
+            VStack(spacing: 0) {
+                HStack {
+                    Text("Target User ID")
+                        .font(.subheadline)
+                        .foregroundColor(theme.textPrimary)
+                    Spacer()
+                    TextField("UUID", text: $targetUserId)
+                        .font(.subheadline).fontDesign(.monospaced)
+                        .multilineTextAlignment(.trailing)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .foregroundColor(theme.textPrimary)
+                        .onSubmit { Task { await load(reset: true) } }
+                    if !targetUserId.isEmpty {
+                        Button { targetUserId = "" } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundColor(theme.textTertiary)
+                        }
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+
+                Divider().background(theme.divider)
+
+                HStack {
+                    Text("Action")
+                        .font(.subheadline)
+                        .foregroundColor(theme.textPrimary)
+                    Spacer()
+                    Picker("Action", selection: $selectedAction) {
+                        ForEach(auditActionOptions, id: \.self) { opt in
+                            Text(opt.isEmpty ? "All" : opt).tag(opt)
+                        }
+                    }
+                    .tint(theme.accentLight)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+
+                Divider().background(theme.divider)
+
+                Button {
+                    Task { await load(reset: true) }
+                } label: {
+                    HStack {
+                        Spacer()
+                        if isLoading {
+                            ProgressView().tint(theme.accentLight).scaleEffect(0.8)
+                        }
+                        Text("Apply Filters")
+                            .font(.subheadline).fontWeight(.semibold)
+                            .foregroundColor(theme.accentLight)
+                        Spacer()
+                    }
+                    .padding(.vertical, 12)
+                }
+            }
+            .background(theme.backgroundCard)
+            .cornerRadius(14)
+            .padding(.horizontal, 24)
+        }
+    }
+
+    private var eventsList: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("EVENTS")
+                .font(.caption).fontWeight(.semibold)
+                .foregroundColor(theme.textSecondary)
+                .textCase(.uppercase)
+                .kerning(0.8)
+                .padding(.horizontal, 24)
+
+            if let loadError {
+                Text(loadError)
+                    .font(.footnote)
+                    .foregroundColor(theme.danger)
+                    .padding(.horizontal, 24)
+            }
+
+            if events.isEmpty {
+                if isLoading {
+                    HStack { Spacer(); ProgressView().tint(theme.accentLight); Spacer() }
+                        .padding(.vertical, 20)
+                } else {
+                    HStack {
+                        Spacer()
+                        VStack(spacing: 8) {
+                            Image(systemName: "tray")
+                                .font(.title2)
+                                .foregroundColor(theme.textTertiary)
+                            Text("No audit events match the current filters.")
+                                .font(.subheadline)
+                                .foregroundColor(theme.textSecondary)
+                                .multilineTextAlignment(.center)
+                        }
+                        .padding(.vertical, 20)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 24)
+                }
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(events) { event in
+                        auditRow(event)
+                        if event.id != events.last?.id {
+                            Divider().background(theme.divider).padding(.leading, 16)
+                        }
+                    }
+                }
+                .background(theme.backgroundCard)
+                .cornerRadius(14)
+                .padding(.horizontal, 24)
+            }
+        }
+    }
+
+    private func auditRow(_ event: AdminAuditEvent) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Text(event.action)
+                    .font(.caption).fontWeight(.semibold).fontDesign(.monospaced)
+                    .foregroundColor(theme.accentLight)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(theme.accentLight.opacity(0.12))
+                    .cornerRadius(6)
+                Spacer()
+                Text(event.createdAt, style: .date)
+                    .font(.caption2)
+                    .foregroundColor(theme.textTertiary)
+                Text(event.createdAt, style: .time)
+                    .font(.caption2)
+                    .foregroundColor(theme.textTertiary)
+            }
+
+            Text(event.adminEmail ?? "deleted admin")
+                .font(.subheadline).fontWeight(.medium)
+                .foregroundColor(theme.textPrimary)
+
+            if let targetUserId = event.targetUserId ?? event.targetId {
+                HStack(spacing: 6) {
+                    Text(event.targetType)
+                        .font(.caption2).fontWeight(.medium)
+                        .foregroundColor(theme.textTertiary)
+                    Text(targetUserId)
+                        .font(.caption2).fontDesign(.monospaced)
+                        .foregroundColor(theme.textTertiary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+            }
+
+            if let reason = event.reason, !reason.isEmpty {
+                Text("\u{201C}\(reason)\u{201D}")
+                    .font(.caption).italic()
+                    .foregroundColor(theme.textSecondary)
+            }
+
+            let diff = event.formattedDiff
+            if !diff.isEmpty {
+                Text(diff)
+                    .font(.caption2).fontDesign(.monospaced)
+                    .foregroundColor(theme.textTertiary)
+                    .lineLimit(4)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+    }
+
+    private var paginationBar: some View {
+        HStack(spacing: 12) {
+            Button {
+                page = max(1, page - 1)
+                Task { await load(reset: true, keepPage: true) }
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "chevron.left")
+                    Text("Previous")
+                }
+                .font(.footnote).fontWeight(.medium)
+                .foregroundColor(page > 1 ? theme.accentLight : theme.textTertiary)
+            }
+            .disabled(page <= 1 || isLoading)
+
+            Spacer()
+
+            Text("Page \(page)")
+                .font(.footnote)
+                .foregroundColor(theme.textSecondary)
+
+            Spacer()
+
+            Button {
+                page += 1
+                Task { await load(reset: true, keepPage: true) }
+            } label: {
+                HStack(spacing: 4) {
+                    Text("Next")
+                    Image(systemName: "chevron.right")
+                }
+                .font(.footnote).fontWeight(.medium)
+                .foregroundColor(hasMore ? theme.accentLight : theme.textTertiary)
+            }
+            .disabled(!hasMore || isLoading)
+        }
+        .padding(.horizontal, 24)
+    }
+
+    private func load(reset: Bool, keepPage: Bool = false) async {
+        guard let api = store.api else { return }
+        if reset && !keepPage { page = 1 }
+        isLoading = true
+        loadError = nil
+        do {
+            let fetched = try await api.getAdminAuditEvents(
+                targetUserId: targetUserId.isEmpty ? nil : targetUserId,
+                action: selectedAction.isEmpty ? nil : selectedAction,
+                page: page,
+                limit: limit
+            )
+            events = fetched
+            hasMore = fetched.count == limit
+        } catch {
+            loadError = error.localizedDescription
+        }
+        isLoading = false
     }
 }

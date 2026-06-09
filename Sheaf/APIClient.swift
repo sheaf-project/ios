@@ -1515,6 +1515,25 @@ class APIClient {
         return try JSONDecoder.iso.decode(ExplainAccountResponse.self, from: data)
     }
 
+    func getAdminAuditEvents(
+        targetUserId: String? = nil,
+        action: String? = nil,
+        page: Int = 1,
+        limit: Int = 50
+    ) async throws -> [AdminAuditEvent] {
+        var path = "/v1/admin/audit-events?page=\(page)&limit=\(limit)"
+        if let targetUserId, !targetUserId.isEmpty {
+            let encoded = targetUserId.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? targetUserId
+            path += "&target_user_id=\(encoded)"
+        }
+        if let action, !action.isEmpty {
+            let encoded = action.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? action
+            path += "&action=\(encoded)"
+        }
+        let data = try await request(path)
+        return try JSONDecoder.iso.decode([AdminAuditEvent].self, from: data)
+    }
+
     // MARK: - Announcements
 
     func getAnnouncements() async throws -> [Announcement] {
