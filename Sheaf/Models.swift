@@ -1635,6 +1635,10 @@ struct SystemSafetySettings: Codable {
     var appliesToJournals: Bool
     var appliesToImages: Bool
     var appliesToRevisions: Bool
+    var appliesToNotifications: Bool
+    var appliesToReminders: Bool
+    var appliesToPolls: Bool
+    var appliesToMessages: Bool
 
     enum CodingKeys: String, CodingKey {
         case gracePeriodDays = "grace_period_days"
@@ -1647,6 +1651,28 @@ struct SystemSafetySettings: Codable {
         case appliesToJournals = "applies_to_journals"
         case appliesToImages = "applies_to_images"
         case appliesToRevisions = "applies_to_revisions"
+        case appliesToNotifications = "applies_to_notifications"
+        case appliesToReminders = "applies_to_reminders"
+        case appliesToPolls = "applies_to_polls"
+        case appliesToMessages = "applies_to_messages"
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        gracePeriodDays = try c.decode(Int.self, forKey: .gracePeriodDays)
+        authTier = try c.decode(DeleteConfirmation.self, forKey: .authTier)
+        appliesToMembers = try c.decode(Bool.self, forKey: .appliesToMembers)
+        appliesToGroups = try c.decode(Bool.self, forKey: .appliesToGroups)
+        appliesToTags = try c.decode(Bool.self, forKey: .appliesToTags)
+        appliesToFields = try c.decode(Bool.self, forKey: .appliesToFields)
+        appliesToFronts = try c.decode(Bool.self, forKey: .appliesToFronts)
+        appliesToJournals = try c.decode(Bool.self, forKey: .appliesToJournals)
+        appliesToImages = try c.decode(Bool.self, forKey: .appliesToImages)
+        appliesToRevisions = try c.decode(Bool.self, forKey: .appliesToRevisions)
+        appliesToNotifications = try c.decodeIfPresent(Bool.self, forKey: .appliesToNotifications) ?? false
+        appliesToReminders = try c.decodeIfPresent(Bool.self, forKey: .appliesToReminders) ?? false
+        appliesToPolls = try c.decodeIfPresent(Bool.self, forKey: .appliesToPolls) ?? false
+        appliesToMessages = try c.decodeIfPresent(Bool.self, forKey: .appliesToMessages) ?? false
     }
 }
 
@@ -1661,6 +1687,10 @@ struct SystemSafetyUpdate: Codable {
     var appliesToJournals: Bool?
     var appliesToImages: Bool?
     var appliesToRevisions: Bool?
+    var appliesToNotifications: Bool?
+    var appliesToReminders: Bool?
+    var appliesToPolls: Bool?
+    var appliesToMessages: Bool?
     var password: String?
     var totpCode: String?
 
@@ -1675,6 +1705,10 @@ struct SystemSafetyUpdate: Codable {
         case appliesToJournals = "applies_to_journals"
         case appliesToImages = "applies_to_images"
         case appliesToRevisions = "applies_to_revisions"
+        case appliesToNotifications = "applies_to_notifications"
+        case appliesToReminders = "applies_to_reminders"
+        case appliesToPolls = "applies_to_polls"
+        case appliesToMessages = "applies_to_messages"
         case password
         case totpCode = "totp_code"
     }

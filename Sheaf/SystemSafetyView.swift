@@ -157,6 +157,14 @@ struct SystemSafetyView: View {
                     categoryToggle(label: "Images", icon: "photo.fill", keyPath: \.appliesToImages)
                     Divider().background(theme.divider).padding(.leading, 52)
                     categoryToggle(label: "Pinned Revisions", icon: "pin.fill", keyPath: \.appliesToRevisions)
+                    Divider().background(theme.divider).padding(.leading, 52)
+                    categoryToggle(label: "Notifications", icon: "bell.badge.fill", keyPath: \.appliesToNotifications)
+                    Divider().background(theme.divider).padding(.leading, 52)
+                    categoryToggle(label: "Reminders", icon: "bell.and.waves.left.and.right", keyPath: \.appliesToReminders)
+                    Divider().background(theme.divider).padding(.leading, 52)
+                    categoryToggle(label: "Polls", icon: "chart.bar.xaxis", keyPath: \.appliesToPolls)
+                    Divider().background(theme.divider).padding(.leading, 52)
+                    categoryToggle(label: "Messages", icon: "bubble.left.and.bubble.right.fill", keyPath: \.appliesToMessages)
                 }
             }
         }
@@ -412,6 +420,10 @@ struct SystemSafetyView: View {
         if current.appliesToJournals != draft.appliesToJournals { update.appliesToJournals = draft.appliesToJournals }
         if current.appliesToImages != draft.appliesToImages { update.appliesToImages = draft.appliesToImages }
         if current.appliesToRevisions != draft.appliesToRevisions { update.appliesToRevisions = draft.appliesToRevisions }
+        if current.appliesToNotifications != draft.appliesToNotifications { update.appliesToNotifications = draft.appliesToNotifications }
+        if current.appliesToReminders != draft.appliesToReminders { update.appliesToReminders = draft.appliesToReminders }
+        if current.appliesToPolls != draft.appliesToPolls { update.appliesToPolls = draft.appliesToPolls }
+        if current.appliesToMessages != draft.appliesToMessages { update.appliesToMessages = draft.appliesToMessages }
 
         if isLoosening(current: current, draft: draft) {
             if !password.isEmpty { update.password = password }
@@ -467,7 +479,11 @@ struct SystemSafetyView: View {
         current.appliesToFronts != draft.appliesToFronts ||
         current.appliesToJournals != draft.appliesToJournals ||
         current.appliesToImages != draft.appliesToImages ||
-        current.appliesToRevisions != draft.appliesToRevisions
+        current.appliesToRevisions != draft.appliesToRevisions ||
+        current.appliesToNotifications != draft.appliesToNotifications ||
+        current.appliesToReminders != draft.appliesToReminders ||
+        current.appliesToPolls != draft.appliesToPolls ||
+        current.appliesToMessages != draft.appliesToMessages
     }
 
     private func isLoosening(current: SystemSafetySettings, draft: SystemSafetySettings) -> Bool {
@@ -481,6 +497,10 @@ struct SystemSafetyView: View {
         if current.appliesToJournals && !draft.appliesToJournals { return true }
         if current.appliesToImages && !draft.appliesToImages { return true }
         if current.appliesToRevisions && !draft.appliesToRevisions { return true }
+        if current.appliesToNotifications && !draft.appliesToNotifications { return true }
+        if current.appliesToReminders && !draft.appliesToReminders { return true }
+        if current.appliesToPolls && !draft.appliesToPolls { return true }
+        if current.appliesToMessages && !draft.appliesToMessages { return true }
         return false
     }
 
@@ -501,6 +521,12 @@ struct SystemSafetyView: View {
         case "front_delete": return String(localized: "Delete front")
         case "journal_delete": return String(localized: "Delete journal entry")
         case "image_delete": return String(localized: "Delete image")
+        case "channel_delete": return String(localized: "Delete notification channel")
+        case "watch_token_delete": return String(localized: "Revoke watcher")
+        case "reminder_delete": return String(localized: "Delete reminder")
+        case "poll_delete": return String(localized: "Delete poll")
+        case "message_delete": return String(localized: "Delete message")
+        case "message_thread_delete": return String(localized: "Delete message thread")
         default: return type
         }
     }
