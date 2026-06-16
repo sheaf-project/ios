@@ -1638,7 +1638,12 @@ class APIClient {
     }
 
     /// Shared multipart/form-data helper for file uploads
-    private func multipartRequest(path: String, fileData: Data, filename: String) async throws -> Data {
+    private func multipartRequest(
+        path: String,
+        fileData: Data,
+        filename: String,
+        extraFields: [String: String] = [:]
+    ) async throws -> Data {
         guard let url = URL(string: auth.baseURL + path) else { throw URLError(.badURL) }
         let boundary = "Boundary-\(UUID().uuidString)"
         var req = URLRequest(url: url)
@@ -1652,7 +1657,11 @@ class APIClient {
         body.append("Content-Disposition: form-data; name=\"file\"; filename=\"\(filename)\"\r\n".data(using: .utf8)!)
         body.append("Content-Type: application/octet-stream\r\n\r\n".data(using: .utf8)!)
         body.append(fileData)
-        body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
+        body.append("\r\n".data(using: .utf8)!)
+        for (name, value) in extraFields {
+            appendFormField(&body, boundary: boundary, name: name, value: value)
+        }
+        body.append("--\(boundary)--\r\n".data(using: .utf8)!)
         req.httpBody = body
         let (data, response) = try await urlSession.data(for: req)
         guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
@@ -1712,6 +1721,36 @@ class APIClient {
         let groups: Bool
     }
 
+    private struct PSImportOptions: Encodable {
+        let system_profile: Bool
+        let member_ids: [String]?
+        let conflict_strategy: String
+        let custom_fronts: Bool
+        let member_avatars: Bool
+        let roles_as_tags: Bool
+        let groups: Bool
+        let custom_fields: Bool
+        let fronts: Bool
+        let journal_entries: Bool
+        let chat_messages: Bool
+        let polls: Bool
+    }
+
+    private struct PrismImportOptions: Encodable {
+        let system_profile: Bool
+        let member_ids: [String]?
+        let conflict_strategy: String
+        let member_avatars: Bool
+        let member_groups: Bool
+        let custom_fields: Bool
+        let front_sessions: Bool
+        let notes: Bool
+        let polls: Bool
+        let conversations: Bool
+        let member_board_posts: Bool
+        let media_attachments: Bool
+    }
+
     /// JSON body for POST /v1/imports/api.
     private struct APIImportBody<Opts: Encodable>: Encodable {
         let source: String
@@ -1721,8 +1760,20 @@ class APIClient {
     }
 
     /// Submits a file-based import and waits for it to finish.
-    private func runFileImport<O: Encodable>(source: String, fileData: Data, filename: String, options: O?) async throws -> ImportJobRead {
-        let submitted = try await submitFileImport(source: source, fileData: fileData, filename: filename, options: options)
+    private func runFileImport<O: Encodable>(
+        source: String,
+        fileData: Data,
+        filename: String,
+        options: O?,
+        credential: String? = nil
+    ) async throws -> ImportJobRead {
+        let submitted = try await submitFileImport(
+            source: source,
+            fileData: fileData,
+            filename: filename,
+            options: options,
+            credential: credential
+        )
         return try await awaitTerminalImport(submitted)
     }
 
@@ -1755,8 +1806,15 @@ class APIClient {
         }
     }
 
-    /// POST /v1/imports/file (multipart): file + source + idempotency_key + options.
-    private func submitFileImport<O: Encodable>(source: String, fileData: Data, filename: String, options: O?) async throws -> ImportJobRead {
+    /// POST /v1/imports/file (multipart): file + source + idempotency_key + options
+    /// (+ optional per-source credential, currently only Prism uses it).
+    private func submitFileImport<O: Encodable>(
+        source: String,
+        fileData: Data,
+        filename: String,
+        options: O?,
+        credential: String? = nil
+    ) async throws -> ImportJobRead {
         guard let url = URL(string: auth.baseURL + "/v1/imports/file") else { throw URLError(.badURL) }
         let boundary = "Boundary-\(UUID().uuidString)"
         var req = URLRequest(url: url)
@@ -1785,6 +1843,11 @@ class APIClient {
             body.append("Content-Type: application/json\r\n\r\n".data(using: .utf8)!)
             body.append(jsonString.data(using: .utf8)!)
             body.append("\r\n".data(using: .utf8)!)
+        }
+        // credential — per-source secret, encrypted at rest server-side until
+        // the runner finalises the job. Currently only Prism uses this.
+        if let credential, !credential.isEmpty {
+            appendFormField(&body, boundary: boundary, name: "credential", value: credential)
         }
         body.append("--\(boundary)--\r\n".data(using: .utf8)!)
         req.httpBody = body
@@ -1915,6 +1978,109 @@ class APIClient {
         )
         let job = try await runFileImport(source: "tupperbox_file", fileData: fileData, filename: filename, options: options)
         return TBImportResult(job: job)
+    }
+
+    // MARK: - PluralSpace Import (File)
+
+    func previewPluralSpaceImport(fileData: Data, filename: String) async throws -> PSPreviewSummary {
+        let data = try await multipartRequest(
+            path: "/v1/import/pluralspace/preview",
+            fileData: fileData,
+            filename: filename
+        )
+        return try JSONDecoder.iso.decode(PSPreviewSummary.self, from: data)
+    }
+
+    func doPluralSpaceImport(
+        fileData: Data,
+        filename: String,
+        systemProfile: Bool = true,
+        memberIDs: [String]? = nil,
+        conflictStrategy: String = "skip",
+        customFronts: Bool = true,
+        memberAvatars: Bool = true,
+        rolesAsTags: Bool = true,
+        groups: Bool = true,
+        customFields: Bool = true,
+        fronts: Bool = true,
+        journalEntries: Bool = true,
+        chatMessages: Bool = true,
+        polls: Bool = true
+    ) async throws -> PSImportResult {
+        let options = PSImportOptions(
+            system_profile: systemProfile,
+            member_ids: (memberIDs?.isEmpty == false) ? memberIDs : nil,
+            conflict_strategy: conflictStrategy,
+            custom_fronts: customFronts,
+            member_avatars: memberAvatars,
+            roles_as_tags: rolesAsTags,
+            groups: groups,
+            custom_fields: customFields,
+            fronts: fronts,
+            journal_entries: journalEntries,
+            chat_messages: chatMessages,
+            polls: polls
+        )
+        let job = try await runFileImport(source: "pluralspace_file", fileData: fileData, filename: filename, options: options)
+        return PSImportResult(job: job)
+    }
+
+    // MARK: - Prism Import (File)
+    //
+    // Prism's PRISM1 envelope is decrypted server-side using a user-supplied
+    // passphrase. The preview accepts the passphrase via a `passphrase` form
+    // field; the async import accepts it via the unified `credential` field on
+    // /v1/imports/file. Different field names but same string.
+
+    func previewPrismImport(fileData: Data, filename: String, passphrase: String) async throws -> PrismPreviewSummary {
+        let data = try await multipartRequest(
+            path: "/v1/import/prism/preview",
+            fileData: fileData,
+            filename: filename,
+            extraFields: ["passphrase": passphrase]
+        )
+        return try JSONDecoder.iso.decode(PrismPreviewSummary.self, from: data)
+    }
+
+    func doPrismImport(
+        fileData: Data,
+        filename: String,
+        passphrase: String,
+        systemProfile: Bool = true,
+        memberIDs: [String]? = nil,
+        conflictStrategy: String = "skip",
+        memberAvatars: Bool = true,
+        memberGroups: Bool = true,
+        customFields: Bool = true,
+        frontSessions: Bool = true,
+        notes: Bool = true,
+        polls: Bool = true,
+        conversations: Bool = true,
+        memberBoardPosts: Bool = true,
+        mediaAttachments: Bool = true
+    ) async throws -> PrismImportResult {
+        let options = PrismImportOptions(
+            system_profile: systemProfile,
+            member_ids: (memberIDs?.isEmpty == false) ? memberIDs : nil,
+            conflict_strategy: conflictStrategy,
+            member_avatars: memberAvatars,
+            member_groups: memberGroups,
+            custom_fields: customFields,
+            front_sessions: frontSessions,
+            notes: notes,
+            polls: polls,
+            conversations: conversations,
+            member_board_posts: memberBoardPosts,
+            media_attachments: mediaAttachments
+        )
+        let job = try await runFileImport(
+            source: "prism_file",
+            fileData: fileData,
+            filename: filename,
+            options: options,
+            credential: passphrase
+        )
+        return PrismImportResult(job: job)
     }
 
     func uploadFile(imageData: Data, mimeType: String = "image/jpeg") async throws -> String {
@@ -2081,6 +2247,15 @@ class APIClient {
             "activation_code": activationCode
         ])
         _ = try await request("/v1/notifications/redeem", method: "POST", body: body)
+    }
+
+    func listReceivingChannels() async throws -> [ReceivingChannel] {
+        let data = try await request("/v1/notifications/receiving")
+        return try JSONDecoder.iso.decode([ReceivingChannel].self, from: data)
+    }
+
+    func unsubscribeReceivingChannel(channelID: String) async throws {
+        _ = try await request("/v1/notifications/receiving/\(channelID)/unsubscribe", method: "POST")
     }
 
     // MARK: - Reminders

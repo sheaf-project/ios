@@ -9,6 +9,8 @@ private func importSourceLabel(_ source: String) -> String {
     case "pluralkit_file":    return "PluralKit"
     case "pluralkit_api":     return "PluralKit (API)"
     case "tupperbox_file":    return "Tupperbox"
+    case "pluralspace_file":  return "PluralSpace"
+    case "prism_file":        return "Prism"
     default:
         return source.replacingOccurrences(of: "_", with: " ").capitalized
     }
@@ -17,6 +19,7 @@ private func importSourceLabel(_ source: String) -> String {
 private func importSourceIcon(_ source: String) -> String {
     switch source {
     case "pluralkit_api": return "key.fill"
+    case "prism_file":    return "lock.doc.fill"
     default:              return "square.and.arrow.down.fill"
     }
 }

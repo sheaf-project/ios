@@ -14,6 +14,8 @@ struct SettingsView: View {
     @State private var showSheafImport = false
     @State private var showPKImport = false
     @State private var showTBImport = false
+    @State private var showPSImport = false
+    @State private var showPrismImport = false
     @State private var showImportHistory = false
     @State private var showTOTPSetup = false
     @State private var showTOTPManage = false
@@ -174,6 +176,34 @@ struct SettingsView: View {
                                             .font(.subheadline).fontWeight(.medium)
                                             .foregroundColor(theme.textPrimary)
                                         Text("Push, ntfy, Pushover, webhooks")
+                                            .font(.caption)
+                                            .foregroundColor(theme.textTertiary)
+                                    }
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .font(.caption)
+                                        .foregroundColor(theme.textTertiary)
+                                }
+                                .padding(.horizontal, 16).padding(.vertical, 14)
+                            }
+                            .buttonStyle(.plain)
+
+                            Divider().padding(.leading, 48)
+
+                            NavigationLink {
+                                ReceivingChannelsView()
+                                    .environmentObject(authManager)
+                                    .environmentObject(store)
+                            } label: {
+                                HStack(spacing: 12) {
+                                    Image(systemName: "tray.and.arrow.down.fill")
+                                        .foregroundColor(theme.accentLight)
+                                        .frame(width: 20)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("Receiving")
+                                            .font(.subheadline).fontWeight(.medium)
+                                            .foregroundColor(theme.textPrimary)
+                                        Text("Channels you're subscribed to")
                                             .font(.caption)
                                             .foregroundColor(theme.textTertiary)
                                     }
@@ -402,74 +432,35 @@ struct SettingsView: View {
                     // Data Management
                     settingsSection(title: "Data Management") {
                         VStack(spacing: 0) {
-                            // Import from Simply Plural
-                            Button { showImport = true } label: {
+                            Menu {
+                                Button { showImport = true } label: {
+                                    Label("Simply Plural", systemImage: "square.and.arrow.down.fill")
+                                }
+                                Button { showPKImport = true } label: {
+                                    Label("PluralKit", systemImage: "square.and.arrow.down.fill")
+                                }
+                                Button { showTBImport = true } label: {
+                                    Label("Tupperbox", systemImage: "square.and.arrow.down.fill")
+                                }
+                                Button { showPSImport = true } label: {
+                                    Label("PluralSpace", systemImage: "square.and.arrow.down.fill")
+                                }
+                                Button { showPrismImport = true } label: {
+                                    Label("Prism", systemImage: "lock.doc.fill")
+                                }
+                                Button { showSheafImport = true } label: {
+                                    Label("Sheaf Export", systemImage: "square.and.arrow.down.on.square.fill")
+                                }
+                            } label: {
                                 HStack {
                                     Image(systemName: "square.and.arrow.down.fill")
                                         .foregroundColor(theme.accentLight)
                                         .frame(width: 20)
-                                    Text("Import from Simply Plural")
+                                    Text("Import Data")
                                         .font(.subheadline).fontWeight(.medium)
                                         .foregroundColor(theme.textPrimary)
                                     Spacer()
-                                    Image(systemName: "chevron.right")
-                                        .font(.caption)
-                                        .foregroundColor(theme.textTertiary)
-                                }
-                                .padding(.horizontal, 16).padding(.vertical, 14)
-                            }
-
-                            Divider().background(theme.divider)
-
-                            // Import from PluralKit
-                            Button { showPKImport = true } label: {
-                                HStack {
-                                    Image(systemName: "square.and.arrow.down.fill")
-                                        .foregroundColor(theme.accentLight)
-                                        .frame(width: 20)
-                                    Text("Import from PluralKit")
-                                        .font(.subheadline).fontWeight(.medium)
-                                        .foregroundColor(theme.textPrimary)
-                                    Spacer()
-                                    Image(systemName: "chevron.right")
-                                        .font(.caption)
-                                        .foregroundColor(theme.textTertiary)
-                                }
-                                .padding(.horizontal, 16).padding(.vertical, 14)
-                            }
-
-                            Divider().background(theme.divider)
-
-                            // Import from Tupperbox
-                            Button { showTBImport = true } label: {
-                                HStack {
-                                    Image(systemName: "square.and.arrow.down.fill")
-                                        .foregroundColor(theme.accentLight)
-                                        .frame(width: 20)
-                                    Text("Import from Tupperbox")
-                                        .font(.subheadline).fontWeight(.medium)
-                                        .foregroundColor(theme.textPrimary)
-                                    Spacer()
-                                    Image(systemName: "chevron.right")
-                                        .font(.caption)
-                                        .foregroundColor(theme.textTertiary)
-                                }
-                                .padding(.horizontal, 16).padding(.vertical, 14)
-                            }
-
-                            Divider().background(theme.divider)
-
-                            // Import from Sheaf
-                            Button { showSheafImport = true } label: {
-                                HStack {
-                                    Image(systemName: "square.and.arrow.down.on.square.fill")
-                                        .foregroundColor(theme.accentLight)
-                                        .frame(width: 20)
-                                    Text("Import from Sheaf Export")
-                                        .font(.subheadline).fontWeight(.medium)
-                                        .foregroundColor(theme.textPrimary)
-                                    Spacer()
-                                    Image(systemName: "chevron.right")
+                                    Image(systemName: "chevron.up.chevron.down")
                                         .font(.caption)
                                         .foregroundColor(theme.textTertiary)
                                 }
@@ -892,6 +883,14 @@ struct SettingsView: View {
         }
         .sheet(isPresented: $showTBImport) {
             TupperboxImportSheet()
+                .environmentObject(store)
+        }
+        .sheet(isPresented: $showPSImport) {
+            PluralSpaceImportSheet()
+                .environmentObject(store)
+        }
+        .sheet(isPresented: $showPrismImport) {
+            PrismImportSheet()
                 .environmentObject(store)
         }
         .sheet(isPresented: $showImportHistory) {

@@ -1940,10 +1940,15 @@ class SystemStore: ObservableObject {
 
 extension Error {
     /// `localizedDescription` unless this is a connectivity error (no network, lost
-    /// connection, TLS / certificate failure, connection reset, DNS / host issue, …).
-    /// For those, returns `nil` so view-local error state can stay empty — the offline
-    /// banner already communicates this to the user and a redundant alert is noise.
+    /// connection, TLS / certificate failure, connection reset, DNS / host issue, …)
+    /// or a task cancellation. For those, returns `nil` so view-local error state can
+    /// stay empty — the offline banner already communicates connectivity loss, and
+    /// cancellation is lifecycle noise (e.g. .refreshable tearing down the .task
+    /// request mid-flight) that the user shouldn't see surfaced as "Error: cancelled".
     var userFacingMessage: String? {
-        SystemStore.isOfflineLikeError(self) ? nil : localizedDescription
+        if self is CancellationError { return nil }
+        let ns = self as NSError
+        if ns.domain == NSURLErrorDomain && ns.code == NSURLErrorCancelled { return nil }
+        return SystemStore.isOfflineLikeError(self) ? nil : localizedDescription
     }
 }

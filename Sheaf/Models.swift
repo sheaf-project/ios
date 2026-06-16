@@ -1527,6 +1527,123 @@ struct TBImportResult: Codable {
     }
 }
 
+// MARK: - PluralSpace Import Models
+struct PSPreviewMember: Codable, Identifiable {
+    let id: String
+    let name: String
+}
+
+struct PSPreviewSummary: Codable {
+    var systemName: String?
+    var formatVersion: String?
+    var memberCount: Int
+    var customFrontCount: Int
+    var members: [PSPreviewMember]
+    var groupCount: Int
+    var customFieldCount: Int
+    var frontCount: Int
+    var journalEntryCount: Int
+    var chatChannelCount: Int
+    var chatMessageCount: Int
+    var pollCount: Int
+    var thoughtCount: Int
+    var mediaFileCount: Int
+
+    enum CodingKeys: String, CodingKey {
+        case members
+        case systemName        = "system_name"
+        case formatVersion     = "format_version"
+        case memberCount       = "member_count"
+        case customFrontCount  = "custom_front_count"
+        case groupCount        = "group_count"
+        case customFieldCount  = "custom_field_count"
+        case frontCount        = "front_count"
+        case journalEntryCount = "journal_entry_count"
+        case chatChannelCount  = "chat_channel_count"
+        case chatMessageCount  = "chat_message_count"
+        case pollCount         = "poll_count"
+        case thoughtCount      = "thought_count"
+        case mediaFileCount    = "media_file_count"
+    }
+}
+
+struct PSImportResult: Codable {
+    var membersImported:        Int
+    var customFrontsImported:   Int
+    var groupsImported:         Int
+    var customFieldsImported:   Int
+    var frontsImported:         Int
+    var journalEntriesImported: Int
+    var chatMessagesImported:   Int
+    var pollsImported:          Int
+    var mediaFilesImported:     Int
+    var warnings:               [String]
+}
+
+// MARK: - Prism Import Models
+struct PrismPreviewMember: Codable, Identifiable {
+    let id: String
+    let name: String
+}
+
+struct PrismPreviewSummary: Codable {
+    var systemName: String?
+    var formatVersion: String?
+    var appName: String?
+    var memberCount: Int
+    var members: [PrismPreviewMember]
+    var groupCount: Int
+    var customFieldCount: Int
+    var frontSessionCount: Int
+    var sleepSessionCount: Int
+    var conversationCount: Int
+    var messageCount: Int
+    var pollCount: Int
+    var pollOptionCount: Int
+    var noteCount: Int
+    var reminderCount: Int
+    var habitCount: Int
+    var memberBoardPostCount: Int
+    var mediaAttachmentCount: Int
+    var mediaBlobCount: Int
+
+    enum CodingKeys: String, CodingKey {
+        case members
+        case systemName           = "system_name"
+        case formatVersion        = "format_version"
+        case appName              = "app_name"
+        case memberCount          = "member_count"
+        case groupCount           = "group_count"
+        case customFieldCount     = "custom_field_count"
+        case frontSessionCount    = "front_session_count"
+        case sleepSessionCount    = "sleep_session_count"
+        case conversationCount    = "conversation_count"
+        case messageCount         = "message_count"
+        case pollCount            = "poll_count"
+        case pollOptionCount      = "poll_option_count"
+        case noteCount            = "note_count"
+        case reminderCount        = "reminder_count"
+        case habitCount           = "habit_count"
+        case memberBoardPostCount = "member_board_post_count"
+        case mediaAttachmentCount = "media_attachment_count"
+        case mediaBlobCount       = "media_blob_count"
+    }
+}
+
+struct PrismImportResult: Codable {
+    var membersImported:        Int
+    var groupsImported:         Int
+    var customFieldsImported:   Int
+    var frontSessionsImported:  Int
+    var notesImported:          Int
+    var conversationsImported:  Int
+    var messagesImported:       Int
+    var pollsImported:          Int
+    var boardPostsImported:     Int
+    var mediaImported:          Int
+    var warnings:               [String]
+}
+
 // MARK: - Async Import Jobs
 //
 // The backend retired the synchronous per-source import endpoints in favour of
@@ -1693,6 +1810,43 @@ extension TBImportResult {
             membersImported: c["members_imported"] ?? 0,
             groupsImported:  c["groups_imported"]  ?? 0,
             warnings:        job.warnings
+        )
+    }
+}
+
+extension PSImportResult {
+    init(job: ImportJobRead) {
+        let c = job.counts
+        self.init(
+            membersImported:        c["members_imported"]         ?? 0,
+            customFrontsImported:   c["custom_fronts_imported"]   ?? 0,
+            groupsImported:         c["groups_imported"]          ?? 0,
+            customFieldsImported:   c["custom_fields_imported"]   ?? 0,
+            frontsImported:         c["fronts_imported"]          ?? 0,
+            journalEntriesImported: c["journal_entries_imported"] ?? 0,
+            chatMessagesImported:   c["chat_messages_imported"]   ?? 0,
+            pollsImported:          c["polls_imported"]           ?? 0,
+            mediaFilesImported:     c["media_files_imported"]     ?? 0,
+            warnings:               job.warnings
+        )
+    }
+}
+
+extension PrismImportResult {
+    init(job: ImportJobRead) {
+        let c = job.counts
+        self.init(
+            membersImported:        c["members_imported"]            ?? 0,
+            groupsImported:         c["groups_imported"]             ?? 0,
+            customFieldsImported:   c["custom_fields_imported"]      ?? 0,
+            frontSessionsImported:  c["front_sessions_imported"]     ?? 0,
+            notesImported:          c["notes_imported"]              ?? 0,
+            conversationsImported:  c["conversations_imported"]      ?? 0,
+            messagesImported:       c["messages_imported"]           ?? 0,
+            pollsImported:          c["polls_imported"]              ?? 0,
+            boardPostsImported:     c["member_board_posts_imported"] ?? 0,
+            mediaImported:          c["media_attachments_imported"]  ?? 0,
+            warnings:               job.warnings
         )
     }
 }
@@ -2322,6 +2476,49 @@ struct ChannelActivationResponse: Codable {
 struct TestDispatchResponse: Codable {
     let delivered: Bool
     var error: String?
+}
+
+// MARK: - Receiving Channels
+
+// Account-bound view of a notification channel the authenticated user
+// has redeemed (i.e. is receiving). Returned by GET /v1/notifications/receiving.
+struct ReceivingChannel: Identifiable, Codable {
+    let channelID: String
+    let channelName: String
+    var systemLabel: String?
+    var destinationType: DestinationType
+    var destinationState: DestinationState
+    var redeemedAt: Date?
+    var lastDeliveredAt: Date?
+    // True when the sender has paused the channel server-side. Distinct
+    // from destinationState == .disabled (destination dead, e.g. token
+    // revoked) — paused is a soft state the sender controls.
+    var pausedBySender: Bool
+
+    var id: String { channelID }
+
+    enum CodingKeys: String, CodingKey {
+        case channelID       = "channel_id"
+        case channelName     = "channel_name"
+        case systemLabel     = "system_label"
+        case destinationType  = "destination_type"
+        case destinationState = "destination_state"
+        case redeemedAt       = "redeemed_at"
+        case lastDeliveredAt  = "last_delivered_at"
+        case pausedBySender   = "paused_by_sender"
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        channelID        = try c.decode(String.self, forKey: .channelID)
+        channelName      = try c.decode(String.self, forKey: .channelName)
+        systemLabel      = try c.decodeIfPresent(String.self, forKey: .systemLabel)
+        destinationType  = try c.decode(DestinationType.self, forKey: .destinationType)
+        destinationState = try c.decode(DestinationState.self, forKey: .destinationState)
+        redeemedAt       = try c.decodeIfPresent(Date.self, forKey: .redeemedAt)
+        lastDeliveredAt  = try c.decodeIfPresent(Date.self, forKey: .lastDeliveredAt)
+        pausedBySender   = (try? c.decode(Bool.self, forKey: .pausedBySender)) ?? false
+    }
 }
 
 // MARK: - Push Device Tokens
