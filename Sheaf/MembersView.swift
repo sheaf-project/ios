@@ -533,8 +533,11 @@ struct MemberDetailSheet: View {
                     // Header: banner with avatar overlapping the bottom edge
                     // when a banner is set, otherwise a centred avatar.
                     profileHeader
+                        .padding(.top, 24)
 
-                    // Name + pronouns + custom-front badge
+                    // Name + pronouns + custom-front badge. Pulled slightly
+                    // up so it sits closer to the avatar without the avatar
+                    // overlapping it.
                     VStack(spacing: 12) {
                         HStack(spacing: 8) {
                             Text(liveMember.displayName ?? liveMember.name)
@@ -561,6 +564,7 @@ struct MemberDetailSheet: View {
                                 .font(.subheadline)
                         }
                     }
+                    .padding(.top, -12)
 
                     // Fronting status
                     if store.frontingMembers.contains(where: { $0.id == member.id }) {
