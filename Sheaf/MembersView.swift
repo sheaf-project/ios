@@ -800,6 +800,13 @@ struct MemberEditSheet: View {
     @State private var archiveError: String?
     @State private var archiveActionError: String?
 
+    // Delete button state: confirmation alert + step-up auth sheet, matching
+    // the list flow so Save, Archive, and Delete sit together in the editor.
+    @State private var showDeleteConfirm = false
+    @State private var showDeleteAuthSheet = false
+    @State private var deleteQueuedInfo: DeleteQueued?
+    @State private var showDeleteQueued = false
+
     private struct FormSnapshot: Equatable {
         var name: String
         var displayName: String
@@ -980,9 +987,11 @@ struct MemberEditSheet: View {
                         }
                     }
 
-                    // Archive / Unarchive (existing members only). Mirrors
-                    // the web editor: discoverable next to the rest of the
-                    // member management, beyond just the list long-press.
+                    // Archive / Unarchive + Delete (existing members only).
+                    // Web-parity: keep Save, Archive, and Delete together
+                    // in the editor so member management isn't split across
+                    // screens. The list swipe / context menu keeps both as
+                    // shortcuts.
                     if let existing = member {
                         Button {
                             Task { await toggleArchive(existing) }
@@ -1005,6 +1014,22 @@ struct MemberEditSheet: View {
                                 .foregroundColor(theme.danger)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }
+
+                        Button {
+                            requestDelete(existing)
+                        } label: {
+                            HStack {
+                                Image(systemName: "trash")
+                                Text("Delete Member")
+                                    .fontWeight(.medium)
+                            }
+                            .foregroundColor(theme.danger)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(theme.danger.opacity(0.08))
+                            .cornerRadius(12)
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
                 .padding(.horizontal, 24)
@@ -1063,6 +1088,50 @@ struct MemberEditSheet: View {
                 }
             }
             .environmentObject(store)
+        }
+        .alert("Delete this member?", isPresented: $showDeleteConfirm, presenting: member) { existing in
+            Button("Delete", role: .destructive) {
+                Task {
+                    let queued = await store.deleteMember(id: existing.id)
+                    if let queued {
+                        deleteQueuedInfo = queued
+                        showDeleteQueued = true
+                    } else {
+                        dismiss()
+                    }
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: { existing in
+            Text("This will permanently delete \(existing.displayName ?? existing.name) and cannot be undone.")
+        }
+        .sheet(isPresented: $showDeleteAuthSheet) {
+            if let existing = member {
+                MemberDeleteConfirmSheet(member: existing) { queued in
+                    deleteQueuedInfo = queued
+                    showDeleteQueued = true
+                }
+                .environmentObject(store)
+            }
+        }
+        .alert("Deletion Queued", isPresented: $showDeleteQueued) {
+            Button("OK", role: .cancel) {
+                deleteQueuedInfo = nil
+                dismiss()
+            }
+        } message: {
+            if let info = deleteQueuedInfo {
+                Text("This deletion has been queued and will finalize \(info.finalizeAfter, style: .relative). You can cancel it from System Safety settings.")
+            }
+        }
+    }
+
+    private func requestDelete(_ existing: Member) {
+        let level = store.systemProfile?.deleteConfirmation ?? .none
+        if level == .none {
+            showDeleteConfirm = true
+        } else {
+            showDeleteAuthSheet = true
         }
     }
 
