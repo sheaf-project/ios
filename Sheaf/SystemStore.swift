@@ -696,7 +696,7 @@ class SystemStore: ObservableObject {
     }
 
     var regularMemberCount: Int {
-        members.filter { !$0.isCustomFront }.count
+        members.filter { !$0.isCustomFront && !$0.isArchived }.count
     }
 
     // MARK: - Fronting
