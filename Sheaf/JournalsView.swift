@@ -1074,6 +1074,7 @@ struct JournalAuthorPicker: View {
 struct MarkdownToolbar: View {
     @Environment(\.theme) var theme
     @Binding var text: String
+    @State private var showHelp = false
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
@@ -1089,9 +1090,16 @@ struct MarkdownToolbar: View {
                 toolbarButton("link", icon: "link") { insertLink() }
                 toolbarButton("quote", icon: "text.quote") { insertPrefix("> ") }
                 toolbarButton("code", icon: "chevron.left.forwardslash.chevron.right") { wrap("`") }
+                Divider().frame(height: 20)
+                toolbarButton("formatting help", icon: "questionmark.circle") { showHelp = true }
             }
             .padding(.horizontal, 4)
             .padding(.vertical, 8)
+        }
+        .sheet(isPresented: $showHelp) {
+            MarkdownHelpSheet()
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
         }
     }
 
@@ -1121,5 +1129,74 @@ struct MarkdownToolbar: View {
 
     private func insertLink() {
         text += "[link text](url)"
+    }
+}
+
+/// Quick reference for the markdown the renderer supports, opened from the
+/// toolbar's help button. The line-break note is the headline item: people
+/// expect a single newline to break a line, but markdown needs a blank line
+/// for a new paragraph and two trailing spaces (or a backslash) for a soft
+/// break.
+private struct MarkdownHelpSheet: View {
+    @Environment(\.theme) var theme
+    @Environment(\.dismiss) var dismiss
+
+    private struct Row: Identifiable {
+        let id = UUID()
+        let syntax: String
+        let label: String
+    }
+
+    private let rows: [Row] = [
+        Row(syntax: "**bold**", label: "Bold"),
+        Row(syntax: "*italic*", label: "Italic"),
+        Row(syntax: "# Heading", label: "Heading (more # = smaller)"),
+        Row(syntax: "- item", label: "Bulleted list"),
+        Row(syntax: "1. item", label: "Numbered list"),
+        Row(syntax: "> quote", label: "Quote"),
+        Row(syntax: "[text](https://…)", label: "Link"),
+        Row(syntax: "`code`", label: "Inline code"),
+        Row(syntax: "``` … ```", label: "Code block"),
+    ]
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    ForEach(rows) { row in
+                        HStack(alignment: .top, spacing: 12) {
+                            Text(row.syntax)
+                                .font(.subheadline.monospaced())
+                                .foregroundColor(theme.textPrimary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            Text(row.label)
+                                .font(.footnote)
+                                .foregroundColor(theme.textSecondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+
+                    Divider().padding(.vertical, 4)
+
+                    Text("Line breaks")
+                        .font(.subheadline).fontWeight(.semibold)
+                        .foregroundColor(theme.textPrimary)
+                    Text("Leave a blank line between paragraphs. For a single line break without starting a new paragraph, end the line with two spaces, or a backslash (\\).")
+                        .font(.footnote)
+                        .foregroundColor(theme.textSecondary)
+                }
+                .padding(20)
+            }
+            .background(theme.backgroundPrimary)
+            .navigationTitle("Formatting")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Got it") { dismiss() }
+                        .foregroundColor(theme.accentLight)
+                        .fontWeight(.semibold)
+                }
+            }
+        }
     }
 }
