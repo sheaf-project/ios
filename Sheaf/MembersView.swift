@@ -494,29 +494,48 @@ struct MemberDetailSheet: View {
         store.members.first(where: { $0.id == member.id }) ?? member
     }
 
+    /// Header layout. With a banner set, the avatar is positioned so half
+    /// of it overlaps the banner's bottom edge and half sits below; otherwise
+    /// a plain centred avatar.
+    @ViewBuilder
+    private var profileHeader: some View {
+        let avatarSize: CGFloat = 96
+        let overhang: CGFloat = avatarSize / 2
+        if let banner = liveMember.bannerURL, !banner.isEmpty,
+           let url = resolveAvatarURL(banner, baseURL: store.api?.auth.baseURL ?? "") {
+            AsyncImage(url: url) { phase in
+                switch phase {
+                case .success(let image):
+                    image.resizable().scaledToFill()
+                default:
+                    Rectangle().fill(theme.backgroundCard)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .aspectRatio(3, contentMode: .fill)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .overlay(alignment: .bottom) {
+                AvatarView(member: liveMember, size: avatarSize)
+                    .overlay(Circle().stroke(theme.backgroundPrimary, lineWidth: 4))
+                    .offset(y: overhang)
+            }
+            .padding(.bottom, overhang)
+        } else {
+            AvatarView(member: liveMember, size: avatarSize)
+                .padding(.top, 20)
+        }
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 24) {
-                    // Banner (3:1, profile-only)
-                    if let banner = liveMember.bannerURL, !banner.isEmpty,
-                       let url = resolveAvatarURL(banner, baseURL: store.api?.auth.baseURL ?? "") {
-                        AsyncImage(url: url) { phase in
-                            switch phase {
-                            case .success(let image):
-                                image.resizable().scaledToFill()
-                            default:
-                                Rectangle().fill(theme.backgroundCard)
-                            }
-                        }
-                        .frame(maxWidth: .infinity)
-                        .aspectRatio(3, contentMode: .fill)
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                    }
+                    // Header: banner with avatar overlapping the bottom edge
+                    // when a banner is set, otherwise a centred avatar.
+                    profileHeader
 
-                    // Avatar + name
+                    // Name + pronouns + custom-front badge
                     VStack(spacing: 12) {
-                        AvatarView(member: liveMember, size: 96)
                         HStack(spacing: 8) {
                             Text(liveMember.displayName ?? liveMember.name)
                                 .font(.title2).fontWeight(.bold).fontDesign(.rounded)
@@ -542,7 +561,6 @@ struct MemberDetailSheet: View {
                                 .font(.subheadline)
                         }
                     }
-                    .padding(.top, 20)
 
                     // Fronting status
                     if store.frontingMembers.contains(where: { $0.id == member.id }) {
