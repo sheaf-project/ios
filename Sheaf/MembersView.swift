@@ -1967,8 +1967,11 @@ struct BannerInputSection: View {
 }
 
 private struct CropImage: Identifiable {
-    let id = UUID()
     let image: UIImage
+    // Stable id tied to the UIImage's object identity. A fresh UUID here
+    // would change on every body recomputation, making `.sheet(item:)`
+    // think the item changed and re-present the sheet.
+    var id: ObjectIdentifier { ObjectIdentifier(image) }
 }
 
 // MARK: - Member Delete Confirmation Sheet
