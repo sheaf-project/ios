@@ -14,6 +14,7 @@ struct SupportView: View {
     private var supportEmail: String? { (config["support_email"] as? String)?.nilIfEmpty }
     private var supportURL: String? { (config["support_url"] as? String)?.nilIfEmpty }
     private var supportNote: String? { (config["support_note"] as? String)?.nilIfEmpty }
+    private var supportCustomText: String? { (config["support_custom_text"] as? String)?.nilIfEmpty }
     private var statusURL: String? { (config["status_url"] as? String)?.nilIfEmpty }
     private var termsURL: String? { (config["terms_url"] as? String)?.nilIfEmpty }
     private var privacyURL: String? { (config["privacy_url"] as? String)?.nilIfEmpty }
@@ -31,6 +32,18 @@ struct SupportView: View {
             VStack(spacing: 24) {
                 if isLoading {
                     ProgressView().tint(theme.accentLight).padding(.top, 40)
+                }
+
+                // Operator-authored markdown blurb at the top. Server strips
+                // any raw HTML before sending so it's safe to render.
+                if let customText = supportCustomText {
+                    MarkdownText(customText, color: theme.textPrimary)
+                        .font(.subheadline)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                        .background(theme.backgroundCard)
+                        .cornerRadius(12)
                 }
 
                 if hasOperatorContact {
