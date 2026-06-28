@@ -1566,8 +1566,45 @@ class APIClient {
 
     // MARK: - Export
 
-    func exportData() async throws -> Data {
-        return try await request("/v1/export")
+    /// Synchronous JSON export. `format` is "sheaf" (full-fidelity native) or
+    /// "openplural" (v0.1 interchange, uri-only assets). No step-up; this is
+    /// metadata only, no image bytes.
+    func exportData(format: String = "sheaf") async throws -> Data {
+        let encoded = format.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? format
+        return try await request("/v1/export?format=\(encoded)")
+    }
+
+    /// Enqueue an async full-backup job (JSON + image bytes, zipped). Body
+    /// carries the format ("sheaf_native" or "openplural") and step-up
+    /// credentials (password, plus totp_code when the account has 2FA).
+    /// Returns 202 + the pending job; poll [listExportJobs] / [getExportJob]
+    /// until status is "done", then [downloadExportJob].
+    func createExportJob(includeImages: Bool, format: String, password: String, totpCode: String?) async throws -> ExportJobRead {
+        let payload = ExportJobRequest(
+            includeImages: includeImages,
+            format: format,
+            password: password,
+            totpCode: (totpCode?.isEmpty == false) ? totpCode : nil
+        )
+        let body = try JSONEncoder().encode(payload)
+        let data = try await request("/v1/export/jobs", method: "POST", body: body)
+        return try JSONDecoder.iso.decode(ExportJobRead.self, from: data)
+    }
+
+    func listExportJobs() async throws -> [ExportJobRead] {
+        let data = try await request("/v1/export/jobs")
+        return try JSONDecoder.iso.decode([ExportJobRead].self, from: data)
+    }
+
+    func getExportJob(id: String) async throws -> ExportJobRead {
+        let data = try await request("/v1/export/jobs/\(id)")
+        return try JSONDecoder.iso.decode(ExportJobRead.self, from: data)
+    }
+
+    /// Stream a finished backup zip. Returns the raw bytes; the caller writes
+    /// them to a chosen location.
+    func downloadExportJob(id: String) async throws -> Data {
+        return try await request("/v1/export/jobs/\(id)/download")
     }
 
     // MARK: - File Upload
@@ -1749,6 +1786,14 @@ class APIClient {
         let conversations: Bool
         let member_board_posts: Bool
         let media_attachments: Bool
+    }
+
+    private struct OpenPluralImportOptions: Encodable {
+        let system_profile: Bool
+        let fronts: Bool
+        let groups: Bool
+        let tags: Bool
+        let custom_fields: Bool
     }
 
     /// JSON body for POST /v1/imports/api.
@@ -2081,6 +2126,47 @@ class APIClient {
             credential: passphrase
         )
         return PrismImportResult(job: job)
+    }
+
+    // MARK: - OpenPlural Import (File)
+    //
+    // Cross-app interchange format. Preview returns the Sheaf preview shape
+    // plus a `lineage_length`. One source covers both the bare `.json` and
+    // the `.openplural.zip` bundle — the runner sniffs the zip magic and
+    // unpacks images when present.
+
+    func previewOpenPluralImport(fileData: Data, filename: String) async throws -> SheafPreviewSummary {
+        let data = try await multipartRequest(
+            path: "/v1/import/openplural/preview",
+            fileData: fileData,
+            filename: filename
+        )
+        return try JSONDecoder.iso.decode(SheafPreviewSummary.self, from: data)
+    }
+
+    func doOpenPluralImport(
+        fileData: Data,
+        filename: String,
+        systemProfile: Bool = true,
+        fronts: Bool = true,
+        groups: Bool = true,
+        tags: Bool = true,
+        customFields: Bool = true
+    ) async throws -> OpenPluralImportResult {
+        let options = OpenPluralImportOptions(
+            system_profile: systemProfile,
+            fronts: fronts,
+            groups: groups,
+            tags: tags,
+            custom_fields: customFields
+        )
+        let job = try await runFileImport(
+            source: "openplural_file",
+            fileData: fileData,
+            filename: filename,
+            options: options
+        )
+        return OpenPluralImportResult(job: job)
     }
 
     func uploadFile(imageData: Data, mimeType: String = "image/jpeg") async throws -> String {

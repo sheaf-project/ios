@@ -16,13 +16,11 @@ struct SettingsView: View {
     @State private var showTBImport = false
     @State private var showPSImport = false
     @State private var showPrismImport = false
+    @State private var showOpenPluralImport = false
     @State private var showImportHistory = false
     @State private var showTOTPSetup = false
     @State private var showTOTPManage = false
     @State private var me: UserRead?
-    @State private var isExporting = false
-    @State private var exportError: String?
-    @State private var showExportSuccess = false
     @State private var isLoadingFileUsage = false
     @State private var fileUsageDisplay = "—"
     @State private var showFileCleanupConfirm = false
@@ -448,6 +446,9 @@ struct SettingsView: View {
                                 Button { showPrismImport = true } label: {
                                     Label("Prism", systemImage: "lock.doc.fill")
                                 }
+                                Button { showOpenPluralImport = true } label: {
+                                    Label("OpenPlural", systemImage: "shippingbox.fill")
+                                }
                                 Button { showSheafImport = true } label: {
                                     Label("Sheaf Export", systemImage: "square.and.arrow.down.on.square.fill")
                                 }
@@ -489,26 +490,25 @@ struct SettingsView: View {
                             Divider().background(theme.divider)
 
                             // Export
-                            Button {
-                                Task { await exportData() }
+                            NavigationLink {
+                                ExportDataView()
+                                    .environmentObject(store)
                             } label: {
                                 HStack {
                                     Image(systemName: "square.and.arrow.up.fill")
                                         .foregroundColor(theme.accentLight)
                                         .frame(width: 20)
-                                    Text("Export All Data")
+                                    Text("Export Data")
                                         .font(.subheadline).fontWeight(.medium)
                                         .foregroundColor(theme.textPrimary)
                                     Spacer()
-                                    if isExporting {
-                                        ProgressView()
-                                            .tint(theme.accentLight)
-                                            .scaleEffect(0.8)
-                                    }
+                                    Image(systemName: "chevron.right")
+                                        .font(.caption)
+                                        .foregroundColor(theme.textTertiary)
                                 }
                                 .padding(.horizontal, 16).padding(.vertical, 14)
                             }
-                            .disabled(isExporting)
+                            .buttonStyle(.plain)
                         }
                     }
 
@@ -893,6 +893,10 @@ struct SettingsView: View {
             PrismImportSheet()
                 .environmentObject(store)
         }
+        .sheet(isPresented: $showOpenPluralImport) {
+            OpenPluralImportSheet()
+                .environmentObject(store)
+        }
         .sheet(isPresented: $showImportHistory) {
             ImportHistoryView()
                 .environmentObject(store)
@@ -905,18 +909,6 @@ struct SettingsView: View {
             TOTPManageSheet()
                 .environmentObject(authManager)
                 .environmentObject(store)
-        }
-        .alert("Export Successful", isPresented: $showExportSuccess) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text("Your data has been saved to Files.")
-        }
-        .alert("Export Failed", isPresented: .constant(exportError != nil)) {
-            Button("OK", role: .cancel) {
-                exportError = nil
-            }
-        } message: {
-            Text(exportError ?? "An unknown error occurred.")
         }
         .sheet(isPresented: $showDeleteAccount, onDismiss: { Task { await loadMe() } }) {
             DeleteAccountSheet()
@@ -1040,73 +1032,6 @@ struct SettingsView: View {
         isRunningFileCleanup = false
         showFileCleanupResult = true
         await loadFileUsage()
-    }
-
-
-    private func exportData() async {
-        guard let api = store.api else { return }
-        
-        await MainActor.run {
-            isExporting = true
-            exportError = nil
-        }
-        
-        do {
-            let data = try await api.exportData()
-            
-            // Create a temporary file
-            let timestamp = ISO8601DateFormatter().string(from: Date())
-                .replacingOccurrences(of: ":", with: "-")
-            let filename = "sheaf-export-\(timestamp).json"
-            let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(filename)
-            
-            try data.write(to: tempURL)
-            
-            // Present share sheet
-            await MainActor.run {
-                isExporting = false
-                presentShareSheet(url: tempURL)
-            }
-        } catch is CancellationError {
-            await MainActor.run { isExporting = false }
-        } catch {
-            await MainActor.run {
-                isExporting = false
-                exportError = error.userFacingMessage
-            }
-        }
-    }
-    
-    private func presentShareSheet(url: URL) {
-        let scene = UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .first(where: { $0.activationState == .foregroundActive })
-            ?? UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
-        guard let windowScene = scene,
-              let window = windowScene.windows.first(where: { $0.isKeyWindow }) ?? windowScene.windows.first,
-              let rootViewController = window.rootViewController else {
-            return
-        }
-
-        var presenter = rootViewController
-        while let presented = presenter.presentedViewController {
-            presenter = presented
-        }
-
-        let activityVC = UIActivityViewController(
-            activityItems: [url],
-            applicationActivities: nil
-        )
-
-        if let popover = activityVC.popoverPresentationController {
-            popover.sourceView = presenter.view
-            popover.sourceRect = CGRect(x: presenter.view.bounds.midX,
-                                       y: presenter.view.bounds.midY,
-                                       width: 0, height: 0)
-            popover.permittedArrowDirections = []
-        }
-
-        presenter.present(activityVC, animated: true)
     }
 
     private func formatTier(_ tier: String) -> String {

@@ -11,6 +11,7 @@ private func importSourceLabel(_ source: String) -> String {
     case "tupperbox_file":    return "Tupperbox"
     case "pluralspace_file":  return "PluralSpace"
     case "prism_file":        return "Prism"
+    case "openplural_file":   return "OpenPlural"
     default:
         return source.replacingOccurrences(of: "_", with: " ").capitalized
     }

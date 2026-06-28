@@ -1851,6 +1851,129 @@ extension PrismImportResult {
     }
 }
 
+// MARK: - OpenPlural Import (and shared Sheaf preview)
+//
+// OpenPlural is a cross-app interchange format. Its preview endpoint returns
+// the Sheaf preview shape plus a `lineage_length` field (number of prior
+// exports the file has passed through). One source — `openplural_file` —
+// covers both the bare `.json` and the `.openplural.zip` bundle; the runner
+// sniffs the zip magic and unpacks images when present.
+
+struct SheafPreviewSummary: Codable {
+    var memberCount: Int
+    var frontCount: Int
+    var groupCount: Int
+    var tagCount: Int
+    var customFieldCount: Int
+    // True for a complete-backup zip; surfaces an image count alongside.
+    var archive: Bool
+    var imageCount: Int
+    // OpenPlural-only: how many prior exports this file has passed through.
+    // Absent (0) for native Sheaf previews.
+    var lineageLength: Int
+
+    enum CodingKeys: String, CodingKey {
+        case memberCount       = "member_count"
+        case frontCount        = "front_count"
+        case groupCount        = "group_count"
+        case tagCount          = "tag_count"
+        case customFieldCount  = "custom_field_count"
+        case archive
+        case imageCount        = "image_count"
+        case lineageLength     = "lineage_length"
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        memberCount      = try c.decodeIfPresent(Int.self,  forKey: .memberCount)      ?? 0
+        frontCount       = try c.decodeIfPresent(Int.self,  forKey: .frontCount)       ?? 0
+        groupCount       = try c.decodeIfPresent(Int.self,  forKey: .groupCount)       ?? 0
+        tagCount         = try c.decodeIfPresent(Int.self,  forKey: .tagCount)         ?? 0
+        customFieldCount = try c.decodeIfPresent(Int.self,  forKey: .customFieldCount) ?? 0
+        archive          = try c.decodeIfPresent(Bool.self, forKey: .archive)          ?? false
+        imageCount       = try c.decodeIfPresent(Int.self,  forKey: .imageCount)       ?? 0
+        lineageLength    = try c.decodeIfPresent(Int.self,  forKey: .lineageLength)    ?? 0
+    }
+}
+
+struct OpenPluralImportResult: Codable {
+    var membersImported:      Int
+    var frontsImported:       Int
+    var groupsImported:       Int
+    var tagsImported:         Int
+    var customFieldsImported: Int
+    var imagesImported:       Int
+    var warnings:             [String]
+}
+
+extension OpenPluralImportResult {
+    init(job: ImportJobRead) {
+        let c = job.counts
+        self.init(
+            membersImported:      c["members_imported"]       ?? 0,
+            frontsImported:       c["fronts_imported"]        ?? 0,
+            groupsImported:       c["groups_imported"]        ?? 0,
+            tagsImported:         c["tags_imported"]          ?? 0,
+            customFieldsImported: c["custom_fields_imported"] ?? 0,
+            imagesImported:       c["images_imported"]        ?? 0,
+            warnings:             job.warnings
+        )
+    }
+}
+
+// MARK: - Export Jobs (async full-backup with images)
+//
+// Two-channel export surface that mirrors the Android implementation:
+//
+//   • Sync JSON: GET /v1/export?format=sheaf|openplural — metadata only.
+//   • Async backup: POST /v1/export/jobs (step-up: password + totp_code when
+//     2FA is on), then poll list/get and download the finished zip.
+//
+// Format strings differ between the two endpoints (matches backend):
+//   sync export:  "sheaf"        | "openplural"
+//   async job:    "sheaf_native" | "openplural"
+
+struct ExportJobRequest: Encodable {
+    let includeImages: Bool
+    let format: String
+    let password: String
+    let totpCode: String?
+
+    enum CodingKeys: String, CodingKey {
+        case includeImages = "include_images"
+        case format
+        case password
+        case totpCode      = "totp_code"
+    }
+}
+
+struct ExportJobRead: Codable, Identifiable {
+    let id: String
+    let includeImages: Bool
+    let format: String
+    // pending | running | done | failed | expired
+    let status: String
+    let requestedAt: Date
+    let startedAt: Date?
+    let completedAt: Date?
+    let expiresAt: Date?
+    let fileSizeBytes: Int64?
+    let error: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id, format, status, error
+        case includeImages = "include_images"
+        case requestedAt   = "requested_at"
+        case startedAt     = "started_at"
+        case completedAt   = "completed_at"
+        case expiresAt     = "expires_at"
+        case fileSizeBytes = "file_size_bytes"
+    }
+
+    var isTerminal:     Bool { status == "done" || status == "failed" || status == "expired" }
+    var isDownloadable: Bool { status == "done" }
+}
+
 // MARK: - Announcements
 
 enum AnnouncementSeverity: String, Codable {
