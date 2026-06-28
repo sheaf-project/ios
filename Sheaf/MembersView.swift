@@ -1654,6 +1654,8 @@ struct AvatarInputSection: View {
     @Binding var isUploading: Bool
     var api: APIClient?
     @State private var uploadError: String?
+    // Picked-but-uncropped image, presented in the cropper before upload.
+    @State private var cropImage: UIImage?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -1765,46 +1767,56 @@ struct AvatarInputSection: View {
                     .foregroundColor(theme.danger)
             }
         }
+        .sheet(item: Binding<CropImage?>(
+            get: { cropImage.map(CropImage.init) },
+            set: { if $0 == nil { cropImage = nil } }
+        )) { wrapper in
+            ImageCropperView(
+                sourceImage: wrapper.image,
+                aspectRatio: 1.0,
+                cropShape: .circle,
+                title: "Crop Avatar",
+                onConfirm: { data in
+                    Task { await uploadCropped(data: data) }
+                }
+            )
+        }
     }
 
     private func uploadPhoto(_ item: PhotosPickerItem) async {
-        isUploading = true
         uploadError = nil
-        defer { isUploading = false }
-
-        guard let data = try? await item.loadTransferable(type: Data.self),
-              let api else { return }
-
-        // Determine MIME type
-        let mimeType: String
-        if let uti = item.supportedContentTypes.first {
-            if uti.conforms(to: .png) {
-                mimeType = "image/png"
-            } else if uti.conforms(to: .gif) {
-                mimeType = "image/gif"
-            } else if uti.conforms(to: .webP) {
-                mimeType = "image/webp"
-            } else {
-                mimeType = "image/jpeg"
-            }
-        } else {
-            mimeType = "image/jpeg"
+        guard let data = try? await item.loadTransferable(type: Data.self) else {
+            await MainActor.run { selectedPhoto = nil }
+            return
         }
+        // Decode into a working image (EXIF-correct, downsampled for the
+        // cropper), then route through the shared cropper instead of
+        // uploading the raw bytes. The cropper exports PNG so a zoomed-out
+        // letterbox keeps its transparent margins.
+        let decoded = UIImage.decodeForCrop(data: data) ?? UIImage(data: data)
+        await MainActor.run {
+            cropImage = decoded
+            selectedPhoto = nil
+        }
+    }
 
+    private func uploadCropped(data: Data) async {
+        await MainActor.run {
+            isUploading = true
+            uploadError = nil
+        }
+        defer { Task { @MainActor in isUploading = false } }
+        guard let api else { return }
         do {
-            let url = try await api.uploadFile(imageData: data, mimeType: mimeType)
+            let url = try await api.uploadFile(imageData: data, mimeType: "image/png", purpose: "avatar")
             await MainActor.run {
-                if !url.isEmpty {
-                    avatarURL = url
-                }
-                selectedPhoto = nil
+                if !url.isEmpty { avatarURL = url }
             }
         } catch is CancellationError {
-            await MainActor.run { selectedPhoto = nil }
+            return
         } catch {
             await MainActor.run {
                 uploadError = error.userFacingMessage
-                selectedPhoto = nil
             }
         }
     }
