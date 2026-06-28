@@ -32,6 +32,7 @@ struct Member: Identifiable, Codable, Hashable {
     var description: String?
     var pronouns: String?
     var avatarURL: String?
+    var bannerURL: String?
     var color: String?
     var birthday: String?
     var emoji: String?
@@ -50,6 +51,7 @@ struct Member: Identifiable, Codable, Hashable {
         case description
         case pronouns
         case avatarURL     = "avatar_url"
+        case bannerURL     = "banner_url"
         case color
         case birthday
         case emoji
@@ -70,6 +72,7 @@ struct Member: Identifiable, Codable, Hashable {
         description   = try c.decodeIfPresent(String.self, forKey: .description)
         pronouns      = try c.decodeIfPresent(String.self, forKey: .pronouns)
         avatarURL     = try c.decodeIfPresent(String.self, forKey: .avatarURL)
+        bannerURL     = try c.decodeIfPresent(String.self, forKey: .bannerURL)
         color         = try c.decodeIfPresent(String.self, forKey: .color)
         birthday      = try c.decodeIfPresent(String.self, forKey: .birthday)
         emoji         = try c.decodeIfPresent(String.self, forKey: .emoji)
@@ -83,8 +86,8 @@ struct Member: Identifiable, Codable, Hashable {
 
     init(id: String, systemID: String, name: String, displayName: String? = nil,
          description: String? = nil, pronouns: String? = nil, avatarURL: String? = nil,
-         color: String? = nil, birthday: String? = nil, emoji: String? = nil,
-         pluralkitID: String? = nil, isCustomFront: Bool = false,
+         bannerURL: String? = nil, color: String? = nil, birthday: String? = nil,
+         emoji: String? = nil, pluralkitID: String? = nil, isCustomFront: Bool = false,
          privacy: PrivacyLevel, note: String? = nil, createdAt: Date, updatedAt: Date) {
         self.id = id
         self.systemID = systemID
@@ -93,6 +96,7 @@ struct Member: Identifiable, Codable, Hashable {
         self.description = description
         self.pronouns = pronouns
         self.avatarURL = avatarURL
+        self.bannerURL = bannerURL
         self.color = color
         self.birthday = birthday
         self.emoji = emoji
@@ -125,6 +129,7 @@ struct MemberCreate: Codable {
     var description: String?
     var pronouns: String?
     var avatarURL: String?
+    var bannerURL: String?
     var color: String?
     var birthday: String?
     var emoji: String?
@@ -138,6 +143,7 @@ struct MemberCreate: Codable {
         case description
         case pronouns
         case avatarURL     = "avatar_url"
+        case bannerURL     = "banner_url"
         case color
         case birthday
         case emoji
@@ -154,6 +160,7 @@ struct MemberUpdate: Codable {
     var description: String?
     var pronouns: String?
     var avatarURL: String?
+    var bannerURL: String?
     var color: String?
     var birthday: String?
     var emoji: String?
@@ -167,6 +174,7 @@ struct MemberUpdate: Codable {
         case description
         case pronouns
         case avatarURL     = "avatar_url"
+        case bannerURL     = "banner_url"
         case color
         case birthday
         case emoji
@@ -186,6 +194,7 @@ struct MemberUpdate: Codable {
         try c.encode(description, forKey: .description)
         try c.encode(pronouns, forKey: .pronouns)
         try c.encode(avatarURL, forKey: .avatarURL)
+        try c.encode(bannerURL, forKey: .bannerURL)
         try c.encode(color, forKey: .color)
         try c.encode(birthday, forKey: .birthday)
         try c.encode(emoji, forKey: .emoji)

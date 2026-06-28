@@ -985,7 +985,8 @@ class SystemStore: ObservableObject {
                     let update = MemberUpdate(
                         name: create.name, displayName: create.displayName,
                         description: create.description, pronouns: create.pronouns,
-                        avatarURL: create.avatarURL, color: create.color,
+                        avatarURL: create.avatarURL, bannerURL: create.bannerURL,
+                        color: create.color,
                         birthday: create.birthday, emoji: create.emoji,
                         isCustomFront: create.isCustomFront, privacy: create.privacy,
                         note: create.note
@@ -1027,6 +1028,7 @@ class SystemStore: ObservableObject {
                 members[idx].description = create.description
                 members[idx].pronouns = create.pronouns
                 members[idx].avatarURL = create.avatarURL
+                members[idx].bannerURL = create.bannerURL
                 members[idx].color = create.color
                 members[idx].birthday = create.birthday
                 members[idx].emoji = create.emoji
@@ -1043,7 +1045,8 @@ class SystemStore: ObservableObject {
                 id: tempID, systemID: systemProfile?.id ?? "",
                 name: create.name, displayName: create.displayName,
                 description: create.description, pronouns: create.pronouns,
-                avatarURL: create.avatarURL, color: create.color,
+                avatarURL: create.avatarURL, bannerURL: create.bannerURL,
+                color: create.color,
                 birthday: create.birthday, emoji: create.emoji,
                 isCustomFront: create.isCustomFront ?? false,
                 privacy: create.privacy ?? .private,

@@ -273,6 +273,22 @@ struct MemberDetailSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 24) {
+                    // Banner (3:1, profile-only)
+                    if let banner = liveMember.bannerURL, !banner.isEmpty,
+                       let url = resolveAvatarURL(banner, baseURL: store.api?.auth.baseURL ?? "") {
+                        AsyncImage(url: url) { phase in
+                            switch phase {
+                            case .success(let image):
+                                image.resizable().scaledToFill()
+                            default:
+                                Rectangle().fill(theme.backgroundCard)
+                            }
+                        }
+                        .frame(maxWidth: .infinity)
+                        .aspectRatio(3, contentMode: .fill)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                    }
+
                     // Avatar + name
                     VStack(spacing: 12) {
                         AvatarView(member: liveMember, size: 96)
@@ -527,6 +543,7 @@ struct MemberEditSheet: View {
     @State private var pronouns = ""
     @State private var description = ""
     @State private var avatarURL = ""
+    @State private var bannerURL = ""
     @State private var colorHex = "#A78BFA"
     @State private var birthday = ""
     @State private var emoji = ""
@@ -543,6 +560,9 @@ struct MemberEditSheet: View {
     @State private var selectedPhoto: PhotosPickerItem?
     @State private var isUploadingAvatar = false
     @State private var avatarMode: AvatarInputMode = .url
+    @State private var selectedBannerPhoto: PhotosPickerItem?
+    @State private var isUploadingBanner = false
+    @State private var bannerCropImage: UIImage?
 
     var isNew: Bool { member == nil }
 
@@ -550,6 +570,14 @@ struct MemberEditSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 16) {
+                    BannerInputSection(
+                        bannerURL: $bannerURL,
+                        selectedPhoto: $selectedBannerPhoto,
+                        isUploading: $isUploadingBanner,
+                        cropImage: $bannerCropImage,
+                        api: store.api
+                    )
+
                     formField("Name *", value: $name, placeholder: "member-name")
                     formField("Display Name", value: $displayName, placeholder: "Shown to others")
                     formField("Pronouns", value: $pronouns, placeholder: "e.g. she/her")
@@ -713,6 +741,7 @@ struct MemberEditSheet: View {
         pronouns      = m.pronouns ?? ""
         description   = m.description ?? ""
         avatarURL     = m.avatarURL ?? ""
+        bannerURL     = m.bannerURL ?? ""
         if avatarURL.hasPrefix("/") { avatarMode = .upload }
         colorHex      = m.color ?? "#A78BFA"
         birthday      = m.birthday ?? ""
@@ -757,6 +786,7 @@ struct MemberEditSheet: View {
             description: description.isEmpty ? nil : description,
             pronouns: pronouns.isEmpty ? nil : pronouns,
             avatarURL: avatarURL.isEmpty ? nil : avatarURL,
+            bannerURL: bannerURL.isEmpty ? nil : bannerURL,
             color: colorHex.isEmpty ? nil : colorHex,
             birthday: birthday.isEmpty ? nil : birthday,
             emoji: emoji.isEmpty ? nil : emoji,
@@ -1347,6 +1377,155 @@ struct AvatarInputSection: View {
             }
         }
     }
+}
+
+// MARK: - Banner Input Section
+struct BannerInputSection: View {
+    @Environment(\.theme) var theme
+    @Binding var bannerURL: String
+    @Binding var selectedPhoto: PhotosPickerItem?
+    @Binding var isUploading: Bool
+    @Binding var cropImage: UIImage?
+    var api: APIClient?
+    @State private var uploadError: String?
+    @State private var showPicker = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Banner")
+                .font(.footnote).fontWeight(.semibold)
+                .foregroundColor(theme.textSecondary)
+
+            ZStack(alignment: .bottomTrailing) {
+                Group {
+                    if !bannerURL.isEmpty,
+                       let url = resolveAvatarURL(bannerURL, baseURL: api?.auth.baseURL ?? "") {
+                        AsyncImage(url: url) { phase in
+                            switch phase {
+                            case .success(let image):
+                                image.resizable().scaledToFill()
+                            case .failure:
+                                bannerPlaceholder
+                            default:
+                                ProgressView().tint(theme.accentLight)
+                            }
+                        }
+                    } else {
+                        bannerPlaceholder
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .aspectRatio(3, contentMode: .fill)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .contentShape(RoundedRectangle(cornerRadius: 12))
+                .onTapGesture {
+                    if !isUploading { showPicker = true }
+                }
+
+                Menu {
+                    Button {
+                        showPicker = true
+                    } label: {
+                        Label("Choose Photo", systemImage: "photo")
+                    }
+                    if !bannerURL.isEmpty {
+                        Button(role: .destructive) {
+                            bannerURL = ""
+                        } label: {
+                            Label("Remove Banner", systemImage: "trash")
+                        }
+                    }
+                } label: {
+                    Image(systemName: "pencil")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundColor(.white)
+                        .frame(width: 32, height: 32)
+                        .background(Color.black.opacity(0.55))
+                        .clipShape(Circle())
+                        .padding(10)
+                }
+                .disabled(isUploading)
+
+                if isUploading {
+                    ZStack {
+                        Color.black.opacity(0.4)
+                        ProgressView().tint(.white)
+                    }
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .allowsHitTesting(false)
+                }
+            }
+
+            if let uploadError {
+                Text(uploadError)
+                    .font(.footnote)
+                    .foregroundColor(theme.danger)
+            }
+        }
+        .photosPicker(isPresented: $showPicker, selection: $selectedPhoto, matching: .images)
+        .onChange(of: selectedPhoto) { _, newItem in
+            guard let newItem else { return }
+            Task { await pickPhoto(newItem) }
+        }
+        .sheet(item: Binding<CropImage?>(
+            get: { cropImage.map(CropImage.init) },
+            set: { if $0 == nil { cropImage = nil } }
+        )) { wrapper in
+            ImageCropperView(
+                sourceImage: wrapper.image,
+                aspectRatio: 3.0,
+                cropShape: .roundedRect(cornerRadius: 12),
+                title: "Crop Banner",
+                onConfirm: { data in
+                    Task { await uploadCropped(data: data) }
+                }
+            )
+        }
+    }
+
+    private var bannerPlaceholder: some View {
+        ZStack {
+            Rectangle().fill(theme.backgroundCard)
+            HStack(spacing: 6) {
+                Image(systemName: "photo")
+                Text("Add Banner")
+            }
+            .font(.subheadline.weight(.medium))
+            .foregroundColor(theme.textTertiary)
+        }
+    }
+
+    private func pickPhoto(_ item: PhotosPickerItem) async {
+        uploadError = nil
+        guard let data = try? await item.loadTransferable(type: Data.self) else {
+            await MainActor.run { selectedPhoto = nil }
+            return
+        }
+        let decoded = UIImage.decodeForCrop(data: data) ?? UIImage(data: data)
+        await MainActor.run {
+            cropImage = decoded
+            selectedPhoto = nil
+        }
+    }
+
+    private func uploadCropped(data: Data) async {
+        await MainActor.run { isUploading = true }
+        defer { Task { @MainActor in isUploading = false } }
+        guard let api else { return }
+        do {
+            let url = try await api.uploadFile(imageData: data, mimeType: "image/png", purpose: "banner")
+            await MainActor.run {
+                if !url.isEmpty { bannerURL = url }
+            }
+        } catch {
+            await MainActor.run { uploadError = error.userFacingMessage }
+        }
+    }
+}
+
+private struct CropImage: Identifiable {
+    let id = UUID()
+    let image: UIImage
 }
 
 // MARK: - Member Delete Confirmation Sheet

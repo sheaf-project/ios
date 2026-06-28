@@ -2169,7 +2169,7 @@ class APIClient {
         return OpenPluralImportResult(job: job)
     }
 
-    func uploadFile(imageData: Data, mimeType: String = "image/jpeg") async throws -> String {
+    func uploadFile(imageData: Data, mimeType: String = "image/jpeg", purpose: String = "avatar") async throws -> String {
         let ext: String
         switch mimeType {
         case "image/png": ext = "png"
@@ -2179,14 +2179,14 @@ class APIClient {
         }
 
         // First attempt
-        let (data, status) = try await performUpload(imageData: imageData, mimeType: mimeType, ext: ext)
+        let (data, status) = try await performUpload(imageData: imageData, mimeType: mimeType, ext: ext, purpose: purpose)
         if status != 401 { return try parseUploadResponse(data) }
 
         // 401 — refresh token and retry
         let fresh = try await refreshOnce()
         await MainActor.run { auth.save(baseURL: auth.baseURL, tokens: fresh) }
 
-        let (retryData, retryStatus) = try await performUpload(imageData: imageData, mimeType: mimeType, ext: ext)
+        let (retryData, retryStatus) = try await performUpload(imageData: imageData, mimeType: mimeType, ext: ext, purpose: purpose)
         guard retryStatus != 401 else {
             await MainActor.run { auth.logout() }
             throw NSError(domain: "APIError", code: 401,
@@ -2195,8 +2195,10 @@ class APIClient {
         return try parseUploadResponse(retryData)
     }
 
-    private func performUpload(imageData: Data, mimeType: String, ext: String) async throws -> (Data, Int) {
-        guard let url = URL(string: auth.baseURL + "/v1/files/upload") else {
+    private func performUpload(imageData: Data, mimeType: String, ext: String, purpose: String = "avatar") async throws -> (Data, Int) {
+        var comps = URLComponents(string: auth.baseURL + "/v1/files/upload")
+        comps?.queryItems = [URLQueryItem(name: "purpose", value: purpose)]
+        guard let url = comps?.url else {
             throw URLError(.badURL)
         }
         let boundary = "Boundary-\(UUID().uuidString)"
