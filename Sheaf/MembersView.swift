@@ -794,6 +794,12 @@ struct MemberEditSheet: View {
     @State private var formBaseline: FormSnapshot?
     @State private var showUnsavedAlert = false
 
+    // Archive button state. Mirrors the list flow: try with no creds first,
+    // surface the step-up sheet if the server demands re-auth.
+    @State private var archiveAuthMember: Member?
+    @State private var archiveError: String?
+    @State private var archiveActionError: String?
+
     private struct FormSnapshot: Equatable {
         var name: String
         var displayName: String
@@ -973,6 +979,33 @@ struct MemberEditSheet: View {
                             }
                         }
                     }
+
+                    // Archive / Unarchive (existing members only). Mirrors
+                    // the web editor: discoverable next to the rest of the
+                    // member management, beyond just the list long-press.
+                    if let existing = member {
+                        Button {
+                            Task { await toggleArchive(existing) }
+                        } label: {
+                            HStack {
+                                Image(systemName: existing.isArchived ? "tray.and.arrow.up" : "archivebox")
+                                Text(existing.isArchived ? "Unarchive Member" : "Archive Member")
+                                    .fontWeight(.medium)
+                            }
+                            .foregroundColor(existing.isArchived ? theme.accentLight : theme.textSecondary)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(theme.backgroundCard)
+                            .cornerRadius(12)
+                        }
+                        .buttonStyle(.plain)
+                        if let archiveActionError {
+                            Text(archiveActionError)
+                                .font(.footnote)
+                                .foregroundColor(theme.danger)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
                 }
                 .padding(.horizontal, 24)
                 .padding(.top, 12)
@@ -1012,10 +1045,49 @@ struct MemberEditSheet: View {
             Button("Discard Changes", role: .destructive) { dismiss() }
             Button("Cancel", role: .cancel) {}
         }
+        .sheet(item: $archiveAuthMember) { member in
+            ArchiveAuthSheet(member: member, error: archiveError) { password, totp in
+                let confirmation = MemberDeleteConfirm(password: password, totpCode: totp)
+                do {
+                    _ = try await store.archiveMember(id: member.id, confirmation: confirmation)
+                    await MainActor.run { dismiss() }
+                    return true
+                } catch {
+                    let code = (error as NSError).code
+                    await MainActor.run {
+                        archiveError = (code == 400 || code == 403)
+                            ? "Incorrect password or authenticator code."
+                            : error.userFacingMessage
+                    }
+                    return false
+                }
+            }
+            .environmentObject(store)
+        }
     }
 
     private func attemptDismiss() {
         if isDirty { showUnsavedAlert = true } else { dismiss() }
+    }
+
+    private func toggleArchive(_ existing: Member) async {
+        archiveActionError = nil
+        do {
+            if existing.isArchived {
+                _ = try await store.unarchiveMember(id: existing.id)
+            } else {
+                _ = try await store.archiveMember(id: existing.id)
+            }
+            await MainActor.run { dismiss() }
+        } catch {
+            let code = (error as NSError).code
+            if !existing.isArchived, code == 400 || code == 403 {
+                archiveError = nil
+                archiveAuthMember = existing
+            } else {
+                archiveActionError = error.userFacingMessage
+            }
+        }
     }
 
     func populateFields() {
