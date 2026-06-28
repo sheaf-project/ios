@@ -626,6 +626,33 @@ struct SettingsView: View {
                                 .padding(.horizontal, 16).padding(.vertical, 14)
                             }
                             .buttonStyle(.plain)
+
+                            Divider().background(theme.divider)
+
+                            NavigationLink {
+                                ArchivedMembersView()
+                                    .environmentObject(store)
+                            } label: {
+                                HStack(spacing: 12) {
+                                    Image(systemName: "archivebox")
+                                        .foregroundColor(theme.accentLight)
+                                        .frame(width: 20)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("Archived Members")
+                                            .font(.subheadline).fontWeight(.medium)
+                                            .foregroundColor(theme.textPrimary)
+                                        Text("View and restore archived members")
+                                            .font(.caption)
+                                            .foregroundColor(theme.textTertiary)
+                                    }
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .font(.caption)
+                                        .foregroundColor(theme.textTertiary)
+                                }
+                                .padding(.horizontal, 16).padding(.vertical, 14)
+                            }
+                            .buttonStyle(.plain)
                         }
                     }
 
