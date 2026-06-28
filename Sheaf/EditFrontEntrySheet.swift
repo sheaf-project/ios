@@ -94,6 +94,12 @@ struct EditFrontEntrySheet: View {
                                    in: startedAt...,
                                    displayedComponents: [.date, .hourAndMinute])
                             .foregroundColor(theme.textPrimary)
+
+                        if endBeforeStart {
+                            Text("The end time must be after the start time.")
+                                .font(.footnote)
+                                .foregroundColor(theme.danger)
+                        }
                     }
                 }
                 .listRowBackground(theme.backgroundCard)
@@ -120,7 +126,7 @@ struct EditFrontEntrySheet: View {
                                     ? theme.textTertiary : theme.accentLight)
                         }
                     }
-                    .disabled(selectedIDs.isEmpty || isSaving)
+                    .disabled(selectedIDs.isEmpty || isSaving || endBeforeStart)
                 }
             }
             .onAppear {
@@ -133,8 +139,15 @@ struct EditFrontEntrySheet: View {
         }
     }
 
+    /// Invalid range guard used by both the inline warning and the Save
+    /// button's enabled state. Mirrors the web edit-front dialog so saving
+    /// an end-before-start entry isn't possible.
+    private var endBeforeStart: Bool {
+        !isOngoing && endedAt <= startedAt
+    }
+
     private func save() async {
-        guard !selectedIDs.isEmpty else { return }
+        guard !selectedIDs.isEmpty, !endBeforeStart else { return }
         isSaving = true
         let update = FrontUpdate(
             startedAt: startedAt,
