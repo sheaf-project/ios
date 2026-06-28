@@ -564,6 +564,50 @@ struct MemberEditSheet: View {
     @State private var isUploadingBanner = false
     @State private var bannerCropImage: UIImage?
 
+    // Load-time snapshots of form fields + staged field values used to
+    // detect unsaved changes when the user tries to leave the editor.
+    @State private var formBaseline: FormSnapshot?
+    @State private var showUnsavedAlert = false
+
+    private struct FormSnapshot: Equatable {
+        var name: String
+        var displayName: String
+        var pronouns: String
+        var description: String
+        var avatarURL: String
+        var bannerURL: String
+        var colorHex: String
+        var birthday: String
+        var emoji: String
+        var note: String
+        var isCustomFront: Bool
+        var privacy: PrivacyLevel
+    }
+
+    private var currentSnapshot: FormSnapshot {
+        FormSnapshot(
+            name: name, displayName: displayName, pronouns: pronouns,
+            description: description, avatarURL: avatarURL, bannerURL: bannerURL,
+            colorHex: colorHex, birthday: birthday, emoji: emoji, note: note,
+            isCustomFront: isCustomFront, privacy: privacy
+        )
+    }
+
+    private var isDirty: Bool {
+        guard let baseline = formBaseline else { return false }
+        if baseline != currentSnapshot { return true }
+        // Compare staged custom-field values against the load-time baseline.
+        // Treat NSNull-staged vs absent baseline as no-change so a brand-new
+        // edit that immediately gets cleared doesn't count as dirty.
+        let keys = Set(fieldValues.keys).union(fieldValuesBaseline.keys)
+        for key in keys {
+            if !customFieldValuesEqual(fieldValues[key], fieldValuesBaseline[key]) {
+                return true
+            }
+        }
+        return false
+    }
+
     var isNew: Bool { member == nil }
 
     var body: some View {
@@ -714,7 +758,7 @@ struct MemberEditSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button("Cancel") { attemptDismiss() }
                         .foregroundColor(theme.accentLight)
                 }
                 ToolbarItem(placement: .confirmationAction) {
@@ -731,11 +775,31 @@ struct MemberEditSheet: View {
             }
         }
         .presentationDragIndicator(.visible)
+        .interactiveDismissDisabled(isDirty)
         .onAppear { populateFields() }
+        .confirmationDialog(
+            "You have unsaved changes to this member.",
+            isPresented: $showUnsavedAlert,
+            titleVisibility: .visible
+        ) {
+            Button("Save and Exit") { save() }
+                .disabled(name.isEmpty || isSaving)
+            Button("Discard Changes", role: .destructive) { dismiss() }
+            Button("Cancel", role: .cancel) {}
+        }
+    }
+
+    private func attemptDismiss() {
+        if isDirty { showUnsavedAlert = true } else { dismiss() }
     }
 
     func populateFields() {
-        guard let m = member else { return }
+        guard let m = member else {
+            // New-member sheet: snapshot the empty form as baseline so any
+            // typed input flips dirty.
+            formBaseline = currentSnapshot
+            return
+        }
         name          = m.name
         displayName   = m.displayName ?? ""
         pronouns      = m.pronouns ?? ""
@@ -749,6 +813,7 @@ struct MemberEditSheet: View {
         note          = m.note ?? ""
         isCustomFront = m.isCustomFront
         privacy       = m.privacy
+        formBaseline  = currentSnapshot
         // Load existing field values. Server omits fields the viewer
         // isn't allowed to see — those keys won't be in the map.
         Task {
