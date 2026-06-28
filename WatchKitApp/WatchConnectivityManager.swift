@@ -1,6 +1,7 @@
 import Foundation
 import Combine
 import WatchConnectivity
+import WidgetKit
 
 extension Notification.Name {
     static let avatarsUpdated = Notification.Name("sheaf.avatarsUpdated")
@@ -224,6 +225,10 @@ final class WatchConnectivityManager: NSObject, WCSessionDelegate, ObservableObj
                 refreshToken: refreshToken
             )
             debugLog("WatchConnectivityManager: Credentials saved, isAuthenticated: \(authManager.isAuthenticated)")
+            // Pushed credentials don't otherwise rotate the widget timelines,
+            // so complications stay on the previous "open Sheaf on phone"
+            // state until their next scheduled update. Reload now.
+            WidgetCenter.shared.reloadAllTimelines()
         }
     }
 
