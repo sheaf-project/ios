@@ -15,7 +15,6 @@ enum ImageCropShape {
 /// PNG export at 1024px on the longest edge so on-screen framing is exactly
 /// what gets saved.
 struct ImageCropperView: View {
-    @Environment(\.theme) private var theme
     @Environment(\.dismiss) private var dismiss
 
     let sourceImage: UIImage
@@ -33,7 +32,11 @@ struct ImageCropperView: View {
     @State private var rotation: Angle = .zero
     @State private var lastRotation: Angle = .zero
 
+    // Last on-screen crop position, used by export so the saved image
+    // matches what the user framed. Updated whenever the viewport changes.
     @State private var cropBounds: CGRect = .zero
+    @State private var lastViewport: CGSize = .zero
+    @State private var didInitialFit = false
 
     init(sourceImage: UIImage,
          aspectRatio: CGFloat,
@@ -49,107 +52,119 @@ struct ImageCropperView: View {
 
     var body: some View {
         NavigationStack {
-            GeometryReader { proxy in
-                let viewport = proxy.size
-                let crop = cropRect(in: viewport)
-
-                ZStack {
-                    Color.black.ignoresSafeArea()
-
-                    // Image with transform
-                    Image(uiImage: sourceImage)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: viewport.width, height: viewport.height)
-                        .scaleEffect(scale)
-                        .rotationEffect(rotation)
-                        .offset(offset)
-
-                    // Scrim with crop hole
-                    cropMask(viewport: viewport, crop: crop)
-                        .allowsHitTesting(false)
-
-                    // Crop outline
-                    cropOutline(crop: crop)
-                        .allowsHitTesting(false)
+            VStack(spacing: 0) {
+                GeometryReader { proxy in
+                    cropArea(viewport: proxy.size)
                 }
-                .contentShape(Rectangle())
-                .gesture(combinedGesture)
-                .onAppear {
-                    cropBounds = crop
-                    fitToCover(viewport: viewport, crop: crop)
+                controlsBar
+            }
+            .background(Color.black.ignoresSafeArea())
+            .navigationTitle(title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                        .foregroundColor(.white)
                 }
-            }
-            .background(Color.black)
-
-            controlsBar
-        }
-        .navigationTitle(title)
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .cancellationAction) {
-                Button("Cancel") { dismiss() }.foregroundColor(.white)
-            }
-            ToolbarItem(placement: .confirmationAction) {
-                Button("Use") {
-                    if let data = exportPNG() {
-                        onConfirm(data)
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Use") {
+                        if let data = exportPNG() {
+                            onConfirm(data)
+                        }
+                        dismiss()
                     }
-                    dismiss()
+                    .foregroundColor(.white)
+                    .fontWeight(.semibold)
                 }
-                .foregroundColor(.white)
-                .fontWeight(.semibold)
             }
+            .toolbarBackground(Color.black, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarColorScheme(.dark, for: .navigationBar)
         }
-        .toolbarBackground(Color.black, for: .navigationBar)
-        .toolbarBackground(.visible, for: .navigationBar)
-        .toolbarColorScheme(.dark, for: .navigationBar)
+    }
+
+    // MARK: Crop area
+
+    @ViewBuilder
+    private func cropArea(viewport: CGSize) -> some View {
+        let crop = cropRect(in: viewport)
+        let rendered = renderedSize(in: viewport)
+
+        ZStack {
+            Color.black
+
+            // Image: explicit frame from our own fit calculation, centred in
+            // the ZStack and then offset/rotated/scaled by the user.
+            Image(uiImage: sourceImage)
+                .resizable()
+                .frame(width: rendered.width, height: rendered.height)
+                .scaleEffect(scale)
+                .rotationEffect(rotation)
+                .offset(offset)
+
+            cropMask(viewport: viewport, crop: crop)
+                .allowsHitTesting(false)
+            cropOutline(crop: crop)
+                .allowsHitTesting(false)
+        }
+        .frame(width: viewport.width, height: viewport.height)
+        .contentShape(Rectangle())
+        .gesture(combinedGesture)
+        .onAppear {
+            updateForViewport(viewport)
+        }
+        .onChange(of: viewport.width) { _, _ in updateForViewport(viewport) }
+        .onChange(of: viewport.height) { _, _ in updateForViewport(viewport) }
+    }
+
+    private func updateForViewport(_ viewport: CGSize) {
+        guard viewport.width > 0, viewport.height > 0 else { return }
+        lastViewport = viewport
+        let crop = cropRect(in: viewport)
+        cropBounds = crop
+        if !didInitialFit {
+            fitToCover(viewport: viewport, crop: crop)
+            didInitialFit = true
+        }
     }
 
     // MARK: Controls
 
     private var controlsBar: some View {
-        VStack(spacing: 12) {
-            HStack(spacing: 24) {
-                Button {
-                    rotation = snappedQuarter(rotation, direction: -1)
-                    lastRotation = rotation
-                } label: {
-                    Image(systemName: "rotate.left")
-                        .font(.title3)
-                        .foregroundColor(.white)
-                        .frame(width: 44, height: 44)
-                }
-
-                HStack(spacing: 8) {
-                    Image(systemName: "arrow.clockwise")
-                        .font(.footnote)
-                        .foregroundColor(.white.opacity(0.7))
-                    Slider(
-                        value: Binding(
-                            get: { rotation.degrees },
-                            set: {
-                                rotation = .degrees($0)
-                                lastRotation = rotation
-                            }
-                        ),
-                        in: -180...180
-                    )
-                    .tint(.white)
-                }
-
-                Button {
-                    rotation = snappedQuarter(rotation, direction: 1)
-                    lastRotation = rotation
-                } label: {
-                    Image(systemName: "rotate.right")
-                        .font(.title3)
-                        .foregroundColor(.white)
-                        .frame(width: 44, height: 44)
-                }
+        HStack(spacing: 16) {
+            Button {
+                rotation = snappedQuarter(rotation, direction: -1)
+                lastRotation = rotation
+            } label: {
+                Image(systemName: "rotate.left")
+                    .font(.title3)
+                    .foregroundColor(.white)
+                    .frame(width: 44, height: 44)
             }
-            .padding(.horizontal, 16)
+
+            Slider(
+                value: Binding(
+                    get: { rotation.degrees },
+                    set: {
+                        rotation = .degrees($0)
+                        lastRotation = rotation
+                    }
+                ),
+                in: -180...180
+            )
+            .tint(.white)
+
+            Button {
+                rotation = snappedQuarter(rotation, direction: 1)
+                lastRotation = rotation
+            } label: {
+                Image(systemName: "rotate.right")
+                    .font(.title3)
+                    .foregroundColor(.white)
+                    .frame(width: 44, height: 44)
+            }
         }
+        .padding(.horizontal, 16)
         .padding(.vertical, 12)
         .background(Color.black)
     }
@@ -236,18 +251,23 @@ struct ImageCropperView: View {
         return CGRect(x: x, y: y, width: w, height: h)
     }
 
-    private func fitToCover(viewport: CGSize, crop: CGRect) {
+    /// scaledToFit dimensions of the source image inside the viewport, used
+    /// for both the on-screen Image frame and the export transform so both
+    /// stay in sync.
+    private func renderedSize(in viewport: CGSize) -> CGSize {
         let imgW = sourceImage.size.width
         let imgH = sourceImage.size.height
-        guard imgW > 0, imgH > 0 else { return }
+        guard imgW > 0, imgH > 0, viewport.width > 0, viewport.height > 0 else {
+            return .zero
+        }
+        let fit = min(viewport.width / imgW, viewport.height / imgH)
+        return CGSize(width: imgW * fit, height: imgH * fit)
+    }
 
-        // scaledToFit picks the larger of (viewport.w / imgW) vs (viewport.h / imgH),
-        // limited to the smaller axis.
-        let fitScale = min(viewport.width / imgW, viewport.height / imgH)
-        let renderedW = imgW * fitScale
-        let renderedH = imgH * fitScale
-
-        let coverScale = max(crop.width / renderedW, crop.height / renderedH)
+    private func fitToCover(viewport: CGSize, crop: CGRect) {
+        let rendered = renderedSize(in: viewport)
+        guard rendered.width > 0, rendered.height > 0 else { return }
+        let coverScale = max(crop.width / rendered.width, crop.height / rendered.height)
         scale = coverScale
         lastScale = coverScale
         offset = .zero
@@ -276,16 +296,14 @@ struct ImageCropperView: View {
     /// Renders the cropped image at 1024px on the longest edge using a single
     /// forward CGAffineTransform that mirrors the on-screen framing.
     private func exportPNG() -> Data? {
-        let viewport = cropBounds.size
-        guard viewport.width > 0, viewport.height > 0 else { return nil }
+        let viewport = lastViewport
         let crop = cropBounds
+        guard viewport.width > 0, viewport.height > 0,
+              crop.width > 0, crop.height > 0,
+              sourceImage.cgImage != nil else { return nil }
 
-        let imgW = sourceImage.size.width
-        let imgH = sourceImage.size.height
-        guard imgW > 0, imgH > 0, sourceImage.cgImage != nil else { return nil }
-
-        // scaledToFit factor used when rendering the image into the viewport.
-        let fitScale = min(viewport.width / imgW, viewport.height / imgH)
+        let rendered = renderedSize(in: viewport)
+        guard rendered.width > 0, rendered.height > 0 else { return nil }
 
         // Compute output dimensions sized to the crop aspect, capped at 1024.
         let cropAR = crop.width / crop.height
@@ -304,37 +322,31 @@ struct ImageCropperView: View {
         defer { UIGraphicsEndImageContext() }
         guard let ctx = UIGraphicsGetCurrentContext() else { return nil }
 
-        // Map crop rectangle in viewport space onto the output canvas.
+        // Map crop rectangle in viewport space onto the output canvas:
+        //   1. scaleBy(scaleToOutput): viewport pixels -> output pixels
+        //   2. translateBy(-crop.origin): crop's top-left lands at canvas (0,0)
+        //   3. translateBy(imageCenter): origin moves to the on-screen image
+        //      centre (viewport centre + user offset)
+        //   4. rotate(rotation) + scaleBy(scale): user transforms
+        //   5. draw image centred on origin at its scaledToFit rendered size
         let scaleToOutput = outputSize.width / crop.width
-
-        // Build transform from viewport-centred image to output canvas:
-        //   1. translate so crop origin is at canvas (0,0)
-        //   2. scale crop to fill canvas
-        //   3. translate to viewport centre, apply rotation, then scale, then
-        //      offset so the rendered image lands where the user framed it
-        ctx.saveGState()
         ctx.scaleBy(x: scaleToOutput, y: scaleToOutput)
         ctx.translateBy(x: -crop.origin.x, y: -crop.origin.y)
-        ctx.translateBy(x: viewport.width / 2 + offset.width, y: viewport.height / 2 + offset.height)
+        ctx.translateBy(
+            x: viewport.width / 2 + offset.width,
+            y: viewport.height / 2 + offset.height
+        )
         ctx.scaleBy(x: scale, y: scale)
         ctx.rotate(by: CGFloat(rotation.radians))
 
-        // Image is rendered scaledToFit then centred. Translate so its centre
-        // is at the current origin, then draw at (0,0) of its rendered size.
-        let renderedW = imgW * fitScale
-        let renderedH = imgH * fitScale
-
-        // UIImage draws flipped relative to CG context — use UIImage.draw to
-        // keep orientation handling correct.
         UIGraphicsPushContext(ctx)
         sourceImage.draw(in: CGRect(
-            x: -renderedW / 2,
-            y: -renderedH / 2,
-            width: renderedW,
-            height: renderedH
+            x: -rendered.width / 2,
+            y: -rendered.height / 2,
+            width: rendered.width,
+            height: rendered.height
         ))
         UIGraphicsPopContext()
-        ctx.restoreGState()
 
         guard let img = UIGraphicsGetImageFromCurrentImageContext() else { return nil }
         return img.pngData()
