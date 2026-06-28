@@ -13,14 +13,31 @@ struct MembersView: View {
     @State private var deleteQueuedInfo: DeleteQueued?
     @State private var showDeleteQueued = false
 
+    // Archive: nil unless the server demands step-up auth (the system's
+    // archive safety category is on). Drives the prompt sheet.
+    @State private var archiveAuthMember: Member?
+    @State private var archiveError: String?
+    @State private var showArchived = false
+
 
     private func removeMemberFromFront(_ member: Member) async {
         await store.removeMemberFromFront(member.id)
     }
 
+    /// Active members (non-archived). The list endpoint returns archived
+    /// members too; we split them so the main roster stays clean and
+    /// archived members surface in their own collapsible section.
+    var activeMembers: [Member] {
+        store.members.filter { !$0.isArchived }
+    }
+
+    var archivedMembers: [Member] {
+        store.members.filter { $0.isArchived }
+    }
+
     var filtered: [Member] {
-        if searchText.isEmpty { return store.members }
-        return store.members.filter {
+        if searchText.isEmpty { return activeMembers }
+        return activeMembers.filter {
             ($0.displayName ?? $0.name).localizedCaseInsensitiveContains(searchText) ||
             $0.name.localizedCaseInsensitiveContains(searchText)
         }
@@ -62,6 +79,8 @@ struct MembersView: View {
                             selectedMember = member
                         } onDelete: {
                             requestDelete(member)
+                        } onArchive: {
+                            Task { await archive(member) }
                         }
                         .swipeActions(edge: .leading, allowsFullSwipe: true) {
                             let isFronting = store.frontingMembers.contains(where: { $0.id == member.id })
@@ -87,10 +106,58 @@ struct MembersView: View {
                             } label: {
                                 Label("Delete", systemImage: "trash")
                             }
+                            Button {
+                                Task { await archive(member) }
+                            } label: {
+                                Label("Archive", systemImage: "archivebox")
+                            }
+                            .tint(.gray)
                         }
                         .listRowBackground(Color.clear)
                         .listRowSeparator(.hidden)
                         .listRowInsets(EdgeInsets(top: 5, leading: 24, bottom: 5, trailing: 24))
+                    }
+
+                    if !archivedMembers.isEmpty {
+                        Button {
+                            withAnimation { showArchived.toggle() }
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: showArchived ? "chevron.down" : "chevron.right")
+                                    .font(.caption)
+                                Text("Archived (\(archivedMembers.count))")
+                                    .font(.subheadline.weight(.medium))
+                                Spacer()
+                            }
+                            .foregroundColor(theme.textSecondary)
+                            .padding(.vertical, 8)
+                            .padding(.horizontal, 4)
+                        }
+                        .buttonStyle(.plain)
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                        .listRowInsets(EdgeInsets(top: 8, leading: 24, bottom: 0, trailing: 24))
+
+                        if showArchived {
+                            ForEach(archivedMembers) { member in
+                                ArchivedMemberRow(member: member) {
+                                    selectedMember = member
+                                } onUnarchive: {
+                                    Task { await unarchive(member) }
+                                }
+                                .swipeActions(edge: .trailing) {
+                                    Button {
+                                        Task { await unarchive(member) }
+                                    } label: {
+                                        Label("Unarchive", systemImage: "tray.and.arrow.up")
+                                    }
+                                    .tint(theme.accentLight)
+                                }
+                                .listRowBackground(Color.clear)
+                                .listRowSeparator(.hidden)
+                                .listRowInsets(EdgeInsets(top: 5, leading: 24, bottom: 5, trailing: 24))
+                            }
+                        }
                     }
                 }
                 .listStyle(.plain)
@@ -141,6 +208,53 @@ struct MembersView: View {
                 Text("This deletion has been queued and will finalize \(info.finalizeAfter, style: .relative). You can cancel it from System Safety settings.")
             }
         }
+        .sheet(item: $archiveAuthMember) { member in
+            ArchiveAuthSheet(member: member, error: archiveError) { password, totp in
+                await archiveWithCredentials(member: member, password: password, totpCode: totp)
+            }
+            .environmentObject(store)
+        }
+    }
+
+    /// Archive a member. Try with no credentials first; the server returns
+    /// 400/403 if the system's archive safety category demands step-up, in
+    /// which case we surface the auth sheet and retry with creds.
+    private func archive(_ member: Member) async {
+        do {
+            _ = try await store.archiveMember(id: member.id)
+        } catch {
+            let code = (error as NSError).code
+            if code == 400 || code == 403 {
+                archiveError = nil
+                archiveAuthMember = member
+            } else {
+                store.errorMessage = error.userFacingMessage
+            }
+        }
+    }
+
+    private func archiveWithCredentials(member: Member, password: String, totpCode: String?) async -> Bool {
+        let confirmation = MemberDeleteConfirm(password: password, totpCode: totpCode)
+        do {
+            _ = try await store.archiveMember(id: member.id, confirmation: confirmation)
+            return true
+        } catch {
+            let code = (error as NSError).code
+            if code == 400 || code == 403 {
+                archiveError = "Incorrect password or authenticator code."
+            } else {
+                archiveError = error.userFacingMessage
+            }
+            return false
+        }
+    }
+
+    private func unarchive(_ member: Member) async {
+        do {
+            _ = try await store.unarchiveMember(id: member.id)
+        } catch {
+            store.errorMessage = error.userFacingMessage
+        }
     }
 
     private func requestDelete(_ member: Member) {
@@ -162,6 +276,7 @@ struct MemberRow: View {
     let isFronting: Bool
     let onTap: () -> Void
     let onDelete: () -> Void
+    let onArchive: () -> Void
 
     var body: some View {
         Button(action: onTap) {
@@ -241,6 +356,12 @@ struct MemberRow: View {
 
             Divider()
 
+            Button {
+                onArchive()
+            } label: {
+                Label("Archive Member", systemImage: "archivebox")
+            }
+
             Button(role: .destructive) {
                 onDelete()
             } label: {
@@ -251,6 +372,110 @@ struct MemberRow: View {
 
     private func removeMemberFromFront() async {
         await store.removeMemberFromFront(member.id)
+    }
+}
+
+// MARK: - Archived Member Row
+struct ArchivedMemberRow: View {
+    @Environment(\.theme) var theme
+    let member: Member
+    let onTap: () -> Void
+    let onUnarchive: () -> Void
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: 14) {
+                AvatarView(member: member, size: 40)
+                    .opacity(0.6)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(member.displayName ?? member.name)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundColor(theme.textSecondary)
+                    Text("Archived")
+                        .font(.caption2)
+                        .foregroundColor(theme.textTertiary)
+                }
+                Spacer()
+                Button {
+                    onUnarchive()
+                } label: {
+                    Text("Unarchive")
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(theme.accentLight)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(12)
+            .background(theme.backgroundCard.opacity(0.6))
+            .cornerRadius(14)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Archive Auth Sheet
+/// Step-up auth sheet shown when the system's archive safety category is
+/// enabled and the server demands re-authentication to archive a member.
+struct ArchiveAuthSheet: View {
+    @Environment(\.theme) var theme
+    @Environment(\.dismiss) var dismiss
+    @EnvironmentObject var store: SystemStore
+    let member: Member
+    let error: String?
+    /// Returns true if the archive succeeded so the sheet auto-dismisses.
+    let onConfirm: (String, String?) async -> Bool
+
+    @State private var password = ""
+    @State private var totp = ""
+    @State private var isArchiving = false
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    Text("This instance requires re-authentication to archive a member.")
+                        .font(.subheadline)
+                        .foregroundColor(theme.textSecondary)
+                }
+                Section("Password") {
+                    SecureField("Account password", text: $password)
+                }
+                Section("Authenticator code (if enabled)") {
+                    TextField("123456", text: $totp)
+                        .keyboardType(.numberPad)
+                        .textContentType(.oneTimeCode)
+                }
+                if let error {
+                    Section {
+                        Text(error)
+                            .font(.footnote)
+                            .foregroundColor(theme.danger)
+                    }
+                }
+            }
+            .navigationTitle("Confirm Archive")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                        .disabled(isArchiving)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button {
+                        Task {
+                            isArchiving = true
+                            let success = await onConfirm(password, totp.isEmpty ? nil : totp)
+                            isArchiving = false
+                            if success { dismiss() }
+                        }
+                    } label: {
+                        if isArchiving { ProgressView() }
+                        else { Text("Archive").fontWeight(.semibold) }
+                    }
+                    .disabled(password.isEmpty || isArchiving)
+                }
+            }
+        }
     }
 }
 

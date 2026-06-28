@@ -40,6 +40,7 @@ struct Member: Identifiable, Codable, Hashable {
     var isCustomFront: Bool
     var privacy: PrivacyLevel
     var note: String?
+    var archivedAt: Date?
     let createdAt: Date
     let updatedAt: Date
 
@@ -52,6 +53,7 @@ struct Member: Identifiable, Codable, Hashable {
         case pronouns
         case avatarURL     = "avatar_url"
         case bannerURL     = "banner_url"
+        case archivedAt    = "archived_at"
         case color
         case birthday
         case emoji
@@ -73,6 +75,7 @@ struct Member: Identifiable, Codable, Hashable {
         pronouns      = try c.decodeIfPresent(String.self, forKey: .pronouns)
         avatarURL     = try c.decodeIfPresent(String.self, forKey: .avatarURL)
         bannerURL     = try c.decodeIfPresent(String.self, forKey: .bannerURL)
+        archivedAt    = try c.decodeIfPresent(Date.self, forKey: .archivedAt)
         color         = try c.decodeIfPresent(String.self, forKey: .color)
         birthday      = try c.decodeIfPresent(String.self, forKey: .birthday)
         emoji         = try c.decodeIfPresent(String.self, forKey: .emoji)
@@ -111,6 +114,8 @@ struct Member: Identifiable, Codable, Hashable {
     var displayColor: Color {
         Color(hex: color ?? "#8B5CF6") ?? .purple
     }
+
+    var isArchived: Bool { archivedAt != nil }
 
     var initials: String {
         let n = displayName ?? name

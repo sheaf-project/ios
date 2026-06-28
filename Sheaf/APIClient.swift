@@ -1039,6 +1039,26 @@ class APIClient {
         return try? JSONDecoder.iso.decode(DeleteQueued.self, from: data)
     }
 
+    /// Archive a member: a reversible soft-hide. [confirmation] carries
+    /// step-up credentials only when the system's archive safety category is
+    /// on; an empty body is fine otherwise (the server then 4xxs and the
+    /// caller retries with creds).
+    func archiveMember(id: String, confirmation: MemberDeleteConfirm? = nil) async throws -> Member {
+        let body: Data
+        if let confirmation {
+            body = try JSONEncoder.iso.encode(confirmation)
+        } else {
+            body = "{}".data(using: .utf8)!
+        }
+        let data = try await request("/v1/members/\(id)/archive", method: "POST", body: body)
+        return try JSONDecoder.iso.decode(Member.self, from: data)
+    }
+
+    func unarchiveMember(id: String) async throws -> Member {
+        let data = try await request("/v1/members/\(id)/unarchive", method: "POST", body: "{}".data(using: .utf8)!)
+        return try JSONDecoder.iso.decode(Member.self, from: data)
+    }
+
     // MARK: - Fronts
 
     /// Returns array — current fronts can be co-front (multiple entries)

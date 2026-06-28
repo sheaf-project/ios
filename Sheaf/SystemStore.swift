@@ -1089,6 +1089,30 @@ class SystemStore: ObservableObject {
         return nil
     }
 
+    /// Archive (reversible soft-hide). Returns `true` on success; on 400/403
+    /// the caller should surface the step-up auth sheet and retry with creds.
+    @discardableResult
+    func archiveMember(id: String, confirmation: MemberDeleteConfirm? = nil) async throws -> Member {
+        guard let api else { throw URLError(.notConnectedToInternet) }
+        let updated = try await api.archiveMember(id: id, confirmation: confirmation)
+        if let idx = members.firstIndex(where: { $0.id == id }) {
+            members[idx] = updated
+        }
+        saveAllToCache()
+        return updated
+    }
+
+    @discardableResult
+    func unarchiveMember(id: String) async throws -> Member {
+        guard let api else { throw URLError(.notConnectedToInternet) }
+        let updated = try await api.unarchiveMember(id: id)
+        if let idx = members.firstIndex(where: { $0.id == id }) {
+            members[idx] = updated
+        }
+        saveAllToCache()
+        return updated
+    }
+
     // MARK: - Groups
 
     func saveGroup(existing: SystemGroup? = nil, create: GroupCreate) async {
