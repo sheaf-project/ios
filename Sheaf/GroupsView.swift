@@ -33,13 +33,16 @@ struct GroupsView: View {
             } else {
                 ScrollView {
                     LazyVStack(spacing: 12) {
-                        ForEach(store.groups) { group in
-                            GroupCard(group: group, members: store.membersIn(group: group)) {
-                                selectedGroup = group
+                        // Flatten parent-before-children so subgroups can
+                        // render indented under their parent. Roots are
+                        // groups with no parent (or an orphaned parent_id).
+                        ForEach(orderHierarchically(store.groups), id: \.group.id) { entry in
+                            GroupCard(group: entry.group, depth: entry.depth, members: store.membersIn(group: entry.group)) {
+                                selectedGroup = entry.group
                             }
                             .swipeActions(edge: .trailing) {
                                 Button(role: .destructive) {
-                                    groupToDelete = group
+                                    groupToDelete = entry.group
                                     showDeleteGroupConfirm = true
                                 } label: {
                                     Label("Delete", systemImage: "trash")
@@ -94,6 +97,7 @@ struct GroupsView: View {
 struct GroupCard: View {
     @Environment(\.theme) var theme
     let group: SystemGroup
+    var depth: Int = 0
     let members: [Member]
     let onTap: () -> Void
 
@@ -152,6 +156,9 @@ struct GroupCard: View {
                 .stroke(theme.backgroundCard, lineWidth: 1))
         }
         .buttonStyle(ScaleButtonStyle())
+        // Indent subgroups under their parent. Capped so deep nesting stays
+        // usable on a narrow screen; the server also caps nesting depth.
+        .padding(.leading, CGFloat(min(depth, 4)) * 16)
     }
 }
 
@@ -279,11 +286,20 @@ struct GroupEditSheet: View {
     @State private var name = ""
     @State private var description = ""
     @State private var colorHex = "#6366F1"
+    @State private var parentID: String?
     @State private var selectedMemberIDs: Set<String> = []
     @State private var isSaving = false
     @State private var isLoadingMembers = false
 
     var isNew: Bool { group == nil }
+
+    /// Parents eligible for selection: every group except this one and its
+    /// descendants (preventing cycles). The server also caps nesting depth.
+    private var eligibleParents: [SystemGroup] {
+        guard let currentID = group?.id else { return store.groups }
+        let descendants = collectDescendantIDs(of: currentID, in: store.groups)
+        return store.groups.filter { $0.id != currentID && !descendants.contains($0.id) }
+    }
 
     var body: some View {
         NavigationStack {
@@ -307,6 +323,20 @@ struct GroupEditSheet: View {
                             set: { colorHex = $0.toHex() }
                         )).labelsHidden()
                     }
+                    .listRowBackground(theme.backgroundCard)
+                }
+
+                Section("Parent group") {
+                    Picker(selection: $parentID) {
+                        Text("None (top-level)").tag(String?.none)
+                        ForEach(eligibleParents) { g in
+                            Text(g.name).tag(Optional(g.id))
+                        }
+                    } label: {
+                        Text("Parent")
+                            .foregroundColor(theme.textPrimary)
+                    }
+                    .pickerStyle(.menu)
                     .listRowBackground(theme.backgroundCard)
                 }
 
@@ -363,6 +393,7 @@ struct GroupEditSheet: View {
         name        = g.name
         description = g.description ?? ""
         colorHex    = g.color ?? "#6366F1"
+        parentID    = g.parentID
         // Load existing members from API so selections are pre-filled
         isLoadingMembers = true
         if let fetched = try? await store.api?.getGroupMembers(groupID: g.id) {
@@ -377,7 +408,7 @@ struct GroupEditSheet: View {
             name: name,
             description: description.isEmpty ? nil : description,
             color: colorHex.isEmpty ? nil : colorHex,
-            parentID: nil
+            parentID: parentID
         )
         Task {
             await store.saveGroup(existing: group, create: create)
@@ -453,4 +484,52 @@ struct GroupMemberPickerView: View {
             }
         }
     }
+}
+
+// MARK: - Hierarchical group ordering
+
+struct GroupHierarchyEntry {
+    let group: SystemGroup
+    let depth: Int
+}
+
+/// Flatten the group list into parent-before-children order with a depth for
+/// each, so the list can indent subgroups under their parent. Roots are
+/// groups with no parent (or a parent_id that isn't in the set); orphans
+/// fall back to roots so nothing is dropped.
+func orderHierarchically(_ groups: [SystemGroup]) -> [GroupHierarchyEntry] {
+    let byID = Dictionary(uniqueKeysWithValues: groups.map { ($0.id, $0) })
+    let childrenOf = Dictionary(grouping: groups, by: { $0.parentID })
+    var out: [GroupHierarchyEntry] = []
+
+    func visit(_ group: SystemGroup, depth: Int) {
+        out.append(GroupHierarchyEntry(group: group, depth: depth))
+        let children = (childrenOf[group.id] ?? []).sorted { $0.name.localizedCompare($1.name) == .orderedAscending }
+        for child in children {
+            visit(child, depth: depth + 1)
+        }
+    }
+
+    let roots = groups.filter { g in
+        guard let pid = g.parentID else { return true }
+        return byID[pid] == nil
+    }.sorted { $0.name.localizedCompare($1.name) == .orderedAscending }
+
+    for root in roots {
+        visit(root, depth: 0)
+    }
+    return out
+}
+
+/// Ids of every group descended from `rootID` (its children, recursively).
+func collectDescendantIDs(of rootID: String, in groups: [SystemGroup]) -> Set<String> {
+    let childrenOf = Dictionary(grouping: groups, by: { $0.parentID })
+    var result: Set<String> = []
+    var stack: [String] = [rootID]
+    while let next = stack.popLast() {
+        for child in childrenOf[next] ?? [] where result.insert(child.id).inserted {
+            stack.append(child.id)
+        }
+    }
+    return result
 }
