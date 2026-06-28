@@ -709,6 +709,37 @@ struct SettingsView: View {
                         }
                     }
 
+                    // Support
+                    settingsSection(title: String(localized: "Support")) {
+                        VStack(spacing: 0) {
+                            NavigationLink {
+                                SupportView()
+                                    .environmentObject(authManager)
+                                    .environmentObject(store)
+                            } label: {
+                                HStack {
+                                    Image(systemName: "questionmark.circle")
+                                        .foregroundColor(theme.accentLight)
+                                        .frame(width: 20)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("Support")
+                                            .font(.subheadline).fontWeight(.medium)
+                                            .foregroundColor(theme.textPrimary)
+                                        Text("Contact, status, and policies")
+                                            .font(.caption)
+                                            .foregroundColor(theme.textTertiary)
+                                    }
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .font(.caption)
+                                        .foregroundColor(theme.textTertiary)
+                                }
+                                .padding(.horizontal, 16).padding(.vertical, 14)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+
                     // Debug
                     settingsSection(title: String(localized: "Diagnostics")) {
                         VStack(spacing: 0) {
