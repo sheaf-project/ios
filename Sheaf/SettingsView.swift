@@ -899,7 +899,7 @@ struct SettingsView: View {
 
                     VStack(spacing: 4) {
                         Text("Sheaf").font(.footnote).fontWeight(.semibold).foregroundColor(theme.textTertiary)
-                        Text("v1.0.0").font(.caption).foregroundColor(theme.textTertiary)
+                        Text("v\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0")").font(.caption).foregroundColor(theme.textTertiary)
                     }
                     .padding(.bottom, 80)
                 }
