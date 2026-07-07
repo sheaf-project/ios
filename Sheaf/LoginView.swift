@@ -132,6 +132,7 @@ struct SignInForm: View {
     @State private var error    = ""
     @State private var isLoading = false
     @State private var needsTOTP = false
+    @State private var useRecoveryCode = false
     @State private var forgotPasswordURL: URL?
     @FocusState private var focused: Field?
     enum Field { case url, email, password, totp }
@@ -144,8 +145,24 @@ struct SignInForm: View {
             
             // Show TOTP field if needed
             if needsTOTP {
-                formField(icon: "lock.shield", label: "2FA Code", placeholder: "000000", value: $totpCode, field: .totp, keyboard: .numberPad)
-                    .transition(.opacity.combined(with: .move(edge: .top)))
+                if useRecoveryCode {
+                    formField(icon: "key.fill", label: String(localized: "Recovery Code"), placeholder: "xxxxxxxx-xxxxxxxx", value: $totpCode, field: .totp, keyboard: .asciiCapable)
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                } else {
+                    formField(icon: "lock.shield", label: "2FA Code", placeholder: "000000", value: $totpCode, field: .totp, keyboard: .numberPad)
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                }
+
+                Button {
+                    withAnimation { useRecoveryCode.toggle() }
+                    totpCode = ""
+                    focused = .totp
+                } label: {
+                    Text(useRecoveryCode ? "Use an authenticator code instead" : "Use a recovery code instead")
+                        .font(.footnote)
+                        .foregroundColor(theme.accentLight)
+                }
+                .transition(.opacity)
 
                 HStack(spacing: 8) {
                     Toggle("", isOn: $rememberDevice)
@@ -168,7 +185,7 @@ struct SignInForm: View {
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
             .tint(theme.accentLight)
-            .disabled(email.isEmpty || password.isEmpty || isLoading || (needsTOTP && totpCode.count != 6))
+            .disabled(email.isEmpty || password.isEmpty || isLoading || (needsTOTP && !totpInputComplete))
 
             // Forgot password
             Button { openForgotPassword() } label: {
@@ -200,6 +217,13 @@ struct SignInForm: View {
         }
     }
 
+    /// Recovery codes are alphanumeric (two hyphen-separated groups of 8),
+    /// so only require the 6-digit shape for authenticator codes.
+    private var totpInputComplete: Bool {
+        let code = totpCode.trimmingCharacters(in: .whitespacesAndNewlines)
+        return useRecoveryCode ? code.count >= 8 : code.count == 6
+    }
+
     private func signIn() {
         error = ""
         var cleanURL = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -222,8 +246,9 @@ struct SignInForm: View {
                     captchaPayload = try await APIClient.solveAltchaChallenge(challenge)
                     debugLog("Login: Altcha challenge solved")
                 }
-                debugLog("Login: Starting login request... (TOTP: \(totpCode.isEmpty ? "no" : "yes"))")
-                let tokens = try await api.login(email: email, password: password, totpCode: totpCode.isEmpty ? nil : totpCode, captcha: captchaPayload, rememberDevice: rememberDevice)
+                let code = totpCode.trimmingCharacters(in: .whitespacesAndNewlines)
+                debugLog("Login: Starting login request... (TOTP: \(code.isEmpty ? "no" : "yes"))")
+                let tokens = try await api.login(email: email, password: password, totpCode: code.isEmpty ? nil : code, captcha: captchaPayload, rememberDevice: rememberDevice)
                 debugLog("Login: Login successful, got tokens")
                 
                 // Login succeeded, save credentials

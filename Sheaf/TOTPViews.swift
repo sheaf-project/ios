@@ -8,11 +8,12 @@ struct TOTPSetupSheet: View {
     @EnvironmentObject var authManager: AuthManager
     @Environment(\.dismiss) var dismiss
 
-    enum Step { case loading, scan, verify, recoveryCodes, done }
+    enum Step { case password, loading, scan, verify, recoveryCodes, done }
 
-    @State private var step: Step = .loading
+    @State private var step: Step = .password
     @State private var setupResponse: TOTPSetupResponse?
     @State private var error: String = ""
+    @State private var password = ""
     @State private var digits: [String] = Array(repeating: "", count: 6)
     @State private var isVerifying = false
     @State private var copiedSecret = false
@@ -26,6 +27,7 @@ struct TOTPSetupSheet: View {
             ScrollView {
                 VStack(spacing: 0) {
                     switch step {
+                    case .password:      passwordStep
                     case .loading:       loadingStep
                     case .scan:          scanStep
                     case .verify:        verifyStep
@@ -51,10 +53,45 @@ struct TOTPSetupSheet: View {
             }
         }
         .presentationDetents([.large])
-        .task { await beginSetup() }
     }
 
     // MARK: - Steps
+
+    var passwordStep: some View {
+        VStack(spacing: 20) {
+            Spacer().frame(height: 12)
+
+            Image(systemName: "key.fill")
+                .font(.largeTitle)
+                .foregroundColor(theme.accentLight)
+
+            Text("Enter your account password to start setting up two-factor authentication.")
+                .font(.subheadline)
+                .foregroundColor(theme.textSecondary)
+                .multilineTextAlignment(.center)
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Password")
+                    .font(.footnote).fontWeight(.semibold)
+                    .foregroundColor(theme.textSecondary)
+                SecureField("Enter your password", text: $password)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .padding(14)
+                    .background(theme.inputBackground)
+                    .cornerRadius(12)
+                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(theme.inputBorder, lineWidth: 1.5))
+                    .foregroundColor(theme.textPrimary)
+                    .onSubmit { if !password.isEmpty { Task { await beginSetup() } } }
+            }
+
+            if !error.isEmpty { errorLabel }
+
+            primaryButton(label: "Continue", disabled: password.isEmpty) {
+                Task { await beginSetup() }
+            }
+        }
+    }
 
     var loadingStep: some View {
         VStack(spacing: 16) {
@@ -263,6 +300,7 @@ struct TOTPSetupSheet: View {
 
     var headerTitle: String {
         switch step {
+        case .password:      return "Set Up 2FA"
         case .loading:       return "Set Up 2FA"
         case .scan:          return "Scan QR Code"
         case .verify:        return "Confirm Code"
@@ -308,18 +346,23 @@ struct TOTPSetupSheet: View {
     }
 
     func beginSetup() async {
+        await MainActor.run {
+            error = ""
+            withAnimation { step = .loading }
+        }
         let api = APIClient(auth: authManager)
         do {
-            let response = try await api.setupTOTP()
+            let response = try await api.setupTOTP(password: password)
             await MainActor.run {
                 setupResponse = response
                 withAnimation { step = .scan }
             }
         } catch is CancellationError {
+            await MainActor.run { withAnimation { step = .password } }
         } catch {
             await MainActor.run {
                 self.error = error.userFacingMessage ?? ""
-                withAnimation { step = .scan }
+                withAnimation { step = .password }
             }
         }
     }
@@ -526,8 +569,11 @@ struct TOTPManageSheet: View {
                 Text("Current 2FA Code")
                     .font(.footnote).fontWeight(.semibold)
                     .foregroundColor(theme.textSecondary)
-                TextField("6-digit code", text: $totpCode)
-                    .keyboardType(.numberPad)
+                // Accepts a recovery code as well, so no number pad here
+                TextField("6-digit code or recovery code", text: $totpCode)
+                    .keyboardType(.asciiCapable)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
                     .padding(14)
                     .background(theme.inputBackground)
                     .cornerRadius(12)
@@ -710,10 +756,11 @@ struct TOTPManageSheet: View {
         do {
             // The API expects email + password + optional totp code
             let me = try await api.getMe()
+            let code = totpCode.trimmingCharacters(in: .whitespacesAndNewlines)
             try await api.disableTOTP(
                 email: me.email,
                 password: password,
-                totpCode: totpCode.isEmpty ? nil : totpCode
+                totpCode: code.isEmpty ? nil : code
             )
             await MainActor.run {
                 isProcessing = false

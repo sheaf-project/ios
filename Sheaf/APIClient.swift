@@ -637,8 +637,16 @@ class APIClient {
     }
 
     /// Initiate TOTP setup — returns secret, provisioning URI, and recovery codes.
-    func setupTOTP() async throws -> TOTPSetupResponse {
-        let data = try await request("/v1/auth/totp/setup", method: "POST")
+    /// The server requires the account password to authorize enrolment.
+    func setupTOTP(password: String) async throws -> TOTPSetupResponse {
+        let body = try JSONEncoder.iso.encode(TOTPSetupRequest(password: password))
+        // Use perform() directly so a wrong password (401) doesn't trigger
+        // the auto-refresh → retry → logout flow in request().
+        let (data, status) = try await perform("/v1/auth/totp/setup", method: "POST", body: body)
+        guard (200...299).contains(status) else {
+            throw NSError(domain: "APIError", code: status,
+                          userInfo: [NSLocalizedDescriptionKey: friendlyErrorMessage(statusCode: status, data: data)])
+        }
         return try JSONDecoder.iso.decode(TOTPSetupResponse.self, from: data)
     }
 
@@ -782,7 +790,13 @@ class APIClient {
 
     func disableTOTP(email: String, password: String, totpCode: String?) async throws {
         let body = try JSONEncoder.iso.encode(UserLogin(email: email, password: password, totpCode: totpCode))
-        _ = try await request("/v1/auth/totp/disable", method: "POST", body: body)
+        // Use perform() directly so a wrong password (401) doesn't trigger
+        // the auto-refresh → retry → logout flow in request().
+        let (data, status) = try await perform("/v1/auth/totp/disable", method: "POST", body: body)
+        guard (200...299).contains(status) else {
+            throw NSError(domain: "APIError", code: status,
+                          userInfo: [NSLocalizedDescriptionKey: friendlyErrorMessage(statusCode: status, data: data)])
+        }
     }
 
     func regenerateRecoveryCodes(code: String) async throws -> [String] {

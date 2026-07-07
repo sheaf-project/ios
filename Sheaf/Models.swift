@@ -550,6 +550,10 @@ struct TOTPVerify: Codable {
     var code: String
 }
 
+struct TOTPSetupRequest: Codable {
+    var password: String
+}
+
 struct TOTPSetupResponse: Codable {
     let secret: String
     let provisioningUri: String
