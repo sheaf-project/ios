@@ -54,6 +54,11 @@ final class AuthManager: ObservableObject {
     private let refreshKey = "sheaf_refresh_token"
     private let urlKey     = "sheaf_base_url"
 
+    /// Set when a keychain write fails (e.g. device locked during a
+    /// background refresh). Retried on next foreground so the persisted
+    /// refresh token doesn't go stale while memory holds the rotated one.
+    private var needsKeychainRetry = false
+
     // Watch-companion creds, kept distinct from the phone's primary
     // credentials so the watch can rotate its own one-shot refresh JWT
     // without colliding with the phone's rotation. Pushed to the watch
@@ -81,7 +86,34 @@ final class AuthManager: ObservableObject {
         // Configure connectivity manager immediately
         #if os(iOS)
         PhoneConnectivityManager.shared.configure(auth: self)
+
+        NotificationCenter.default.addObserver(
+            forName: UIApplication.willEnterForegroundNotification,
+            object: nil, queue: .main
+        ) { [weak self] _ in
+            self?.retryKeychainSaveIfNeeded()
+        }
         #endif
+    }
+
+    private func persistTokens() -> Bool {
+        do {
+            try KeychainHelper.save(key: urlKey, value: baseURL)
+            try KeychainHelper.save(key: accessKey, value: accessToken)
+            try KeychainHelper.save(key: refreshKey, value: refreshToken)
+            return true
+        } catch {
+            debugLog("AuthManager: Keychain save FAILED (\(error)), tokens held in memory only")
+            return false
+        }
+    }
+
+    func retryKeychainSaveIfNeeded() {
+        guard needsKeychainRetry, isAuthenticated else { return }
+        if persistTokens() {
+            needsKeychainRetry = false
+            debugLog("AuthManager: Deferred keychain save succeeded on foreground")
+        }
     }
 
     /// Mint a child session on the server and stash the resulting tokens
@@ -175,15 +207,12 @@ final class AuthManager: ObservableObject {
         // credential reply path.
 
         // Save to iCloud Keychain (will sync to watch automatically)
-        do {
-            try KeychainHelper.save(key: urlKey, value: cleanURL)
-            try KeychainHelper.save(key: accessKey, value: tokens.accessToken)
-            try KeychainHelper.save(key: refreshKey, value: tokens.refreshToken)
-        } catch {
-            debugLog("AuthManager: Keychain save failed: \(error)")
+        if persistTokens() {
+            needsKeychainRetry = false
+            debugLog("AuthManager: Credentials saved to iCloud Keychain")
+        } else {
+            needsKeychainRetry = true
         }
-
-        debugLog("AuthManager: Credentials saved to iCloud Keychain")
 
         // Push to the watch if one is paired. The connectivity manager
         // will mint a server-side companion session on demand so the watch
@@ -195,7 +224,9 @@ final class AuthManager: ObservableObject {
         #endif
     }
 
-    func logout() {
+    func logout(reason: String = "user initiated") {
+        debugLog("AuthManager: Logging out, reason: \(reason)")
+
         // Server-side logout (best-effort, fire-and-forget). The cascade
         // delete will also revoke the paired watch's session, so the
         // watch refresh fails the next time it tries.
@@ -428,6 +459,7 @@ class APIClient {
         if status != 401 { return data }
 
         // 401 — try to refresh once, then retry
+        debugLog("APIClient: 401 on \(method) \(path), attempting token refresh")
         do {
             _ = try await refreshOnce()
         } catch {
@@ -435,7 +467,7 @@ class APIClient {
             if code == 401 || code == 403 {
                 let detail = (error as NSError).localizedDescription
                 if detail.localizedCaseInsensitiveContains("session revoked") {
-                    await MainActor.run { auth.logout() }
+                    await MainActor.run { auth.logout(reason: "refresh rejected, session revoked (\(method) \(path))") }
                     throw NSError(domain: "APIError", code: 401,
                                   userInfo: [NSLocalizedDescriptionKey: "Your session has been revoked. Please log in again."])
                 }
@@ -445,7 +477,8 @@ class APIClient {
                     try await Task.sleep(nanoseconds: 500_000_000)
                     _ = try await refreshOnce()
                 } catch {
-                    await MainActor.run { auth.logout() }
+                    let second = (error as NSError)
+                    await MainActor.run { auth.logout(reason: "refresh failed twice, HTTP \(second.code): \(second.localizedDescription)") }
                     throw NSError(domain: "APIError", code: 401,
                                   userInfo: [NSLocalizedDescriptionKey: "Session expired. Please log in again."])
                 }
@@ -459,11 +492,11 @@ class APIClient {
         guard retryStatus != 401 else {
             let detail = friendlyErrorMessage(statusCode: retryStatus, data: retryData)
             if detail.localizedCaseInsensitiveContains("session revoked") {
-                await MainActor.run { auth.logout() }
+                await MainActor.run { auth.logout(reason: "still 401 after refresh, session revoked (\(method) \(path))") }
                 throw NSError(domain: "APIError", code: 401,
                               userInfo: [NSLocalizedDescriptionKey: "Your session has been revoked. Please log in again."])
             }
-            await MainActor.run { auth.logout() }
+            await MainActor.run { auth.logout(reason: "still 401 after successful refresh (\(method) \(path)): \(detail)") }
             throw NSError(domain: "APIError", code: 401,
                           userInfo: [NSLocalizedDescriptionKey: "Session expired. Please log in again."])
         }
@@ -490,8 +523,7 @@ class APIClient {
             try detectCloudflareInterception(data)
         }
         if http.statusCode == 403 {
-            let body = String(data: data, encoding: .utf8) ?? "(empty)"
-            debugLog("APIClient: 403 Forbidden on \(method) \(path) — \(body)")
+            debugLog("APIClient: 403 Forbidden on \(method) \(path)")
         }
         // Throw for all errors except 401 (which we handle via retry)
         if http.statusCode != 401 && !(200...299).contains(http.statusCode) {
@@ -532,21 +564,21 @@ class APIClient {
         let session = urlSession
         let auth = self.auth
         let baseURL = auth.baseURL
+        // Suffix only, safe to log and enough to correlate with server logs
+        let sentSuffix = String(auth.refreshToken.suffix(6))
 
         let task = Task<TokenResponse, Error> { [auth, baseURL, weak self] in
             let (data, response) = try await session.data(for: req)
             guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
             guard (200...299).contains(http.statusCode) else {
-                if http.statusCode == 403 {
-                    let body = String(data: data, encoding: .utf8) ?? "(empty)"
-                    debugLog("APIClient: 403 Forbidden on POST /v1/auth/refresh — \(body)")
-                }
+                debugLog("APIClient: Refresh FAILED, HTTP \(http.statusCode), sent token ..\(sentSuffix)")
                 let msg = self?.friendlyErrorMessage(statusCode: http.statusCode, data: data)
                     ?? "HTTP \(http.statusCode)"
                 throw NSError(domain: "APIError", code: http.statusCode,
                               userInfo: [NSLocalizedDescriptionKey: msg])
             }
             let fresh = try JSONDecoder.iso.decode(TokenResponse.self, from: data)
+            debugLog("APIClient: Refresh OK, rotated ..\(sentSuffix) -> ..\(String(fresh.refreshToken.suffix(6)))")
             // Persist before returning so joiners on task.value can't
             // race past us and retry with the stale access token.
             await MainActor.run { auth.save(baseURL: baseURL, tokens: fresh) }
@@ -1192,6 +1224,64 @@ class APIClient {
         let data = try await request("/v1/tags/\(id)", method: "DELETE", body: body)
         guard !data.isEmpty else { return nil }
         return try? JSONDecoder.iso.decode(DeleteQueued.self, from: data)
+    }
+
+    // MARK: - Relationships
+
+    func getRelationshipTypes() async throws -> [RelationshipType] {
+        let data = try await request("/v1/relationship-types")
+        return try JSONDecoder.iso.decode([RelationshipType].self, from: data)
+    }
+
+    func createRelationshipType(_ create: RelationshipTypeCreate) async throws -> RelationshipType {
+        let body = try JSONEncoder.iso.encode(create)
+        let data = try await request("/v1/relationship-types", method: "POST", body: body)
+        return try JSONDecoder.iso.decode(RelationshipType.self, from: data)
+    }
+
+    func updateRelationshipType(id: String, update: RelationshipTypeUpdate) async throws -> RelationshipType {
+        let body = try JSONEncoder.iso.encode(update)
+        let data = try await request("/v1/relationship-types/\(id)", method: "PATCH", body: body)
+        return try JSONDecoder.iso.decode(RelationshipType.self, from: data)
+    }
+
+    func deleteRelationshipType(id: String) async throws {
+        _ = try await request("/v1/relationship-types/\(id)", method: "DELETE")
+    }
+
+    func getMemberRelationships(memberID: String) async throws -> [MemberRelationship] {
+        let data = try await request("/v1/members/\(memberID)/relationships")
+        return try JSONDecoder.iso.decode([MemberRelationship].self, from: data)
+    }
+
+    func createMemberRelationship(_ create: RelationshipEdgeCreate) async throws -> RelationshipEdge {
+        let body = try JSONEncoder.iso.encode(create)
+        let data = try await request("/v1/member-relationships", method: "POST", body: body)
+        return try JSONDecoder.iso.decode(RelationshipEdge.self, from: data)
+    }
+
+    func deleteMemberRelationship(id: String) async throws {
+        _ = try await request("/v1/member-relationships/\(id)", method: "DELETE")
+    }
+
+    func getGroupRelationships(groupID: String) async throws -> [MemberRelationship] {
+        let data = try await request("/v1/groups/\(groupID)/relationships")
+        return try JSONDecoder.iso.decode([MemberRelationship].self, from: data)
+    }
+
+    func createGroupRelationship(_ create: RelationshipEdgeCreate) async throws -> RelationshipEdge {
+        let body = try JSONEncoder.iso.encode(create)
+        let data = try await request("/v1/group-relationships", method: "POST", body: body)
+        return try JSONDecoder.iso.decode(RelationshipEdge.self, from: data)
+    }
+
+    func deleteGroupRelationship(id: String) async throws {
+        _ = try await request("/v1/group-relationships/\(id)", method: "DELETE")
+    }
+
+    func getRelationshipGraph(scope: String) async throws -> RelationshipGraph {
+        let data = try await request("/v1/relationships/graph?scope=\(scope)")
+        return try JSONDecoder.iso.decode(RelationshipGraph.self, from: data)
     }
 
     // MARK: - Journals

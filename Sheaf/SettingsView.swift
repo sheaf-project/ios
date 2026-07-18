@@ -537,6 +537,28 @@ struct SettingsView: View {
 
                             Divider().background(theme.divider)
 
+                            NavigationLink {
+                                RelationshipTypesView()
+                                    .environmentObject(store)
+                            } label: {
+                                HStack {
+                                    Image(systemName: "person.line.dotted.person")
+                                        .foregroundColor(theme.accentLight)
+                                        .frame(width: 20)
+                                    Text("Relationships")
+                                        .font(.subheadline).fontWeight(.medium)
+                                        .foregroundColor(theme.textPrimary)
+                                    Spacer()
+                                    Text("\(store.relationshipTypes.count)")
+                                        .font(.subheadline)
+                                        .foregroundColor(theme.textTertiary)
+                                }
+                                .padding(.horizontal, 16).padding(.vertical, 14)
+                            }
+                            .buttonStyle(.plain)
+
+                            Divider().background(theme.divider)
+
                             Button { store.loadAll() } label: {
                                 HStack {
                                     Image(systemName: "arrow.clockwise").foregroundColor(theme.accent)

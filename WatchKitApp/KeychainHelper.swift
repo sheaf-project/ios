@@ -30,7 +30,12 @@ class KeychainHelper {
             kSecAttrAccount as String: key,
             kSecAttrService as String: "systems.lupine.sheaf",
             kSecValueData as String: data,
-            kSecAttrSynchronizable as String: true  // Enable iCloud sync
+            kSecAttrSynchronizable as String: true,  // Enable iCloud sync
+            // AfterFirstUnlock so background refreshes (WCSession wakes,
+            // silent pushes) can persist rotated tokens while the device
+            // is locked. WhenUnlocked (the default) made those saves fail
+            // silently, leaving a stale one-shot refresh token on disk.
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock
         ]
         
         // Try to add the item
@@ -46,7 +51,8 @@ class KeychainHelper {
             ]
             
             let updateAttributes: [String: Any] = [
-                kSecValueData as String: data
+                kSecValueData as String: data,
+                kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock
             ]
             
             let updateStatus = SecItemUpdate(updateQuery as CFDictionary, updateAttributes as CFDictionary)

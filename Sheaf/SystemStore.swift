@@ -123,6 +123,7 @@ class SystemStore: ObservableObject {
     @Published var groups: [SystemGroup] = []
     @Published var tags: [Tag] = []
     @Published var fields: [CustomField] = []
+    @Published var relationshipTypes: [RelationshipType] = []
     @Published var currentFronts: [FrontEntry] = []
     @Published var frontHistory: [FrontEntry] = []
     @Published var hasMoreHistory = true
@@ -435,6 +436,11 @@ class SystemStore: ObservableObject {
                 )
             } catch {
                 showError(error)
+            }
+
+            // Relationship types: non-fatal, server may not support this endpoint yet
+            if let api {
+                relationshipTypes = (try? await api.getRelationshipTypes()) ?? relationshipTypes
             }
 
             // Announcements: non-fatal, server may not support this endpoint yet
@@ -1351,6 +1357,110 @@ class SystemStore: ObservableObject {
         if NetworkMonitor.shared.isOnline, let api {
             fields = (try? await api.getFields()) ?? fields
             saveAllToCache()
+        }
+    }
+
+    // MARK: - Relationships (consolidated for views)
+
+    func reloadRelationshipTypes() async {
+        guard NetworkMonitor.shared.isOnline, let api else { return }
+        relationshipTypes = sortedTypes((try? await api.getRelationshipTypes()) ?? relationshipTypes)
+    }
+
+    func createRelationshipType(_ create: RelationshipTypeCreate) async -> RelationshipType? {
+        guard NetworkMonitor.shared.isOnline, let api else { return nil }
+        do {
+            let created = try await api.createRelationshipType(create)
+            relationshipTypes = sortedTypes(relationshipTypes + [created])
+            return created
+        } catch {
+            showError(error)
+            return nil
+        }
+    }
+
+    func updateRelationshipType(id: String, update: RelationshipTypeUpdate) async -> RelationshipType? {
+        guard NetworkMonitor.shared.isOnline, let api else { return nil }
+        do {
+            let updated = try await api.updateRelationshipType(id: id, update: update)
+            if let idx = relationshipTypes.firstIndex(where: { $0.id == id }) {
+                relationshipTypes[idx] = updated
+            }
+            relationshipTypes = sortedTypes(relationshipTypes)
+            return updated
+        } catch {
+            showError(error)
+            return nil
+        }
+    }
+
+    private func sortedTypes(_ types: [RelationshipType]) -> [RelationshipType] {
+        types.sorted { $0.name.lowercased() < $1.name.lowercased() }
+    }
+
+    func deleteRelationshipType(id: String) async {
+        guard NetworkMonitor.shared.isOnline, let api else { return }
+        do {
+            try await api.deleteRelationshipType(id: id)
+            relationshipTypes.removeAll { $0.id == id }
+        } catch {
+            showError(error)
+        }
+    }
+
+    func getMemberRelationships(memberID: String) async -> [MemberRelationship] {
+        if NetworkMonitor.shared.isOnline, let api {
+            return (try? await api.getMemberRelationships(memberID: memberID)) ?? []
+        }
+        return []
+    }
+
+    func createMemberRelationship(_ create: RelationshipEdgeCreate) async -> RelationshipEdge? {
+        guard NetworkMonitor.shared.isOnline, let api else { return nil }
+        do {
+            return try await api.createMemberRelationship(create)
+        } catch {
+            showError(error)
+            return nil
+        }
+    }
+
+    func deleteMemberRelationship(id: String) async -> Bool {
+        guard NetworkMonitor.shared.isOnline, let api else { return false }
+        do {
+            try await api.deleteMemberRelationship(id: id)
+            return true
+        } catch {
+            showError(error)
+            return false
+        }
+    }
+
+    func getGroupRelationships(groupID: String) async -> [MemberRelationship] {
+        if NetworkMonitor.shared.isOnline, let api {
+            return (try? await api.getGroupRelationships(groupID: groupID)) ?? []
+        }
+        return []
+    }
+
+    func createGroupRelationship(_ create: RelationshipEdgeCreate) async -> RelationshipEdge? {
+        guard NetworkMonitor.shared.isOnline, let api else { return nil }
+        do {
+            return try await api.createGroupRelationship(create)
+        } catch {
+            showError(error)
+            return nil
+        }
+    }
+
+    func deleteGroupRelationship(id: String) async -> Bool {
+        guard NetworkMonitor.shared.isOnline, let api else { return false }
+        do {
+            try await api.deleteGroupRelationship(id: id)
+            return true
+        } catch {
+            showError(error)
+            return false
         }
     }
 

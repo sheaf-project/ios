@@ -489,6 +489,8 @@ struct MemberDetailSheet: View {
     @State private var showBioRevisions = false
     @State private var fieldValues: [CustomFieldValue] = []
     @State private var loadingFields = false
+    @State private var relationships: [MemberRelationship] = []
+    @State private var showAddRelationship = false
 
     private var liveMember: Member {
         store.members.first(where: { $0.id == member.id }) ?? member
@@ -674,6 +676,52 @@ struct MemberDetailSheet: View {
                         ProgressView().tint(theme.accentLight)
                     }
 
+                    // Relationships. Hidden until the system has defined at
+                    // least one relationship type (or existing links).
+                    if !relationships.isEmpty || !store.relationshipTypes.isEmpty {
+                        VStack(alignment: .leading, spacing: 10) {
+                            HStack {
+                                Text("Relationships")
+                                    .font(.footnote).fontWeight(.semibold)
+                                    .foregroundColor(theme.textSecondary)
+                                    .textCase(.uppercase)
+                                    .kerning(0.8)
+                                Spacer()
+                                Button {
+                                    showAddRelationship = true
+                                } label: {
+                                    Image(systemName: "plus")
+                                        .font(.footnote)
+                                        .foregroundColor(theme.accentLight)
+                                }
+                                .accessibilityLabel("Add Relationship")
+                            }
+
+                            if relationships.isEmpty {
+                                Text("No relationships yet")
+                                    .font(.subheadline)
+                                    .foregroundColor(theme.textTertiary)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(16)
+                                    .background(theme.backgroundCard)
+                                    .cornerRadius(14)
+                            } else {
+                                VStack(spacing: 0) {
+                                    ForEach(Array(relationships.enumerated()), id: \.element.id) { i, rel in
+                                        relationshipRow(rel)
+                                        if i < relationships.count - 1 {
+                                            Divider().background(theme.divider).padding(.leading, 16)
+                                        }
+                                    }
+                                }
+                                .background(theme.backgroundCard)
+                                .cornerRadius(14)
+                                .overlay(RoundedRectangle(cornerRadius: 14).stroke(theme.border, lineWidth: 1))
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+
                     // Switch to button
                     Button {
                         Task {
@@ -725,9 +773,16 @@ struct MemberDetailSheet: View {
             MemberBioRevisionsView(member: liveMember)
                 .environmentObject(store)
         }
+        .sheet(isPresented: $showAddRelationship) {
+            AddRelationshipSheet(nodeID: liveMember.id, nodeName: liveMember.displayName ?? liveMember.name) {
+                Task { await loadRelationships() }
+            }
+            .environmentObject(store)
+        }
         .presentationDragIndicator(.visible)
         .task {
             await loadFieldValues()
+            await loadRelationships()
         }
     }
 
@@ -735,6 +790,43 @@ struct MemberDetailSheet: View {
         loadingFields = true
         fieldValues = await store.getMemberFieldValues(memberID: member.id)
         loadingFields = false
+    }
+
+    private func loadRelationships() async {
+        relationships = await store.getMemberRelationships(memberID: member.id)
+    }
+
+    @ViewBuilder
+    private func relationshipRow(_ rel: MemberRelationship) -> some View {
+        let other = store.members.first { $0.id == rel.otherID }
+        HStack(spacing: 12) {
+            if let other {
+                AvatarView(member: other, size: 36)
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text(other.map { $0.displayName ?? $0.name } ?? "Unknown member")
+                    .font(.subheadline).fontWeight(.medium)
+                    .foregroundColor(theme.textPrimary)
+                Text(rel.mutual ? "\(rel.label) (mutual)" : rel.label)
+                    .font(.caption)
+                    .foregroundColor(theme.textSecondary)
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .contentShape(Rectangle())
+        .contextMenu {
+            Button(role: .destructive) {
+                Task {
+                    if await store.deleteMemberRelationship(id: rel.id) {
+                        relationships.removeAll { $0.id == rel.id }
+                    }
+                }
+            } label: {
+                Label("Remove Relationship", systemImage: "trash")
+            }
+        }
     }
 
     private func displayValue(_ value: AnyCodable, field: CustomField) -> String {

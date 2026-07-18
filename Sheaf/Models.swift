@@ -3403,3 +3403,181 @@ struct UnreadCounts: Codable {
         case byBoard = "by_board"
     }
 }
+
+// MARK: - Relationships
+
+/// How a relationship type reads from each endpoint.
+/// - symmetric: one label, unordered (e.g. partner)
+/// - directional: source reads forwardLabel, target reads reverseLabel
+///   (e.g. parent/child)
+/// - either: directional by default, but an edge with `mutual` set reads
+///   forwardLabel from both ends (e.g. protector -> protectee, or mutual
+///   protectors)
+enum RelationshipSymmetry: String, Codable, CaseIterable {
+    case symmetric
+    case directional
+    case either
+}
+
+struct RelationshipType: Identifiable, Codable, Hashable {
+    let id: String
+    let systemID: String
+    var name: String
+    var symmetry: RelationshipSymmetry
+    var forwardLabel: String
+    var reverseLabel: String?
+    let createdAt: Date
+    let updatedAt: Date
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, symmetry
+        case systemID     = "system_id"
+        case forwardLabel = "forward_label"
+        case reverseLabel = "reverse_label"
+        case createdAt    = "created_at"
+        case updatedAt    = "updated_at"
+    }
+}
+
+struct RelationshipTypeCreate: Codable {
+    var name: String
+    var symmetry: RelationshipSymmetry
+    var forwardLabel: String
+    var reverseLabel: String?
+
+    enum CodingKeys: String, CodingKey {
+        case name, symmetry
+        case forwardLabel = "forward_label"
+        case reverseLabel = "reverse_label"
+    }
+}
+
+struct RelationshipTypeUpdate: Codable {
+    var name: String?
+    var forwardLabel: String?
+    var reverseLabel: String?
+
+    enum CodingKeys: String, CodingKey {
+        case name
+        case forwardLabel = "forward_label"
+        case reverseLabel = "reverse_label"
+    }
+}
+
+/// Create one relationship edge. For directional / either types the source
+/// is the forward-label endpoint; for symmetric types order does not matter.
+struct RelationshipEdgeCreate: Codable {
+    var sourceID: String
+    var targetID: String
+    var relationshipTypeID: String
+    var mutual: Bool = false
+    var visibility: String = "private"
+
+    enum CodingKeys: String, CodingKey {
+        case mutual, visibility
+        case sourceID           = "source_id"
+        case targetID           = "target_id"
+        case relationshipTypeID = "relationship_type_id"
+    }
+}
+
+struct RelationshipEdge: Identifiable, Codable {
+    let id: String
+    let sourceID: String
+    let targetID: String
+    let relationshipTypeID: String
+    let mutual: Bool
+    let createdAt: Date
+
+    enum CodingKeys: String, CodingKey {
+        case id, mutual
+        case sourceID           = "source_id"
+        case targetID           = "target_id"
+        case relationshipTypeID = "relationship_type_id"
+        case createdAt          = "created_at"
+    }
+}
+
+enum RelationshipDirection: String, Codable {
+    case none
+    case outgoing
+    case incoming
+}
+
+/// One edge as it reads from a single member's or group's perspective: the
+/// label and the `other` endpoint are already resolved for that viewer.
+struct MemberRelationship: Identifiable, Codable {
+    let id: String
+    let relationshipTypeID: String
+    let typeName: String
+    let otherID: String
+    let label: String
+    let direction: RelationshipDirection
+    let mutual: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case id, label, direction, mutual
+        case relationshipTypeID = "relationship_type_id"
+        case typeName           = "type_name"
+        case otherID            = "other_id"
+    }
+}
+
+struct RelationshipPreset {
+    let label: String
+    let name: String
+    let symmetry: RelationshipSymmetry
+    let forwardLabel: String
+    var reverseLabel: String?
+}
+
+let relationshipPresets: [RelationshipPreset] = [
+    RelationshipPreset(label: "Partner", name: "Partner", symmetry: .symmetric, forwardLabel: "partner"),
+    RelationshipPreset(label: "Friend", name: "Friend", symmetry: .symmetric, forwardLabel: "friend"),
+    RelationshipPreset(label: "Sibling", name: "Sibling", symmetry: .symmetric, forwardLabel: "sibling"),
+    RelationshipPreset(label: "Parent / Child", name: "Parent", symmetry: .directional, forwardLabel: "parent", reverseLabel: "child"),
+    RelationshipPreset(label: "Protector / Protectee", name: "Protector", symmetry: .either, forwardLabel: "protector", reverseLabel: "protectee"),
+    RelationshipPreset(label: "Caretaker", name: "Caretaker", symmetry: .either, forwardLabel: "caretaker", reverseLabel: "cared for"),
+    RelationshipPreset(label: "Split from", name: "Split", symmetry: .directional, forwardLabel: "split from", reverseLabel: "split off"),
+]
+
+// MARK: - Relationship Graph
+
+struct RelationshipGraphNode: Identifiable, Codable {
+    let id: String
+    let name: String
+    let avatarURL: String?
+    let color: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, color
+        case avatarURL = "avatar_url"
+    }
+}
+
+struct RelationshipGraphEdge: Identifiable, Codable {
+    let id: String
+    let sourceID: String
+    let targetID: String
+    let relationshipTypeID: String
+    let typeName: String
+    let sourceLabel: String
+    let targetLabel: String
+    let mutual: Bool
+    let directed: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case id, mutual, directed
+        case sourceID           = "source_id"
+        case targetID           = "target_id"
+        case relationshipTypeID = "relationship_type_id"
+        case typeName           = "type_name"
+        case sourceLabel        = "source_label"
+        case targetLabel        = "target_label"
+    }
+}
+
+struct RelationshipGraph: Codable {
+    let nodes: [RelationshipGraphNode]
+    let edges: [RelationshipGraphEdge]
+}

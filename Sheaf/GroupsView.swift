@@ -321,6 +321,8 @@ struct GroupDetailSheet: View {
     let group: SystemGroup
     @State private var showEdit = false
     @State private var members: [Member] = []
+    @State private var relationships: [MemberRelationship] = []
+    @State private var showAddRelationship = false
 
     var body: some View {
         NavigationStack {
@@ -389,6 +391,34 @@ struct GroupDetailSheet: View {
                         }
                     }
                 }
+
+                if !relationships.isEmpty || !store.relationshipTypes.isEmpty {
+                    Section {
+                        if relationships.isEmpty {
+                            Text("No relationships yet")
+                                .font(.subheadline)
+                                .foregroundColor(theme.textTertiary)
+                                .listRowBackground(theme.backgroundCard)
+                        } else {
+                            ForEach(relationships) { rel in
+                                relationshipRow(rel)
+                            }
+                        }
+                    } header: {
+                        HStack {
+                            Text("Relationships")
+                            Spacer()
+                            Button {
+                                showAddRelationship = true
+                            } label: {
+                                Image(systemName: "plus")
+                                    .font(.footnote)
+                                    .foregroundColor(theme.accentLight)
+                            }
+                            .accessibilityLabel("Add Relationship")
+                        }
+                    }
+                }
             }
             .listStyle(.insetGrouped)
             .scrollContentBackground(.hidden)
@@ -411,9 +441,48 @@ struct GroupDetailSheet: View {
             GroupEditSheet(group: group)
                 .environmentObject(store)
         }
+        .sheet(isPresented: $showAddRelationship) {
+            AddRelationshipSheet(scope: .group, nodeID: group.id, nodeName: group.name) {
+                Task { await loadRelationships() }
+            }
+            .environmentObject(store)
+        }
         .task {
             if let fetched = try? await store.api?.getGroupMembers(groupID: group.id) {
                 members = fetched
+            }
+            await loadRelationships()
+        }
+    }
+
+    private func loadRelationships() async {
+        relationships = await store.getGroupRelationships(groupID: group.id)
+    }
+
+    @ViewBuilder
+    private func relationshipRow(_ rel: MemberRelationship) -> some View {
+        let other = store.groups.first { $0.id == rel.otherID }
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(other?.name ?? "Unknown group")
+                    .font(.subheadline).fontWeight(.medium)
+                    .foregroundColor(theme.textPrimary)
+                Text(rel.mutual ? "\(rel.label) (mutual)" : rel.label)
+                    .font(.caption)
+                    .foregroundColor(theme.textSecondary)
+            }
+            Spacer()
+        }
+        .listRowBackground(theme.backgroundCard)
+        .contextMenu {
+            Button(role: .destructive) {
+                Task {
+                    if await store.deleteGroupRelationship(id: rel.id) {
+                        relationships.removeAll { $0.id == rel.id }
+                    }
+                }
+            } label: {
+                Label("Remove Relationship", systemImage: "trash")
             }
         }
     }
