@@ -109,21 +109,32 @@ struct RelationshipGraphView: View {
                     .padding(12)
             }
             .overlay(alignment: .bottomTrailing) {
-                Button {
-                    fit()
-                } label: {
-                    Image(systemName: "scope")
-                        .font(.body)
-                        .foregroundColor(theme.accentLight)
-                        .padding(12)
-                        .background(Circle().fill(theme.backgroundCard))
+                Group {
+                    if #available(iOS 26.0, *) {
+                        recentreButton
+                            .glassEffect(.regular.interactive(), in: .circle)
+                    } else {
+                        recentreButton
+                            .background(Circle().fill(theme.backgroundCard))
+                    }
                 }
-                .accessibilityLabel("Recentre")
                 .padding(16)
             }
             .onAppear { canvasSize = geo.size; fit() }
             .onChange(of: geo.size) { _, s in canvasSize = s; fit() }
         }
+    }
+
+    private var recentreButton: some View {
+        Button {
+            fit()
+        } label: {
+            Image(systemName: "scope")
+                .font(.body)
+                .foregroundColor(theme.accentLight)
+                .padding(12)
+        }
+        .accessibilityLabel("Recentre")
     }
 
     private func draw(_ graph: RelationshipGraph, in context: GraphicsContext, size: CGSize) {
