@@ -19,7 +19,7 @@ struct QuickSwitchFrontSheet: View {
     }
 
     var sortedMembers: [Member] {
-        let members = store.membersByFrontFrequency
+        let members = store.membersByFrontFrequency.filter { !$0.isArchived }
         if searchText.isEmpty { return members }
         return members.filter {
             ($0.displayName ?? $0.name).localizedCaseInsensitiveContains(searchText)

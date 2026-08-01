@@ -1104,7 +1104,7 @@ struct AuthorPickerSheet: View {
     @State private var searchText = ""
 
     private var filteredMembers: [Member] {
-        let members = store.members.filter { !$0.isCustomFront }
+        let members = store.members.filter { !$0.isCustomFront && !$0.isArchived }
         if searchText.isEmpty { return members }
         return members.filter {
             ($0.displayName ?? $0.name).localizedCaseInsensitiveContains(searchText)

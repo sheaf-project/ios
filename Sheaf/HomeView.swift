@@ -175,7 +175,7 @@ struct HomeView: View {
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 12) {
                                 Spacer().frame(width: 12)
-                                ForEach(store.membersByFrontFrequency.prefix(8)) { member in
+                                ForEach(store.membersByFrontFrequency.filter { !$0.isArchived }.prefix(8)) { member in
                                     QuickSwitchChip(member: member) {
                                         Task { await store.switchFronting(to: [member.id]) }
                                     }
@@ -632,8 +632,9 @@ struct SwitchFrontingSheet: View {
     @State private var searchText = ""
 
     private var filteredMembers: [Member] {
-        if searchText.isEmpty { return store.members }
-        return store.members.filter {
+        let members = store.members.filter { !$0.isArchived }
+        if searchText.isEmpty { return members }
+        return members.filter {
             ($0.displayName ?? $0.name).localizedCaseInsensitiveContains(searchText)
         }
     }
