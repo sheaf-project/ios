@@ -61,19 +61,28 @@ final class AvatarImageCache: @unchecked Sendable {
         guard let url = request.url else { return nil }
         if let cached = image(for: url) { return cached }
         if let disk = imageFromDisk(for: url) { return disk }
-        do {
-            let (data, response) = try await URLSession.shared.data(for: request)
-            guard let http = response as? HTTPURLResponse,
-                  (200...299).contains(http.statusCode) else { return nil }
-            guard let image = UIImage(data: data) ?? Self.decodeWithImageIO(data) else {
-                return nil
+
+        let maxAttempts = 3
+        for i in 0..<maxAttempts {
+            do {
+                let (data, response) = try await URLSession.shared.data(for: request)
+                guard let http = response as? HTTPURLResponse else { return nil }
+                if (200...299).contains(http.statusCode) {
+                    guard let image = UIImage(data: data) ?? Self.decodeWithImageIO(data) else { return nil }
+                    set(image, for: url)
+                    writeToDisk(data, for: url)
+                    return image
+                }
+                // Only server-side transient statuses are worth retrying.
+                if http.statusCode != 429 && !(500...599).contains(http.statusCode) { return nil }
+            } catch {
+                if (error as? URLError)?.code == .cancelled { return nil }
             }
-            set(image, for: url)
-            writeToDisk(data, for: url)
-            return image
-        } catch {
-            return nil
+            if i < maxAttempts - 1 {
+                try? await Task.sleep(nanoseconds: 300_000_000 << i)
+            }
         }
+        return nil
     }
 
     /// Decodes image data using ImageIO directly, supporting formats UIImage may not handle.
