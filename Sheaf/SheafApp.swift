@@ -5,7 +5,7 @@ import UIKit
 @main
 struct SheafApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-    @StateObject private var authManager      = AuthManager()
+    @StateObject private var authManager      = AuthManager.shared
     @StateObject private var systemStore      = SystemStore()
     @StateObject private var themeManager     = ThemeManager()
     @StateObject private var networkMonitor   = NetworkMonitor.shared

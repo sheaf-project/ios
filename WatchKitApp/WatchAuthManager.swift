@@ -12,6 +12,12 @@ import Combine
 /// is what stops iCloud Keychain from accidentally handing the phone's
 /// one-shot refresh JWT to the watch.
 final class WatchAuthManager: ObservableObject {
+    /// Single app-wide instance. Background refresh must use this rather
+    /// than constructing its own manager: token refresh rotates the one-shot
+    /// refresh JWT, and a second instance holding the stale token would
+    /// replay it and get the session revoked.
+    static let shared = WatchAuthManager()
+
     @Published var isAuthenticated: Bool = false
     @Published var accessToken: String  = ""
     @Published var refreshToken: String = ""

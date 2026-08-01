@@ -162,10 +162,20 @@ class WatchStore: ObservableObject {
     // MARK: - Complication Support
     
     private func updateComplicationData() {
+        WatchFrontingWidgetSync.write(frontingMembers: frontingMembers, currentFronts: currentFronts)
+    }
+}
+
+// MARK: - Shared Fronting Widget Sync
+
+/// Writes the current fronting snapshot into the App Group and reloads the
+/// complications. Used both by the live store and by background refresh.
+enum WatchFrontingWidgetSync {
+    static func write(frontingMembers: [Member], currentFronts: [FrontEntry]) {
         guard let sharedDefaults = UserDefaults(suiteName: "group.systems.lupine.sheaf.shared") else {
             return
         }
-        
+
         let allSharedMembers = frontingMembers.map { member in
             let memberFrontStart = currentFronts
                 .filter { $0.memberIDs.contains(member.id) && $0.endedAt == nil }
@@ -183,19 +193,19 @@ class WatchStore: ObservableObject {
                 frontStartedAt: memberFrontStart
             )
         }
-        
+
         let frontingData = SharedFrontingData(
             primaryMember: allSharedMembers.first,
             totalCount: frontingMembers.count,
             updatedAt: Date(),
             allMembers: allSharedMembers
         )
-        
+
         if let encoded = try? JSONEncoder().encode(frontingData) {
             sharedDefaults.set(encoded, forKey: "currentFronting")
+            sharedDefaults.synchronize()
         }
-        
-        // Request complication update
+
         #if os(watchOS)
         WidgetCenter.shared.reloadAllTimelines()
         #endif

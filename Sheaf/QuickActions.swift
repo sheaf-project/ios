@@ -1,6 +1,7 @@
 import Combine
 import UIKit
 import UserNotifications
+import BackgroundTasks
 
 // MARK: - Quick Action Handler
 final class QuickActionHandler: ObservableObject {
@@ -17,6 +18,49 @@ final class QuickActionHandler: ObservableObject {
         DispatchQueue.main.async {
             self.pendingAction = QuickAction(rawValue: shortcutItem.type)
         }
+    }
+}
+
+// MARK: - Background Refresh
+// Periodically refreshes the shared fronting snapshot so the widgets stay
+// current while the app is suspended. iOS schedules these opportunistically.
+enum BackgroundRefreshManager {
+    static let taskIdentifier = "systems.lupine.sheaf.refresh"
+
+    static func register() {
+        BGTaskScheduler.shared.register(forTaskWithIdentifier: taskIdentifier, using: nil) { task in
+            handle(task as! BGAppRefreshTask)
+        }
+    }
+
+    static func schedule() {
+        let request = BGAppRefreshTaskRequest(identifier: taskIdentifier)
+        request.earliestBeginDate = Date(timeIntervalSinceNow: 15 * 60)
+        try? BGTaskScheduler.shared.submit(request)
+    }
+
+    private static func handle(_ task: BGAppRefreshTask) {
+        schedule()
+
+        let work = Task {
+            await refresh()
+            task.setTaskCompleted(success: true)
+        }
+        task.expirationHandler = { work.cancel() }
+    }
+
+    @MainActor
+    private static func refresh() async {
+        let auth = AuthManager.shared
+        guard auth.isAuthenticated else { return }
+
+        let api = APIClient(auth: auth)
+        guard let fronts = try? await api.getCurrentFronts(),
+              let members = try? await api.getMembers() else { return }
+
+        let ids = Set(fronts.flatMap { $0.memberIDs })
+        let frontingMembers = members.filter { ids.contains($0.id) }
+        FrontingWidgetSync.write(frontingMembers: frontingMembers, currentFronts: fronts)
     }
 }
 
@@ -47,6 +91,8 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
         UNUserNotificationCenter.current().delegate = PushNotificationManager.shared
+        BackgroundRefreshManager.register()
+        BackgroundRefreshManager.schedule()
         return true
     }
 
@@ -93,5 +139,9 @@ class SceneDelegate: NSObject, UIWindowSceneDelegate {
     ) {
         QuickActionHandler.shared.handle(shortcutItem)
         completionHandler(true)
+    }
+
+    func sceneDidEnterBackground(_ scene: UIScene) {
+        BackgroundRefreshManager.schedule()
     }
 }

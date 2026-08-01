@@ -2035,6 +2035,18 @@ class SystemStore: ObservableObject {
     // MARK: - Watch Complication Support
 
     private func updateWatchComplication() {
+        FrontingWidgetSync.write(frontingMembers: frontingMembers, currentFronts: currentFronts)
+        PhoneConnectivityManager.shared.syncCredentials()
+    }
+}
+
+// MARK: - Shared Fronting Widget Sync
+
+/// Writes the current fronting snapshot into the App Group and reloads the
+/// widgets. Used both by the live store and by background refresh so the
+/// widget always renders identical data regardless of who wrote it.
+enum FrontingWidgetSync {
+    static func write(frontingMembers: [Member], currentFronts: [FrontEntry]) {
         guard let sharedDefaults = UserDefaults(suiteName: "group.systems.lupine.sheaf.shared") else { return }
 
         let allSharedMembers = frontingMembers.map { member in
@@ -2070,8 +2082,6 @@ class SystemStore: ObservableObject {
         #if canImport(WidgetKit)
         WidgetKit.WidgetCenter.shared.reloadAllTimelines()
         #endif
-
-        PhoneConnectivityManager.shared.syncCredentials()
     }
 }
 

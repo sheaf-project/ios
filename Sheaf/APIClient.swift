@@ -26,6 +26,12 @@ extension Data {
 
 // MARK: - AuthManager
 final class AuthManager: ObservableObject {
+    /// Single app-wide instance. Background tasks must use this rather than
+    /// constructing their own AuthManager: a second instance gets its own
+    /// refreshTask, so its refresh can't coalesce with the app's and both
+    /// end up racing /v1/auth/refresh with the same one-shot token.
+    static let shared = AuthManager()
+
     @Published var isAuthenticated: Bool = false
     @Published var needsTOTP: Bool = false        // true while awaiting TOTP verification
     @Published var accessToken: String = ""
@@ -106,6 +112,18 @@ final class AuthManager: ObservableObject {
             debugLog("AuthManager: Keychain save FAILED (\(error)), tokens held in memory only")
             return false
         }
+    }
+
+    /// Another actor (background task, synced device via iCloud Keychain)
+    /// may have rotated the tokens since this instance loaded them. Sending
+    /// the stale one to /refresh reads as token reuse server-side, so pick
+    /// up whatever the keychain holds now before trying.
+    func adoptKeychainTokensIfRotated() {
+        guard let stored = KeychainHelper.get(key: refreshKey),
+              !stored.isEmpty, stored != refreshToken else { return }
+        debugLog("AuthManager: Keychain holds rotated tokens, adopting")
+        refreshToken = stored
+        accessToken  = KeychainHelper.get(key: accessKey) ?? accessToken
     }
 
     func retryKeychainSaveIfNeeded() {
@@ -549,6 +567,7 @@ class APIClient {
     private func refreshOnce() async throws -> TokenResponse {
         if let existing = auth.refreshTask { return try await existing.value }
 
+        auth.adoptKeychainTokensIfRotated()
         guard !auth.refreshToken.isEmpty else {
             throw NSError(domain: "APIError", code: 401,
                           userInfo: [NSLocalizedDescriptionKey: "No refresh token available."])

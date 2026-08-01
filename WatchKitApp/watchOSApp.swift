@@ -1,9 +1,11 @@
 import SwiftUI
 import AppIntents
+import WatchKit
 
 @main
 struct watchOSApp: App {
-    @StateObject private var authManager = WatchAuthManager()
+    @WKApplicationDelegateAdaptor(ExtensionDelegate.self) private var extensionDelegate
+    @StateObject private var authManager = WatchAuthManager.shared
     @StateObject private var store       = WatchStore()
     @Environment(\.scenePhase) private var scenePhase
 
@@ -59,8 +61,52 @@ struct watchOSApp: App {
             .onChange(of: scenePhase) { _, newPhase in
                 if newPhase == .active && authManager.isAuthenticated {
                     store.loadAll()
+                } else if newPhase == .background {
+                    WatchBackgroundRefresh.schedule()
                 }
             }
         }
+    }
+}
+
+// MARK: - Background Refresh
+// Periodically refreshes the shared fronting snapshot so complications stay
+// current while the app is suspended. watchOS schedules these opportunistically.
+final class ExtensionDelegate: NSObject, WKApplicationDelegate {
+    func handle(_ backgroundTasks: Set<WKRefreshBackgroundTask>) {
+        for task in backgroundTasks {
+            guard let refreshTask = task as? WKApplicationRefreshBackgroundTask else {
+                task.setTaskCompletedWithSnapshot(false)
+                continue
+            }
+            WatchBackgroundRefresh.schedule()
+            Task {
+                await WatchBackgroundRefresh.refresh()
+                refreshTask.setTaskCompletedWithSnapshot(false)
+            }
+        }
+    }
+}
+
+enum WatchBackgroundRefresh {
+    static func schedule() {
+        WKApplication.shared().scheduleBackgroundRefresh(
+            withPreferredDate: Date(timeIntervalSinceNow: 15 * 60),
+            userInfo: nil
+        ) { _ in }
+    }
+
+    @MainActor
+    static func refresh() async {
+        let auth = WatchAuthManager.shared
+        guard auth.isAuthenticated else { return }
+
+        let api = WatchAPIClient(auth: auth)
+        guard let fronts = try? await api.getCurrentFronts(),
+              let members = try? await api.getMembers() else { return }
+
+        let ids = Set(fronts.flatMap { $0.memberIDs })
+        let fronting = members.filter { ids.contains($0.id) }
+        WatchFrontingWidgetSync.write(frontingMembers: fronting, currentFronts: fronts)
     }
 }
