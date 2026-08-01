@@ -1,20 +1,23 @@
 import SwiftUI
 
 enum QuickSwitchPosition: String, CaseIterable {
-    case belowFronters = "belowFronters"
-    case aboveTabBar   = "aboveTabBar"
+    case belowFronters    = "belowFronters"
+    case aboveTabBar      = "aboveTabBar"
+    case mergedWithTabBar = "mergedWithTabBar"
 
     var label: String {
         switch self {
-        case .belowFronters: return "Below Fronters"
-        case .aboveTabBar:   return "Above Tab Bar"
+        case .belowFronters:    return "Below Fronters"
+        case .aboveTabBar:      return "Above Tab Bar"
+        case .mergedWithTabBar: return "Merged with Tab Bar"
         }
     }
 
     var icon: String {
         switch self {
-        case .belowFronters: return "rectangle.grid.1x2"
-        case .aboveTabBar:   return "dock.rectangle"
+        case .belowFronters:    return "rectangle.grid.1x2"
+        case .aboveTabBar:      return "dock.rectangle"
+        case .mergedWithTabBar: return "platter.filled.bottom.iphone"
         }
     }
 }

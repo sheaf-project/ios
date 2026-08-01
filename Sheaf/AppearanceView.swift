@@ -110,7 +110,7 @@ struct AppearanceView: View {
                 .padding(.horizontal, 24)
 
             VStack(spacing: 0) {
-                ForEach(QuickSwitchPosition.allCases, id: \.self) { position in
+                ForEach(availablePositions, id: \.self) { position in
                     Button {
                         quickSwitchPosition = position
                     } label: {
@@ -132,7 +132,7 @@ struct AppearanceView: View {
                     }
                     .buttonStyle(.plain)
 
-                    if position != QuickSwitchPosition.allCases.last {
+                    if position != availablePositions.last {
                         Divider().background(theme.divider).padding(.leading, 52)
                     }
                 }
@@ -142,6 +142,13 @@ struct AppearanceView: View {
             .overlay(RoundedRectangle(cornerRadius: 16).stroke(theme.backgroundCard, lineWidth: 1))
             .padding(.horizontal, 24)
         }
+    }
+
+    private var availablePositions: [QuickSwitchPosition] {
+        if #available(iOS 26.1, *) {
+            return QuickSwitchPosition.allCases
+        }
+        return QuickSwitchPosition.allCases.filter { $0 != .mergedWithTabBar }
     }
 
     private var visiblePalettes: [Palette] {

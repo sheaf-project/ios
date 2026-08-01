@@ -52,12 +52,97 @@ struct ContentView: View {
                     }
             }
             .tint(theme.accentLight)
+            .modifier(QuickSwitchAccessoryModifier(isHomeTab: selectedTab == 0))
         }
     }
 
     // MARK: - Private
 
     @Binding var selectedTab: Int
+}
+
+// MARK: - Quick Switch Tab Bar Accessory
+
+struct QuickSwitchAccessoryModifier: ViewModifier {
+    @AppStorage("quickSwitchPosition") private var quickSwitchPosition: QuickSwitchPosition = .belowFronters
+    @EnvironmentObject var store: SystemStore
+    // Lives here rather than in the accessory view because the system
+    // recreates the accessory when the tab bar layout changes, which
+    // would reset any state held inside it mid-presentation.
+    @State private var showSwitchSheet = false
+    let isHomeTab: Bool
+
+    func body(content: Content) -> some View {
+        if #available(iOS 26.1, *) {
+            content
+                .tabViewBottomAccessory(isEnabled: isHomeTab && quickSwitchPosition == .mergedWithTabBar) {
+                    QuickSwitchAccessoryView(showSwitchSheet: $showSwitchSheet)
+                }
+                .sheet(isPresented: $showSwitchSheet) {
+                    SwitchFrontingSheet()
+                        .environmentObject(store)
+                }
+        } else {
+            content
+        }
+    }
+}
+
+@available(iOS 26.1, *)
+struct QuickSwitchAccessoryView: View {
+    @EnvironmentObject var store: SystemStore
+    @Environment(\.theme) var theme
+    @Environment(\.tabViewBottomAccessoryPlacement) var placement
+    @Binding var showSwitchSheet: Bool
+
+    var body: some View {
+        Group {
+            if placement == .inline {
+                Button {
+                    showSwitchSheet = true
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "arrow.left.arrow.right")
+                            .font(.footnote)
+                        Text("Quick Switch")
+                            .font(.subheadline).fontWeight(.medium)
+                    }
+                    .foregroundColor(theme.textPrimary)
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.plain)
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 10) {
+                        ForEach(store.membersByFrontFrequency.filter { !$0.isArchived }.prefix(8)) { member in
+                            Button {
+                                Task { await store.switchFronting(to: [member.id]) }
+                            } label: {
+                                AvatarView(member: member, size: 36)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Switch to \(member.displayName ?? member.name)")
+                        }
+                        Button {
+                            showSwitchSheet = true
+                        } label: {
+                            ZStack {
+                                Circle()
+                                    .stroke(theme.inputBorder, style: StrokeStyle(lineWidth: 1.5, dash: [4]))
+                                    .frame(width: 36, height: 36)
+                                Image(systemName: "plus")
+                                    .font(.footnote)
+                                    .foregroundColor(theme.textSecondary)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("More members")
+                    }
+                    .padding(.horizontal, 14)
+                }
+            }
+        }
+    }
 }
 
 // MARK: - Members + Groups
