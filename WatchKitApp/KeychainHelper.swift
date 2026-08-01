@@ -21,33 +21,34 @@ class KeychainHelper {
         case unhandledError(status: OSStatus)
     }
     
-    /// Save a string value to keychain with iCloud sync enabled
-    static func save(key: String, value: String) throws {
+    /// Save a string value to keychain. Synchronizable items sync via
+    /// iCloud Keychain; pass synchronizable: false for per-device secrets.
+    static func save(key: String, value: String, synchronizable: Bool = true) throws {
         let data = value.data(using: .utf8)!
-        
+
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrAccount as String: key,
             kSecAttrService as String: "systems.lupine.sheaf",
             kSecValueData as String: data,
-            kSecAttrSynchronizable as String: true,  // Enable iCloud sync
+            kSecAttrSynchronizable as String: synchronizable,
             // AfterFirstUnlock so background refreshes (WCSession wakes,
             // silent pushes) can persist rotated tokens while the device
             // is locked. WhenUnlocked (the default) made those saves fail
             // silently, leaving a stale one-shot refresh token on disk.
             kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock
         ]
-        
+
         // Try to add the item
         let addStatus = SecItemAdd(query as CFDictionary, nil)
-        
+
         if addStatus == errSecDuplicateItem {
             // Item exists, update it instead
             let updateQuery: [String: Any] = [
                 kSecClass as String: kSecClassGenericPassword,
                 kSecAttrAccount as String: key,
                 kSecAttrService as String: "systems.lupine.sheaf",
-                kSecAttrSynchronizable as String: true
+                kSecAttrSynchronizable as String: synchronizable
             ]
             
             let updateAttributes: [String: Any] = [
@@ -68,12 +69,12 @@ class KeychainHelper {
     }
     
     /// Retrieve a string value from keychain
-    static func get(key: String) -> String? {
+    static func get(key: String, synchronizable: Bool = true) -> String? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrAccount as String: key,
             kSecAttrService as String: "systems.lupine.sheaf",
-            kSecAttrSynchronizable as String: true,  // Look for synced items
+            kSecAttrSynchronizable as String: synchronizable,
             kSecReturnData as String: true,
             kSecMatchLimit as String: kSecMatchLimitOne
         ]
@@ -95,12 +96,12 @@ class KeychainHelper {
     }
     
     /// Delete a value from keychain
-    static func delete(key: String) {
+    static func delete(key: String, synchronizable: Bool = true) {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrAccount as String: key,
             kSecAttrService as String: "systems.lupine.sheaf",
-            kSecAttrSynchronizable as String: true
+            kSecAttrSynchronizable as String: synchronizable
         ]
         
         let status = SecItemDelete(query as CFDictionary)
@@ -114,5 +115,7 @@ class KeychainHelper {
         delete(key: "sheaf_base_url")
         delete(key: "sheaf_access_token")
         delete(key: "sheaf_refresh_token")
+        delete(key: "sheaf_device_access_token", synchronizable: false)
+        delete(key: "sheaf_device_refresh_token", synchronizable: false)
     }
 }

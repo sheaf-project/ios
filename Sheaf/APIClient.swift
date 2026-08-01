@@ -60,6 +60,22 @@ final class AuthManager: ObservableObject {
     private let refreshKey = "sheaf_refresh_token"
     private let urlKey     = "sheaf_base_url"
 
+    // This device's own session, stored local-only. The legacy keys above
+    // are iCloud-synced, which made every device on the account share one
+    // session and its one-shot refresh token — whichever device rotated
+    // first invalidated the others' copy until sync caught up. Distinct
+    // key names keep the local items from colliding with the synced ones.
+    private let deviceAccessKey  = "sheaf_device_access_token"
+    private let deviceRefreshKey = "sheaf_device_refresh_token"
+
+    /// True once this device runs its own server session (after a fresh
+    /// login or a session split). Rotations then persist locally only.
+    private(set) var usingDeviceSession = false
+
+    /// Serializes the session split so concurrent triggers can't mint
+    /// two child sessions.
+    private var sessionSplitTask: Task<Void, Error>?
+
     /// Set when a keychain write fails (e.g. device locked during a
     /// background refresh). Retried on next foreground so the persisted
     /// refresh token doesn't go stale while memory holds the rotated one.
@@ -81,10 +97,19 @@ final class AuthManager: ObservableObject {
     }
 
     init() {
-        // Load from iCloud Keychain (syncs to watch automatically)
-        accessToken  = KeychainHelper.get(key: accessKey) ?? ""
-        refreshToken = KeychainHelper.get(key: refreshKey) ?? ""
-        baseURL      = KeychainHelper.get(key: urlKey) ?? ""
+        baseURL = KeychainHelper.get(key: urlKey) ?? ""
+
+        // Prefer this device's own local session; fall back to the legacy
+        // synced tokens for installs that haven't split yet.
+        let deviceRefresh = KeychainHelper.get(key: deviceRefreshKey, synchronizable: false) ?? ""
+        if !deviceRefresh.isEmpty {
+            usingDeviceSession = true
+            accessToken  = KeychainHelper.get(key: deviceAccessKey, synchronizable: false) ?? ""
+            refreshToken = deviceRefresh
+        } else {
+            accessToken  = KeychainHelper.get(key: accessKey) ?? ""
+            refreshToken = KeychainHelper.get(key: refreshKey) ?? ""
+        }
         isAuthenticated = !accessToken.isEmpty && !baseURL.isEmpty
 
         debugLog("AuthManager: Loaded from Keychain - isAuthenticated: \(isAuthenticated)")
@@ -105,8 +130,13 @@ final class AuthManager: ObservableObject {
     private func persistTokens() -> Bool {
         do {
             try KeychainHelper.save(key: urlKey, value: baseURL)
-            try KeychainHelper.save(key: accessKey, value: accessToken)
-            try KeychainHelper.save(key: refreshKey, value: refreshToken)
+            if usingDeviceSession {
+                try KeychainHelper.save(key: deviceAccessKey,  value: accessToken,  synchronizable: false)
+                try KeychainHelper.save(key: deviceRefreshKey, value: refreshToken, synchronizable: false)
+            } else {
+                try KeychainHelper.save(key: accessKey, value: accessToken)
+                try KeychainHelper.save(key: refreshKey, value: refreshToken)
+            }
             return true
         } catch {
             debugLog("AuthManager: Keychain save FAILED (\(error)), tokens held in memory only")
@@ -119,11 +149,49 @@ final class AuthManager: ObservableObject {
     /// the stale one to /refresh reads as token reuse server-side, so pick
     /// up whatever the keychain holds now before trying.
     func adoptKeychainTokensIfRotated() {
-        guard let stored = KeychainHelper.get(key: refreshKey),
+        let key  = usingDeviceSession ? deviceRefreshKey : refreshKey
+        let sync = !usingDeviceSession
+        guard let stored = KeychainHelper.get(key: key, synchronizable: sync),
               !stored.isEmpty, stored != refreshToken else { return }
         debugLog("AuthManager: Keychain holds rotated tokens, adopting")
         refreshToken = stored
-        accessToken  = KeychainHelper.get(key: accessKey) ?? accessToken
+        accessToken  = KeychainHelper.get(key: usingDeviceSession ? deviceAccessKey : accessKey,
+                                          synchronizable: sync) ?? accessToken
+    }
+
+    /// Splits this device onto its own server session when the current
+    /// tokens may be shared with other devices through iCloud Keychain.
+    /// Mints a child session and stores its tokens locally only; the
+    /// parent tokens stay in the synced keychain untouched so devices
+    /// that haven't updated keep working. No-op once split.
+    @MainActor
+    func splitSharedSessionIfNeeded() async {
+        guard isAuthenticated, !usingDeviceSession else { return }
+        if let existing = sessionSplitTask {
+            try? await existing.value
+            return
+        }
+        let task = Task<Void, Error> {
+            let api = APIClient(auth: self)
+            #if os(iOS)
+            let clientName = "Sheaf iOS (\(UIDevice.current.model))"
+            #else
+            let clientName = "Sheaf iOS"
+            #endif
+            let response = try await api.createSecondarySession(clientName: clientName)
+            accessToken  = response.accessToken
+            refreshToken = response.refreshToken
+            usingDeviceSession = true
+            if !persistTokens() { needsKeychainRetry = true }
+            debugLog("AuthManager: Split onto device session \(response.sessionId)")
+        }
+        sessionSplitTask = task
+        defer { sessionSplitTask = nil }
+        do {
+            try await task.value
+        } catch {
+            debugLog("AuthManager: Session split failed, staying on shared session: \(error)")
+        }
     }
 
     func retryKeychainSaveIfNeeded() {
@@ -195,7 +263,7 @@ final class AuthManager: ObservableObject {
     /// Call once TOTP is verified to finalize the session.
     func completeTOTP() {
         guard let tokens = pendingTokens else { return }
-        save(baseURL: pendingBaseURL, tokens: tokens)
+        save(baseURL: pendingBaseURL, tokens: tokens, isNewLogin: true)
         pendingTokens = nil
         needsTOTP = false
     }
@@ -210,7 +278,12 @@ final class AuthManager: ObservableObject {
         needsTOTP      = false
     }
 
-    func save(baseURL: String, tokens: TokenResponse) {
+    /// Pass isNewLogin on login/registration: those tokens belong to a
+    /// brand-new session minted for this device, so they persist to the
+    /// local-only keys and never enter the synced keychain. Rotations
+    /// (the default) keep whichever storage the session already uses.
+    func save(baseURL: String, tokens: TokenResponse, isNewLogin: Bool = false) {
+        if isNewLogin { usingDeviceSession = true }
         let cleanURL = baseURL.hasSuffix("/") ? String(baseURL.dropLast()) : baseURL
         self.baseURL      = cleanURL
         self.accessToken  = tokens.accessToken
@@ -224,10 +297,9 @@ final class AuthManager: ObservableObject {
         // and re-minted on demand by syncCredentials() / the WCSession
         // credential reply path.
 
-        // Save to iCloud Keychain (will sync to watch automatically)
         if persistTokens() {
             needsKeychainRetry = false
-            debugLog("AuthManager: Credentials saved to iCloud Keychain")
+            debugLog("AuthManager: Credentials saved to Keychain")
         } else {
             needsKeychainRetry = true
         }
@@ -274,6 +346,7 @@ final class AuthManager: ObservableObject {
         // Delete from Keychain
         KeychainHelper.deleteAll()
         clearWatchCredentials()
+        usingDeviceSession = false
 
         #if os(iOS)
         try? WCSession.default.updateApplicationContext(

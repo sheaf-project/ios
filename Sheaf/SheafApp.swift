@@ -183,6 +183,9 @@ struct MainView: View {
                     .environmentObject(systemStore)
             }
             .task {
+                // Split off a session shared via iCloud Keychain before
+                // anything else rotates its one-shot refresh token.
+                await authManager.splitSharedSessionIfNeeded()
                 systemStore.configure(auth: authManager, themeManager: themeManager)
                 // Configure and sync credentials with watch
                 PhoneConnectivityManager.shared.configure(auth: authManager)

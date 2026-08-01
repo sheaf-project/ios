@@ -253,7 +253,7 @@ struct SignInForm: View {
                 
                 // Login succeeded, save credentials
                 await MainActor.run {
-                    authManager.save(baseURL: cleanURL, tokens: tokens)
+                    authManager.save(baseURL: cleanURL, tokens: tokens, isNewLogin: true)
                 }
                 // Check account status after login
                 let authedAPI = APIClient(auth: authManager)
@@ -509,7 +509,7 @@ struct RegisterForm: View {
                     captcha: captchaPayload
                 )
                 await MainActor.run {
-                    authManager.save(baseURL: cleanURL, tokens: tokens)
+                    authManager.save(baseURL: cleanURL, tokens: tokens, isNewLogin: true)
                     authManager.needsOnboarding = true
                 }
                 // Check account status after registration
