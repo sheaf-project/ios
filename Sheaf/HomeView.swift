@@ -8,6 +8,7 @@ struct HomeView: View {
     @State private var showSwitchSheet = false
     @State private var showSettings = false
     @State private var showMessages = false
+    @Namespace private var glassNamespace
 
     var body: some View {
         ZStack {
@@ -52,6 +53,7 @@ struct HomeView: View {
                                     }
                                 }
                             }
+                            .modifier(HeaderGlassButtonModifier(namespace: glassNamespace))
                             Button {
                                 showSettings = true
                             } label: {
@@ -59,7 +61,9 @@ struct HomeView: View {
                                     .font(.title3)
                                     .foregroundColor(theme.textSecondary)
                             }
+                            .modifier(HeaderGlassButtonModifier(namespace: glassNamespace))
                         }
+                        .modifier(HeaderGlassContainerModifier())
                     }
                     .padding(.horizontal, 24)
                     .padding(.top, 16)
@@ -736,5 +740,35 @@ struct SwitchFrontingSheet: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Glass Modifier
+
+struct HeaderGlassContainerModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            GlassEffectContainer {
+                content
+            }
+        } else {
+            content
+        }
+    }
+}
+
+struct HeaderGlassButtonModifier: ViewModifier {
+    let namespace: Namespace.ID
+
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content
+                .padding(.vertical, 10)
+                .padding(.horizontal, 9)
+                .glassEffect(.regular.interactive())
+                .glassEffectUnion(id: "header", namespace: namespace)
+        } else {
+            content
+        }
     }
 }

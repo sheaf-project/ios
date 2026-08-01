@@ -7,6 +7,7 @@ struct PollsView: View {
     @Environment(\.theme) var theme
     @State private var isLoading = false
     @State private var showNewPoll = false
+    @Namespace private var glassNamespace
     @State private var selectedPoll: Poll?
     @State private var pollToDelete: Poll?
     @State private var showDeleteConfirm = false
@@ -45,6 +46,7 @@ struct PollsView: View {
                                 .font(.title3)
                                 .foregroundColor(theme.accentLight)
                         }
+                        .modifier(HeaderGlassButtonModifier(namespace: glassNamespace))
                         Button {
                             Task { await reload() }
                         } label: {
@@ -52,7 +54,9 @@ struct PollsView: View {
                                 .font(.subheadline).fontWeight(.semibold)
                                 .foregroundColor(theme.textSecondary)
                         }
+                        .modifier(HeaderGlassButtonModifier(namespace: glassNamespace))
                     }
+                    .modifier(HeaderGlassContainerModifier())
                 }
                 .padding(.horizontal, 24)
                 .padding(.top, 16)

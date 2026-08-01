@@ -41,6 +41,7 @@ struct HistoryView: View {
     @State private var graphTimeRange: GraphTimeRange = .week
     @State private var showGraph = true
     @State private var showAnalytics = false
+    @Namespace private var glassNamespace
 
     var body: some View {
         ZStack {
@@ -61,6 +62,7 @@ struct HistoryView: View {
                                 .font(.title3)
                                 .foregroundColor(theme.accentLight)
                         }
+                        .modifier(HeaderGlassButtonModifier(namespace: glassNamespace))
                         Button {
                             showAddEntry = true
                         } label: {
@@ -68,6 +70,7 @@ struct HistoryView: View {
                                 .font(.title3)
                                 .foregroundColor(theme.accentLight)
                         }
+                        .modifier(HeaderGlassButtonModifier(namespace: glassNamespace))
                         Button {
                             Task { await reload() }
                         } label: {
@@ -75,7 +78,9 @@ struct HistoryView: View {
                                 .font(.subheadline).fontWeight(.semibold)
                                 .foregroundColor(theme.textSecondary)
                         }
+                        .modifier(HeaderGlassButtonModifier(namespace: glassNamespace))
                     }
+                    .modifier(HeaderGlassContainerModifier())
                 }
                 .padding(.horizontal, 24)
                 .padding(.top, 16)

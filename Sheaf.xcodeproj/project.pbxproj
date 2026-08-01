@@ -716,7 +716,7 @@
 				CODE_SIGN_ENTITLEMENTS = Sheaf/SheafDebug.entitlements;
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 222;
+				CURRENT_PROJECT_VERSION = 223;
 				DEVELOPMENT_TEAM = "";
 				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = 9WFRFPMG45;
 				ENABLE_PREVIEWS = YES;
@@ -758,7 +758,7 @@
 				CODE_SIGN_ENTITLEMENTS = Sheaf/Sheaf.entitlements;
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Distribution";
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 222;
+				CURRENT_PROJECT_VERSION = 223;
 				DEVELOPMENT_TEAM = "";
 				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = 9WFRFPMG45;
 				ENABLE_PREVIEWS = YES;
@@ -800,7 +800,7 @@
 				CODE_SIGN_ENTITLEMENTS = "watchOS App.entitlements";
 				"CODE_SIGN_IDENTITY[sdk=watchos*]" = "iPhone Developer";
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 222;
+				CURRENT_PROJECT_VERSION = 223;
 				DEVELOPMENT_TEAM = "";
 				"DEVELOPMENT_TEAM[sdk=watchos*]" = 9WFRFPMG45;
 				ENABLE_PREVIEWS = YES;
@@ -839,7 +839,7 @@
 				CODE_SIGN_ENTITLEMENTS = "watchOS AppRelease.entitlements";
 				"CODE_SIGN_IDENTITY[sdk=watchos*]" = "iPhone Distribution";
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 222;
+				CURRENT_PROJECT_VERSION = 223;
 				DEVELOPMENT_TEAM = "";
 				"DEVELOPMENT_TEAM[sdk=watchos*]" = 9WFRFPMG45;
 				ENABLE_PREVIEWS = YES;
@@ -875,7 +875,7 @@
 			buildSettings = {
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 222;
+				CURRENT_PROJECT_VERSION = 223;
 				DEVELOPMENT_TEAM = "";
 				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = 9WFRFPMG45;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -908,7 +908,7 @@
 			buildSettings = {
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Distribution";
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 222;
+				CURRENT_PROJECT_VERSION = 223;
 				DEVELOPMENT_TEAM = "";
 				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = 9WFRFPMG45;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -944,7 +944,7 @@
 				CODE_SIGN_ENTITLEMENTS = watchOSWidgetExtensionDebug.entitlements;
 				"CODE_SIGN_IDENTITY[sdk=watchos*]" = "iPhone Developer";
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 222;
+				CURRENT_PROJECT_VERSION = 223;
 				DEVELOPMENT_TEAM = "";
 				"DEVELOPMENT_TEAM[sdk=watchos*]" = 9WFRFPMG45;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -982,7 +982,7 @@
 				CODE_SIGN_ENTITLEMENTS = watchOSWidgetExtension.entitlements;
 				"CODE_SIGN_IDENTITY[sdk=watchos*]" = "iPhone Distribution";
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 222;
+				CURRENT_PROJECT_VERSION = 223;
 				DEVELOPMENT_TEAM = "";
 				"DEVELOPMENT_TEAM[sdk=watchos*]" = 9WFRFPMG45;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -1020,7 +1020,7 @@
 				CODE_SIGN_ENTITLEMENTS = iOSWidgetExtension.entitlements;
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 222;
+				CURRENT_PROJECT_VERSION = 223;
 				DEVELOPMENT_TEAM = "";
 				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = 9WFRFPMG45;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -1056,7 +1056,7 @@
 				CODE_SIGN_ENTITLEMENTS = iOSWidgetExtension.entitlements;
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Distribution";
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 222;
+				CURRENT_PROJECT_VERSION = 223;
 				DEVELOPMENT_TEAM = "";
 				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = 9WFRFPMG45;
 				GENERATE_INFOPLIST_FILE = YES;

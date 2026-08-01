@@ -7,6 +7,7 @@ struct JournalsView: View {
     @State private var isLoadingMore = false
     @State private var selectedEntry: JournalEntry?
     @State private var showNewEntry = false
+    @Namespace private var glassNamespace
     @State private var entryToDelete: JournalEntry?
     @State private var showDeleteConfirm = false
     @State private var showDeleteQueued = false
@@ -30,6 +31,7 @@ struct JournalsView: View {
                                 .font(.title3)
                                 .foregroundColor(theme.accentLight)
                         }
+                        .modifier(HeaderGlassButtonModifier(namespace: glassNamespace))
                         Button {
                             Task { await reload() }
                         } label: {
@@ -37,7 +39,9 @@ struct JournalsView: View {
                                 .font(.subheadline).fontWeight(.semibold)
                                 .foregroundColor(theme.textSecondary)
                         }
+                        .modifier(HeaderGlassButtonModifier(namespace: glassNamespace))
                     }
+                    .modifier(HeaderGlassContainerModifier())
                 }
                 .padding(.horizontal, 24)
                 .padding(.top, 16)
