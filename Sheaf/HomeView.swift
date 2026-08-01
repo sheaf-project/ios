@@ -1,5 +1,24 @@
 import SwiftUI
 
+enum QuickSwitchPosition: String, CaseIterable {
+    case belowFronters = "belowFronters"
+    case aboveTabBar   = "aboveTabBar"
+
+    var label: String {
+        switch self {
+        case .belowFronters: return "Below Fronters"
+        case .aboveTabBar:   return "Above Tab Bar"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .belowFronters: return "rectangle.grid.1x2"
+        case .aboveTabBar:   return "dock.rectangle"
+        }
+    }
+}
+
 struct HomeView: View {
     @EnvironmentObject var store: SystemStore
     @EnvironmentObject var authManager: AuthManager
@@ -8,6 +27,7 @@ struct HomeView: View {
     @State private var showSwitchSheet = false
     @State private var showSettings = false
     @State private var showMessages = false
+    @AppStorage("quickSwitchPosition") private var quickSwitchPosition: QuickSwitchPosition = .belowFronters
     @Namespace private var glassNamespace
 
     var body: some View {
@@ -170,42 +190,8 @@ struct HomeView: View {
 
 
                     // Quick switch section
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Quick Switch")
-                            .font(.headline)
-                            .foregroundColor(theme.textPrimary.opacity(0.8))
-                            .padding(.horizontal, 24)
-
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 12) {
-                                Spacer().frame(width: 12)
-                                ForEach(store.membersByFrontFrequency.filter { !$0.isArchived }.prefix(8)) { member in
-                                    QuickSwitchChip(member: member) {
-                                        Task { await store.switchFronting(to: [member.id]) }
-                                    }
-                                }
-                                Button {
-                                    showSwitchSheet = true
-                                } label: {
-                                    VStack(spacing: 6) {
-                                        ZStack {
-                                            Circle()
-                                                .stroke(theme.inputBorder, style: StrokeStyle(lineWidth: 1.5, dash: [4]))
-                                                .frame(width: 52, height: 52)
-                                            Image(systemName: "plus")
-                                                .foregroundColor(theme.textSecondary)
-                                                .font(.body)
-                                        }
-                                        Text("More")
-                                            .font(.caption2)
-                                            .foregroundColor(theme.textTertiary)
-                                    }
-                                }
-                                Spacer().frame(width: 12)
-                            }
-                        }
-                        .background(Color.clear)
-                        .scrollContentBackground(.hidden)
+                    if quickSwitchPosition == .belowFronters {
+                        quickSwitchSection
                     }
 
                     Spacer().frame(height: 80)
@@ -213,6 +199,14 @@ struct HomeView: View {
             }
             .refreshable {
                 await refresh()
+            }
+            .safeAreaInset(edge: .bottom) {
+                if quickSwitchPosition == .aboveTabBar {
+                    quickSwitchSection
+                        .padding(.top, 16)
+                        .padding(.bottom, 12)
+                        .background(.ultraThinMaterial)
+                }
             }
         }
         .sheet(isPresented: $showSwitchSheet) {
@@ -234,6 +228,46 @@ struct HomeView: View {
         }
     }
 
+
+    private var quickSwitchSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Quick Switch")
+                .font(.headline)
+                .foregroundColor(theme.textPrimary.opacity(0.8))
+                .padding(.horizontal, 24)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 12) {
+                    Spacer().frame(width: 12)
+                    ForEach(store.membersByFrontFrequency.filter { !$0.isArchived }.prefix(8)) { member in
+                        QuickSwitchChip(member: member) {
+                            Task { await store.switchFronting(to: [member.id]) }
+                        }
+                    }
+                    Button {
+                        showSwitchSheet = true
+                    } label: {
+                        VStack(spacing: 6) {
+                            ZStack {
+                                Circle()
+                                    .stroke(theme.inputBorder, style: StrokeStyle(lineWidth: 1.5, dash: [4]))
+                                    .frame(width: 52, height: 52)
+                                Image(systemName: "plus")
+                                    .foregroundColor(theme.textSecondary)
+                                    .font(.body)
+                            }
+                            Text("More")
+                                .font(.caption2)
+                                .foregroundColor(theme.textTertiary)
+                        }
+                    }
+                    Spacer().frame(width: 12)
+                }
+            }
+            .background(Color.clear)
+            .scrollContentBackground(.hidden)
+        }
+    }
 
     private var safetyBannerItems: [SafetyBannerItem] {
         var items: [SafetyBannerItem] = []

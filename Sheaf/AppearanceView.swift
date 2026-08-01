@@ -6,6 +6,7 @@ struct AppearanceView: View {
     @EnvironmentObject var store: SystemStore
     @EnvironmentObject var themeManager: ThemeManager
     @Environment(\.theme) var theme
+    @AppStorage("quickSwitchPosition") private var quickSwitchPosition: QuickSwitchPosition = .belowFronters
 
     var body: some View {
         ZStack {
@@ -15,6 +16,7 @@ struct AppearanceView: View {
                 VStack(spacing: 24) {
                     modeSection
                     paletteSection
+                    quickSwitchSection
                 }
                 .padding(.vertical, 16)
             }
@@ -92,6 +94,52 @@ struct AppearanceView: View {
                     }
                 }
             }
+            .padding(.horizontal, 24)
+        }
+    }
+
+    // MARK: Quick Switch
+
+    private var quickSwitchSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Quick Switch")
+                .font(.caption).fontWeight(.semibold)
+                .foregroundColor(theme.textSecondary)
+                .textCase(.uppercase)
+                .kerning(0.8)
+                .padding(.horizontal, 24)
+
+            VStack(spacing: 0) {
+                ForEach(QuickSwitchPosition.allCases, id: \.self) { position in
+                    Button {
+                        quickSwitchPosition = position
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: position.icon)
+                                .foregroundColor(quickSwitchPosition == position ? theme.accentLight : theme.textTertiary)
+                                .frame(width: 20)
+                            Text(position.label)
+                                .font(.subheadline)
+                                .foregroundColor(theme.textPrimary)
+                            Spacer()
+                            if quickSwitchPosition == position {
+                                Image(systemName: "checkmark")
+                                    .font(.footnote).fontWeight(.semibold)
+                                    .foregroundColor(theme.accentLight)
+                            }
+                        }
+                        .padding(.horizontal, 16).padding(.vertical, 14)
+                    }
+                    .buttonStyle(.plain)
+
+                    if position != QuickSwitchPosition.allCases.last {
+                        Divider().background(theme.divider).padding(.leading, 52)
+                    }
+                }
+            }
+            .background(theme.backgroundCard)
+            .cornerRadius(16)
+            .overlay(RoundedRectangle(cornerRadius: 16).stroke(theme.backgroundCard, lineWidth: 1))
             .padding(.horizontal, 24)
         }
     }
