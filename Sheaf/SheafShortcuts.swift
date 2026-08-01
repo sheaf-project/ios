@@ -77,15 +77,7 @@ struct MemberEntity: AppEntity {
 }
 
 // MARK: - Member Entity Query
-struct MemberEntityQuery: EntityQuery, EnumerableEntityQuery, EntityStringQuery {
-    // EnumerableEntityQuery tells Shortcuts to show a full pre-populated
-    // picker list instead of a free-text search field.
-    func allEntities() async throws -> [MemberEntity] {
-        let members = await ShortcutsDataStore.shared.members
-        return members
-            .map { MemberEntity(id: $0.id, name: $0.name, displayName: $0.displayName, color: $0.color) }
-    }
-
+struct MemberEntityQuery: EntityQuery, EntityStringQuery {
     func entities(for identifiers: [String]) async throws -> [MemberEntity] {
         let members = await ShortcutsDataStore.shared.members
         return members
@@ -93,8 +85,12 @@ struct MemberEntityQuery: EntityQuery, EnumerableEntityQuery, EntityStringQuery 
             .map { MemberEntity(id: $0.id, name: $0.name, displayName: $0.displayName, color: $0.color) }
     }
 
+    // suggestedEntities gives Shortcuts a full pre-populated picker list
+    // instead of a free-text search field.
     func suggestedEntities() async throws -> [MemberEntity] {
-        try await allEntities()
+        let members = await ShortcutsDataStore.shared.members
+        return members
+            .map { MemberEntity(id: $0.id, name: $0.name, displayName: $0.displayName, color: $0.color) }
     }
 
     // EntityStringQuery: called when Siri hears a name and needs to resolve
