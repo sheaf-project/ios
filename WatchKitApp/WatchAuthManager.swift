@@ -27,27 +27,17 @@ final class WatchAuthManager: ObservableObject {
     private let refreshKey = "sheaf_watch_refresh_token"
     private let urlKey     = "sheaf_base_url"
 
-    // Old (pre-companion-session) keychain keys. We migrate off these on
-    // first launch of the new build so a freshly-upgraded watch doesn't
-    // keep using the phone's primary refresh token.
-    private let legacyAccessKey  = "sheaf_access_token"
-    private let legacyRefreshKey = "sheaf_refresh_token"
-
     init() {
         loadCredentials()
     }
 
-    /// Load credentials from the keychain. Skips legacy entries — the
-    /// watch must wait for fresh per-device creds from the phone instead
-    /// of reusing the shared tokens that previously caused refresh-token
-    /// collisions.
+    /// Load credentials from the keychain. Reads only the watch's own
+    /// per-device entries, never the phone's primary tokens. Do NOT delete
+    /// the old shared keys here: the keychain items are iCloud-synced, so
+    /// deleting them from the watch deletes the phone's live credentials
+    /// and logs the phone out on its next cold launch.
     func loadCredentials() {
         debugLog("WatchAuthManager: loadCredentials() called")
-
-        // Wipe any legacy shared-token entries so they can't keep being
-        // read by older code paths or accidentally synced back in.
-        KeychainHelper.delete(key: legacyAccessKey)
-        KeychainHelper.delete(key: legacyRefreshKey)
 
         accessToken  = KeychainHelper.get(key: accessKey)  ?? ""
         refreshToken = KeychainHelper.get(key: refreshKey) ?? ""
@@ -70,9 +60,13 @@ final class WatchAuthManager: ObservableObject {
         debugLog("WatchAuthManager: Credentials saved to Keychain")
     }
 
+    /// Clears only the watch's own per-device credentials. deleteAll()
+    /// would remove the phone's primary tokens from the synced keychain
+    /// and log the phone out too.
     func logout() {
         accessToken = ""; refreshToken = ""; baseURL = ""
         isAuthenticated = false
-        KeychainHelper.deleteAll()
+        KeychainHelper.delete(key: accessKey)
+        KeychainHelper.delete(key: refreshKey)
     }
 }
