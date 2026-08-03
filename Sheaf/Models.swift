@@ -2353,8 +2353,12 @@ enum DestinationType: String, Codable, CaseIterable {
         }
     }
 
+    var usesActivation: Bool {
+        isMobilePush || self == .webPush
+    }
+
     static var creatableTypes: [DestinationType] {
-        [.mobilePush, .ntfy, .pushover, .webhook]
+        [.mobilePush, .webPush, .ntfy, .pushover, .webhook]
     }
 }
 
@@ -2435,6 +2439,60 @@ enum PayloadSensitivity: String, Codable, CaseIterable {
     }
 }
 
+enum RuleAction: String, Codable, CaseIterable {
+    case include = "include"
+    case exclude = "exclude"
+
+    var label: String {
+        switch self {
+        case .include: return "Include"
+        case .exclude: return "Exclude"
+        }
+    }
+}
+
+enum RuleIncludePrivate: String, Codable, CaseIterable {
+    case inherit = "inherit"
+    case yes = "yes"
+    case no = "no"
+
+    var label: String {
+        switch self {
+        case .inherit: return "Inherit"
+        case .yes: return "Include private"
+        case .no: return "Exclude private"
+        }
+    }
+}
+
+struct GroupRuleSpec: Codable, Equatable {
+    var groupID: String
+    var rule: RuleAction
+    var includePrivate: RuleIncludePrivate = .inherit
+
+    enum CodingKeys: String, CodingKey {
+        case groupID        = "group_id"
+        case rule
+        case includePrivate = "include_private"
+    }
+}
+
+struct MemberRuleSpec: Codable, Equatable {
+    var memberID: String
+    var rule: RuleAction
+
+    enum CodingKeys: String, CodingKey {
+        case memberID = "member_id"
+        case rule
+    }
+}
+
+struct QuietHours: Codable, Equatable {
+    var start: String
+    var end: String
+    var tz: String
+}
+
 struct WatchToken: Identifiable, Codable {
     let id: String
     let systemID: String
@@ -2487,8 +2545,12 @@ struct NotificationChannel: Identifiable, Codable {
     var cofrontRedaction: CofrontRedaction
     var payloadSensitivity: PayloadSensitivity
     var debounceSeconds: Int
+    var aggregationWindowSeconds: Int
+    var quietHours: QuietHours?
     var baseAllMembers: Bool
     var baseIncludePrivate: Bool
+    var groupRules: [GroupRuleSpec]
+    var memberRules: [MemberRuleSpec]
     var lastDeliveredAt: Date?
     let createdAt: Date
     let updatedAt: Date
@@ -2505,8 +2567,12 @@ struct NotificationChannel: Identifiable, Codable {
         case cofrontRedaction      = "cofront_redaction"
         case payloadSensitivity    = "payload_sensitivity"
         case debounceSeconds       = "debounce_seconds"
+        case aggregationWindowSeconds = "aggregation_window_seconds"
+        case quietHours            = "quiet_hours"
         case baseAllMembers        = "base_all_members"
         case baseIncludePrivate    = "base_include_private"
+        case groupRules            = "group_rules"
+        case memberRules           = "member_rules"
         case lastDeliveredAt       = "last_delivered_at"
         case createdAt             = "created_at"
         case updatedAt             = "updated_at"
@@ -2526,8 +2592,12 @@ struct NotificationChannel: Identifiable, Codable {
         cofrontRedaction    = try c.decode(CofrontRedaction.self, forKey: .cofrontRedaction)
         payloadSensitivity  = try c.decode(PayloadSensitivity.self, forKey: .payloadSensitivity)
         debounceSeconds     = try c.decode(Int.self, forKey: .debounceSeconds)
+        aggregationWindowSeconds = (try? c.decode(Int.self, forKey: .aggregationWindowSeconds)) ?? 0
+        quietHours          = try? c.decodeIfPresent(QuietHours.self, forKey: .quietHours)
         baseAllMembers      = try c.decode(Bool.self, forKey: .baseAllMembers)
         baseIncludePrivate  = try c.decode(Bool.self, forKey: .baseIncludePrivate)
+        groupRules          = (try? c.decode([GroupRuleSpec].self, forKey: .groupRules)) ?? []
+        memberRules         = (try? c.decode([MemberRuleSpec].self, forKey: .memberRules)) ?? []
         lastDeliveredAt     = try c.decodeIfPresent(Date.self, forKey: .lastDeliveredAt)
         createdAt           = try c.decode(Date.self, forKey: .createdAt)
         updatedAt           = try c.decode(Date.self, forKey: .updatedAt)
@@ -2574,6 +2644,13 @@ struct NotificationChannelUpdate: Codable {
     var cofrontRedaction: CofrontRedaction?
     var payloadSensitivity: PayloadSensitivity?
     var debounceSeconds: Int?
+    var aggregationWindowSeconds: Int?
+    var quietHours: QuietHours?
+    // API treats an explicit quiet_hours null as "clear the window" and an
+    // omitted key as "leave unchanged", so nil alone can't express both.
+    var clearQuietHours: Bool = false
+    var groupRules: [GroupRuleSpec]?
+    var memberRules: [MemberRuleSpec]?
     var baseAllMembers: Bool?
     var baseIncludePrivate: Bool?
 
@@ -2587,8 +2664,35 @@ struct NotificationChannelUpdate: Codable {
         case cofrontRedaction      = "cofront_redaction"
         case payloadSensitivity    = "payload_sensitivity"
         case debounceSeconds       = "debounce_seconds"
+        case aggregationWindowSeconds = "aggregation_window_seconds"
+        case quietHours            = "quiet_hours"
+        case groupRules            = "group_rules"
+        case memberRules           = "member_rules"
         case baseAllMembers        = "base_all_members"
         case baseIncludePrivate    = "base_include_private"
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encodeIfPresent(name, forKey: .name)
+        try c.encodeIfPresent(destinationConfig, forKey: .destinationConfig)
+        try c.encodeIfPresent(webhookSecret, forKey: .webhookSecret)
+        try c.encodeIfPresent(triggerOnStart, forKey: .triggerOnStart)
+        try c.encodeIfPresent(triggerOnStop, forKey: .triggerOnStop)
+        try c.encodeIfPresent(triggerOnCofrontChange, forKey: .triggerOnCofrontChange)
+        try c.encodeIfPresent(cofrontRedaction, forKey: .cofrontRedaction)
+        try c.encodeIfPresent(payloadSensitivity, forKey: .payloadSensitivity)
+        try c.encodeIfPresent(debounceSeconds, forKey: .debounceSeconds)
+        try c.encodeIfPresent(aggregationWindowSeconds, forKey: .aggregationWindowSeconds)
+        if let quietHours {
+            try c.encode(quietHours, forKey: .quietHours)
+        } else if clearQuietHours {
+            try c.encodeNil(forKey: .quietHours)
+        }
+        try c.encodeIfPresent(groupRules, forKey: .groupRules)
+        try c.encodeIfPresent(memberRules, forKey: .memberRules)
+        try c.encodeIfPresent(baseAllMembers, forKey: .baseAllMembers)
+        try c.encodeIfPresent(baseIncludePrivate, forKey: .baseIncludePrivate)
     }
 }
 
@@ -2617,6 +2721,28 @@ struct ChannelActivationResponse: Codable {
 struct TestDispatchResponse: Codable {
     let delivered: Bool
     var error: String?
+}
+
+struct ChannelPreviewMember: Codable, Identifiable, Equatable {
+    let memberID: String
+    let name: String
+    let isPrivate: Bool
+    let attribution: String
+
+    var id: String { memberID }
+
+    enum CodingKeys: String, CodingKey {
+        case memberID  = "member_id"
+        case name
+        case isPrivate = "is_private"
+        case attribution
+    }
+}
+
+struct ChannelPreviewResponse: Codable, Equatable {
+    let included: [ChannelPreviewMember]
+    let excluded: [ChannelPreviewMember]
+    let warnings: [String]
 }
 
 // MARK: - Receiving Channels

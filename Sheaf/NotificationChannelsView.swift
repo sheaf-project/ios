@@ -483,6 +483,7 @@ struct CreateChannelSheet: View {
         let channelName: String
         let url: String
         let expiresAt: Date?
+        var destinationType: DestinationType = .mobilePush
     }
 
     private var isValid: Bool {
@@ -491,7 +492,7 @@ struct CreateChannelSheet: View {
         case .ntfy: return !ntfyServer.isEmpty && !ntfyTopic.trimmingCharacters(in: .whitespaces).isEmpty
         case .pushover: return !pushoverUserKey.trimmingCharacters(in: .whitespaces).isEmpty
         case .webhook: return !webhookURL.trimmingCharacters(in: .whitespaces).isEmpty
-        case .mobilePush: return true
+        case .mobilePush, .webPush: return true
         default: return false
         }
     }
@@ -530,8 +531,8 @@ struct CreateChannelSheet: View {
                             }
                         }
 
-                        if destinationType.isMobilePush {
-                            mobilePushInfoCard
+                        if destinationType.usesActivation {
+                            activationInfoCard
                         }
 
                         sectionCard(title: "Configuration") {
@@ -656,15 +657,17 @@ struct CreateChannelSheet: View {
         }
     }
 
-    private var mobilePushInfoCard: some View {
+    private var activationInfoCard: some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: "info.circle.fill")
                 .foregroundColor(theme.accentLight)
             VStack(alignment: .leading, spacing: 4) {
-                Text("How mobile push works")
+                Text(destinationType == .webPush ? "How web push works" : "How mobile push works")
                     .font(.subheadline).fontWeight(.semibold)
                     .foregroundColor(theme.textPrimary)
-                Text("After creating, you'll get an activation link to share with the person who should receive these notifications. They tap it to subscribe their device.")
+                Text(destinationType == .webPush
+                     ? "After creating, you'll get an activation link to share with the person who should receive these notifications. They open it in their browser and grant push permission to subscribe."
+                     : "After creating, you'll get an activation link to share with the person who should receive these notifications. They tap it to subscribe their device.")
                     .font(.footnote)
                     .foregroundColor(theme.textSecondary)
             }
@@ -714,11 +717,12 @@ struct CreateChannelSheet: View {
 
             let response = try await api.createChannel(watchTokenID: watchTokenID, create: create)
 
-            if destinationType.isMobilePush, let url = response.activationURL {
+            if destinationType.usesActivation, let url = response.activationURL {
                 activationShare = ActivationShareInfo(
                     channelName: response.channel.name,
                     url: url,
-                    expiresAt: response.activationExpiresAt
+                    expiresAt: response.activationExpiresAt,
+                    destinationType: destinationType
                 )
             } else {
                 dismiss()
@@ -831,7 +835,6 @@ struct ChannelDetailView: View {
     @State private var isReissuing = false
     @State private var activationShare: CreateChannelSheet.ActivationShareInfo?
     @State private var errorMessage: String?
-    @State private var hasUnsavedChanges = false
 
     @State private var triggerOnStart: Bool = true
     @State private var triggerOnStop: Bool = false
@@ -839,6 +842,59 @@ struct ChannelDetailView: View {
     @State private var payloadSensitivity: PayloadSensitivity = .full
     @State private var cofrontRedaction: CofrontRedaction = .count
     @State private var includePrivate: Bool = false
+    @State private var baseAllMembers: Bool = true
+    @State private var groupRules: [GroupRuleSpec] = []
+    @State private var memberRules: [MemberRuleSpec] = []
+    @State private var debounceSeconds: Int = 30
+    @State private var aggregationSeconds: Int = 0
+    @State private var quietHoursEnabled: Bool = false
+    @State private var quietStart: Date = .now
+    @State private var quietEnd: Date = .now
+    @State private var quietTz: String = TimeZone.current.identifier
+    @State private var preview: ChannelPreviewResponse?
+    @State private var isPreviewLoading = false
+    @State private var showIncludedMembers = false
+    @State private var showExcludedMembers = false
+
+    private var editedQuietHours: QuietHours? {
+        guard quietHoursEnabled else { return nil }
+        return QuietHours(
+            start: Self.timeString(from: quietStart),
+            end: Self.timeString(from: quietEnd),
+            tz: quietTz
+        )
+    }
+
+    private var hasUnsavedChanges: Bool {
+        triggerOnStart != channel.triggerOnStart ||
+        triggerOnStop != channel.triggerOnStop ||
+        triggerOnCofrontChange != channel.triggerOnCofrontChange ||
+        payloadSensitivity != channel.payloadSensitivity ||
+        cofrontRedaction != channel.cofrontRedaction ||
+        includePrivate != channel.baseIncludePrivate ||
+        baseAllMembers != channel.baseAllMembers ||
+        groupRules != channel.groupRules ||
+        memberRules != channel.memberRules ||
+        debounceSeconds != channel.debounceSeconds ||
+        aggregationSeconds != channel.aggregationWindowSeconds ||
+        editedQuietHours != channel.quietHours
+    }
+
+    private struct PreviewDraft: Equatable {
+        var baseAllMembers: Bool
+        var includePrivate: Bool
+        var groupRules: [GroupRuleSpec]
+        var memberRules: [MemberRuleSpec]
+    }
+
+    private var previewDraft: PreviewDraft {
+        PreviewDraft(
+            baseAllMembers: baseAllMembers,
+            includePrivate: includePrivate,
+            groupRules: groupRules,
+            memberRules: memberRules
+        )
+    }
 
     var body: some View {
         ZStack {
@@ -940,6 +996,148 @@ struct ChannelDetailView: View {
                         }
                     }
 
+                    sectionCard(title: "Base Set") {
+                        VStack(spacing: 0) {
+                            toggleRow(label: "All members", isOn: $baseAllMembers)
+                            Text("When off, no-one triggers notifications by default; use group and member rules to include.")
+                                .font(.caption)
+                                .foregroundColor(theme.textTertiary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, 16).padding(.bottom, 12)
+                        }
+                    }
+
+                    sectionCard(title: "Group Rules") {
+                        VStack(spacing: 0) {
+                            if groupRules.isEmpty {
+                                Text("No group rules")
+                                    .font(.subheadline)
+                                    .foregroundColor(theme.textTertiary)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 16)
+                            }
+                            ForEach(Array(groupRules.enumerated()), id: \.element.groupID) { i, rule in
+                                if i > 0 { Divider().background(theme.divider) }
+                                groupRuleRow(rule)
+                            }
+                            if !availableGroups.isEmpty {
+                                if !groupRules.isEmpty { Divider().background(theme.divider) }
+                                Menu {
+                                    ForEach(availableGroups) { g in
+                                        Button(g.name) {
+                                            groupRules.append(GroupRuleSpec(groupID: g.id, rule: .include))
+                                        }
+                                    }
+                                } label: {
+                                    addRuleLabel("Add Group Rule")
+                                }
+                            }
+                        }
+                    }
+
+                    sectionCard(title: "Member Rules") {
+                        VStack(spacing: 0) {
+                            if memberRules.isEmpty {
+                                Text("No member overrides")
+                                    .font(.subheadline)
+                                    .foregroundColor(theme.textTertiary)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 16)
+                            }
+                            ForEach(Array(memberRules.enumerated()), id: \.element.memberID) { i, rule in
+                                if i > 0 { Divider().background(theme.divider) }
+                                memberRuleRow(rule)
+                            }
+                            if !availableMembers.isEmpty {
+                                if !memberRules.isEmpty { Divider().background(theme.divider) }
+                                Menu {
+                                    ForEach(availableMembers) { m in
+                                        Button(m.displayName ?? m.name) {
+                                            memberRules.append(MemberRuleSpec(memberID: m.id, rule: .include))
+                                        }
+                                    }
+                                } label: {
+                                    addRuleLabel("Add Member Rule")
+                                }
+                            }
+                        }
+                    }
+
+                    sectionCard(title: "Resolved Members") {
+                        VStack(alignment: .leading, spacing: 0) {
+                            if let preview {
+                                if !preview.warnings.isEmpty {
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        ForEach(preview.warnings, id: \.self) { w in
+                                            Text(w)
+                                                .font(.footnote)
+                                                .foregroundColor(.orange)
+                                        }
+                                    }
+                                    .padding(.horizontal, 16).padding(.vertical, 12)
+                                    Divider().background(theme.divider)
+                                }
+                                previewColumn(title: "Will receive (\(preview.included.count))", color: theme.success, rows: preview.included, isExpanded: $showIncludedMembers)
+                                Divider().background(theme.divider)
+                                previewColumn(title: "Will not receive (\(preview.excluded.count))", color: theme.textTertiary, rows: preview.excluded, isExpanded: $showExcludedMembers)
+                            } else {
+                                HStack {
+                                    Spacer()
+                                    if isPreviewLoading {
+                                        ProgressView().tint(theme.accentLight)
+                                    } else {
+                                        Text("Resolving...")
+                                            .font(.subheadline)
+                                            .foregroundColor(theme.textTertiary)
+                                    }
+                                    Spacer()
+                                }
+                                .padding(.vertical, 16)
+                            }
+                        }
+                    }
+
+                    sectionCard(title: "Delivery") {
+                        VStack(spacing: 0) {
+                            numberRow(label: "Debounce", caption: "Minimum gap in seconds between deliveries on this channel.", value: $debounceSeconds)
+                            Divider().background(theme.divider)
+                            numberRow(label: "Aggregation Window", caption: "0 = realtime. Higher batches multiple events into one.", value: $aggregationSeconds)
+                            Divider().background(theme.divider)
+                            toggleRow(label: "Quiet hours", isOn: $quietHoursEnabled)
+                            if quietHoursEnabled {
+                                Divider().background(theme.divider)
+                                timeRow(label: "Start", selection: $quietStart)
+                                Divider().background(theme.divider)
+                                timeRow(label: "End", selection: $quietEnd)
+                                Divider().background(theme.divider)
+                                NavigationLink {
+                                    TimeZonePickerView(selection: $quietTz)
+                                } label: {
+                                    HStack {
+                                        Text("Timezone")
+                                            .font(.subheadline)
+                                            .foregroundColor(theme.textPrimary)
+                                        Spacer()
+                                        Text(quietTz)
+                                            .font(.subheadline)
+                                            .foregroundColor(theme.textTertiary)
+                                            .lineLimit(1)
+                                        Image(systemName: "chevron.right")
+                                            .font(.caption)
+                                            .foregroundColor(theme.textTertiary)
+                                    }
+                                    .padding(.horizontal, 16).padding(.vertical, 12)
+                                }
+                                .buttonStyle(.plain)
+                                Text("Events landing inside the window are deferred to the end time.")
+                                    .font(.caption)
+                                    .foregroundColor(theme.textTertiary)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.horizontal, 16).padding(.bottom, 12)
+                            }
+                        }
+                    }
+
                     if hasUnsavedChanges {
                         Button { Task { await saveChanges() } } label: {
                             Text("Save Changes")
@@ -971,7 +1169,7 @@ struct ChannelDetailView: View {
                             }
                             .disabled(channel.destinationState != .active || isTesting)
 
-                            if channel.destinationType.isMobilePush {
+                            if channel.destinationType.usesActivation {
                                 Divider().background(theme.divider)
 
                                 Button { Task { await reissueActivation() } } label: {
@@ -1018,12 +1216,7 @@ struct ChannelDetailView: View {
         .navigationTitle(channel.name)
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { loadEditableState() }
-        .onChange(of: triggerOnStart) { checkForChanges() }
-        .onChange(of: triggerOnStop) { checkForChanges() }
-        .onChange(of: triggerOnCofrontChange) { checkForChanges() }
-        .onChange(of: payloadSensitivity) { checkForChanges() }
-        .onChange(of: cofrontRedaction) { checkForChanges() }
-        .onChange(of: includePrivate) { checkForChanges() }
+        .task(id: previewDraft) { await loadPreview() }
         .alert("Test Result", isPresented: $showTestResult) {
             Button("OK") {}
         } message: {
@@ -1070,16 +1263,33 @@ struct ChannelDetailView: View {
         payloadSensitivity = channel.payloadSensitivity
         cofrontRedaction = channel.cofrontRedaction
         includePrivate = channel.baseIncludePrivate
+        baseAllMembers = channel.baseAllMembers
+        groupRules = channel.groupRules
+        memberRules = channel.memberRules
+        debounceSeconds = channel.debounceSeconds
+        aggregationSeconds = channel.aggregationWindowSeconds
+        quietHoursEnabled = channel.quietHours != nil
+        let qh = channel.quietHours ?? QuietHours(start: "22:00", end: "07:00", tz: TimeZone.current.identifier)
+        quietStart = Self.timeDate(from: qh.start)
+        quietEnd = Self.timeDate(from: qh.end)
+        quietTz = qh.tz
     }
 
-    private func checkForChanges() {
-        hasUnsavedChanges =
-            triggerOnStart != channel.triggerOnStart ||
-            triggerOnStop != channel.triggerOnStop ||
-            triggerOnCofrontChange != channel.triggerOnCofrontChange ||
-            payloadSensitivity != channel.payloadSensitivity ||
-            cofrontRedaction != channel.cofrontRedaction ||
-            includePrivate != channel.baseIncludePrivate
+    private func loadPreview() async {
+        guard let api = store.api else { return }
+        isPreviewLoading = true
+        defer { isPreviewLoading = false }
+        try? await Task.sleep(nanoseconds: 300_000_000)
+        guard !Task.isCancelled else { return }
+        let draft = NotificationChannelUpdate(
+            groupRules: groupRules,
+            memberRules: memberRules,
+            baseAllMembers: baseAllMembers,
+            baseIncludePrivate: includePrivate
+        )
+        if let result = try? await api.previewChannel(id: channel.id, update: draft) {
+            preview = result
+        }
     }
 
     private func saveChanges() async {
@@ -1091,10 +1301,17 @@ struct ChannelDetailView: View {
                 triggerOnCofrontChange: triggerOnCofrontChange,
                 cofrontRedaction: cofrontRedaction,
                 payloadSensitivity: payloadSensitivity,
+                debounceSeconds: min(max(debounceSeconds, 0), 86400),
+                aggregationWindowSeconds: min(max(aggregationSeconds, 0), 86400),
+                quietHours: editedQuietHours,
+                clearQuietHours: editedQuietHours == nil,
+                groupRules: groupRules,
+                memberRules: memberRules,
+                baseAllMembers: baseAllMembers,
                 baseIncludePrivate: includePrivate
             )
             channel = try await api.updateChannel(id: channel.id, update: update)
-            hasUnsavedChanges = false
+            loadEditableState()
             await onUpdate()
         } catch {
             errorMessage = error.userFacingMessage
@@ -1143,7 +1360,8 @@ struct ChannelDetailView: View {
             activationShare = CreateChannelSheet.ActivationShareInfo(
                 channelName: channel.name,
                 url: response.activationURL,
-                expiresAt: response.activationExpiresAt
+                expiresAt: response.activationExpiresAt,
+                destinationType: channel.destinationType
             )
         } catch {
             errorMessage = error.userFacingMessage
@@ -1176,6 +1394,230 @@ struct ChannelDetailView: View {
             errorMessage = error.userFacingMessage
             isDeleting = false
         }
+    }
+
+    private var availableGroups: [SystemGroup] {
+        let used = Set(groupRules.map(\.groupID))
+        return store.groups.filter { !used.contains($0.id) }
+    }
+
+    private var availableMembers: [Member] {
+        let used = Set(memberRules.map(\.memberID))
+        return store.members.filter { !used.contains($0.id) }
+    }
+
+    private func groupName(_ id: String) -> String {
+        store.groups.first { $0.id == id }?.name ?? "(deleted group)"
+    }
+
+    private func memberName(_ id: String) -> String {
+        guard let m = store.members.first(where: { $0.id == id }) else { return "(deleted member)" }
+        return m.displayName ?? m.name
+    }
+
+    private func updateGroupRule(_ id: String, _ mutate: (inout GroupRuleSpec) -> Void) {
+        guard let i = groupRules.firstIndex(where: { $0.groupID == id }) else { return }
+        mutate(&groupRules[i])
+    }
+
+    private func updateMemberRule(_ id: String, _ mutate: (inout MemberRuleSpec) -> Void) {
+        guard let i = memberRules.firstIndex(where: { $0.memberID == id }) else { return }
+        mutate(&memberRules[i])
+    }
+
+    private func groupRuleRow(_ rule: GroupRuleSpec) -> some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 12) {
+                Text(groupName(rule.groupID))
+                    .font(.subheadline).fontWeight(.medium)
+                    .foregroundColor(theme.textPrimary)
+                    .lineLimit(1)
+                Spacer()
+                Menu {
+                    Picker("", selection: Binding(
+                        get: { rule.rule },
+                        set: { v in updateGroupRule(rule.groupID) { $0.rule = v } }
+                    )) {
+                        ForEach(RuleAction.allCases, id: \.self) { a in
+                            Text(a.label).tag(a)
+                        }
+                    }
+                } label: {
+                    menuChip(rule.rule.label)
+                }
+                Button {
+                    groupRules.removeAll { $0.groupID == rule.groupID }
+                } label: {
+                    Image(systemName: "minus.circle.fill")
+                        .foregroundColor(theme.danger)
+                }
+            }
+            .padding(.horizontal, 16).padding(.vertical, 12)
+
+            if rule.rule == .include {
+                HStack {
+                    Text("Private members")
+                        .font(.footnote)
+                        .foregroundColor(theme.textSecondary)
+                    Spacer()
+                    Menu {
+                        Picker("", selection: Binding(
+                            get: { rule.includePrivate },
+                            set: { v in updateGroupRule(rule.groupID) { $0.includePrivate = v } }
+                        )) {
+                            ForEach(RuleIncludePrivate.allCases, id: \.self) { p in
+                                Text(p.label).tag(p)
+                            }
+                        }
+                    } label: {
+                        menuChip(rule.includePrivate.label)
+                    }
+                }
+                .padding(.horizontal, 16).padding(.bottom, 12)
+            }
+        }
+    }
+
+    private func memberRuleRow(_ rule: MemberRuleSpec) -> some View {
+        HStack(spacing: 12) {
+            Text(memberName(rule.memberID))
+                .font(.subheadline).fontWeight(.medium)
+                .foregroundColor(theme.textPrimary)
+                .lineLimit(1)
+            Spacer()
+            Menu {
+                Picker("", selection: Binding(
+                    get: { rule.rule },
+                    set: { v in updateMemberRule(rule.memberID) { $0.rule = v } }
+                )) {
+                    ForEach(RuleAction.allCases, id: \.self) { a in
+                        Text(a.label).tag(a)
+                    }
+                }
+            } label: {
+                menuChip(rule.rule.label)
+            }
+            Button {
+                memberRules.removeAll { $0.memberID == rule.memberID }
+            } label: {
+                Image(systemName: "minus.circle.fill")
+                    .foregroundColor(theme.danger)
+            }
+        }
+        .padding(.horizontal, 16).padding(.vertical, 12)
+    }
+
+    private func menuChip(_ text: String) -> some View {
+        HStack(spacing: 4) {
+            Text(text)
+                .font(.subheadline)
+            Image(systemName: "chevron.up.chevron.down")
+                .font(.caption2)
+        }
+        .foregroundColor(theme.accentLight)
+    }
+
+    private func addRuleLabel(_ text: String) -> some View {
+        HStack {
+            Image(systemName: "plus.circle.fill")
+                .frame(width: 20)
+            Text(text)
+                .font(.subheadline).fontWeight(.medium)
+            Spacer()
+        }
+        .foregroundColor(theme.accentLight)
+        .padding(.horizontal, 16).padding(.vertical, 14)
+    }
+
+    private func previewColumn(title: String, color: Color, rows: [ChannelPreviewMember], isExpanded: Binding<Bool>) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Button { withAnimation { isExpanded.wrappedValue.toggle() } } label: {
+                HStack {
+                    Text(title)
+                        .font(.footnote).fontWeight(.semibold)
+                        .foregroundColor(color)
+                    Spacer()
+                    Image(systemName: isExpanded.wrappedValue ? "chevron.up" : "chevron.down")
+                        .font(.caption)
+                        .foregroundColor(theme.textTertiary)
+                }
+                .padding(.horizontal, 16).padding(.vertical, 12)
+            }
+
+            if isExpanded.wrappedValue {
+                ForEach(rows) { row in
+                    HStack(spacing: 8) {
+                        Text(row.isPrivate ? "\(row.name) (private)" : row.name)
+                            .font(.subheadline)
+                            .foregroundColor(theme.textPrimary)
+                            .lineLimit(1)
+                        Spacer()
+                        Text(row.attribution)
+                            .font(.caption)
+                            .foregroundColor(theme.textTertiary)
+                            .multilineTextAlignment(.trailing)
+                    }
+                    .padding(.horizontal, 16).padding(.vertical, 6)
+                }
+                if rows.isEmpty {
+                    Text("None")
+                        .font(.caption)
+                        .foregroundColor(theme.textTertiary)
+                        .padding(.horizontal, 16)
+                }
+                Spacer().frame(height: 10)
+            }
+        }
+    }
+
+    private func numberRow(label: String, caption: String, value: Binding<Int>) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(label)
+                    .font(.subheadline)
+                    .foregroundColor(theme.textPrimary)
+                Spacer()
+                TextField("0", value: value, format: .number)
+                    .font(.subheadline)
+                    .foregroundColor(theme.textPrimary)
+                    .keyboardType(.numberPad)
+                    .multilineTextAlignment(.trailing)
+                    .frame(width: 90)
+                Text("sec")
+                    .font(.caption)
+                    .foregroundColor(theme.textTertiary)
+            }
+            Text(caption)
+                .font(.caption)
+                .foregroundColor(theme.textTertiary)
+        }
+        .padding(.horizontal, 16).padding(.vertical, 12)
+    }
+
+    private func timeRow(label: String, selection: Binding<Date>) -> some View {
+        HStack {
+            Text(label)
+                .font(.subheadline)
+                .foregroundColor(theme.textPrimary)
+            Spacer()
+            DatePicker("", selection: selection, displayedComponents: .hourAndMinute)
+                .labelsHidden()
+                .tint(theme.accentLight)
+        }
+        .padding(.horizontal, 16).padding(.vertical, 8)
+    }
+
+    private static func timeDate(from string: String) -> Date {
+        let parts = string.split(separator: ":").compactMap { Int($0) }
+        var c = DateComponents()
+        c.hour = parts.count > 0 ? parts[0] : 0
+        c.minute = parts.count > 1 ? parts[1] : 0
+        return Calendar.current.date(from: c) ?? .now
+    }
+
+    private static func timeString(from date: Date) -> String {
+        let c = Calendar.current.dateComponents([.hour, .minute], from: date)
+        return String(format: "%02d:%02d", c.hour ?? 0, c.minute ?? 0)
     }
 
     private func formatConfigKey(_ key: String) -> String {
@@ -1291,7 +1733,9 @@ struct ActivationShareSheet: View {
                             Text(title)
                                 .font(.title3).fontWeight(.bold).fontDesign(.rounded)
                                 .foregroundColor(theme.textPrimary)
-                            Text("Share this activation link with whoever should receive notifications. They'll need the Sheaf app installed and an account on this server.")
+                            Text(info.destinationType == .webPush
+                                 ? "Share this activation link with whoever should receive notifications. They open it in their browser and grant push permission."
+                                 : "Share this activation link with whoever should receive notifications. They'll need the Sheaf app installed and an account on this server.")
                                 .font(.subheadline)
                                 .foregroundColor(theme.textSecondary)
                                 .multilineTextAlignment(.center)
@@ -1373,6 +1817,49 @@ struct ActivationShareSheet: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - TimeZonePickerView
+
+struct TimeZonePickerView: View {
+    @Environment(\.theme) var theme
+    @Environment(\.dismiss) var dismiss
+    @Binding var selection: String
+
+    @State private var search = ""
+
+    private var zones: [String] {
+        let all = TimeZone.knownTimeZoneIdentifiers.sorted()
+        guard !search.isEmpty else { return all }
+        return all.filter { $0.localizedCaseInsensitiveContains(search) }
+    }
+
+    var body: some View {
+        List(zones, id: \.self) { tz in
+            Button {
+                selection = tz
+                dismiss()
+            } label: {
+                HStack {
+                    Text(tz)
+                        .font(.subheadline)
+                        .foregroundColor(theme.textPrimary)
+                    Spacer()
+                    if tz == selection {
+                        Image(systemName: "checkmark")
+                            .font(.footnote).fontWeight(.semibold)
+                            .foregroundColor(theme.accentLight)
+                    }
+                }
+            }
+            .listRowBackground(theme.backgroundCard)
+        }
+        .scrollContentBackground(.hidden)
+        .background(theme.backgroundPrimary)
+        .searchable(text: $search)
+        .navigationTitle("Timezone")
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 

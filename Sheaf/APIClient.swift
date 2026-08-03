@@ -2522,6 +2522,12 @@ class APIClient {
         return try JSONDecoder.iso.decode(TestDispatchResponse.self, from: data)
     }
 
+    func previewChannel(id: String, update: NotificationChannelUpdate) async throws -> ChannelPreviewResponse {
+        let body = try JSONEncoder.iso.encode(update)
+        let data = try await request("/v1/channels/\(id)/preview", method: "POST", body: body)
+        return try JSONDecoder.iso.decode(ChannelPreviewResponse.self, from: data)
+    }
+
     func reissueChannelActivation(id: String) async throws -> ChannelActivationResponse {
         let data = try await request("/v1/channels/\(id)/reissue-activation", method: "POST")
         return try JSONDecoder.iso.decode(ChannelActivationResponse.self, from: data)
