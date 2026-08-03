@@ -75,7 +75,7 @@ struct HistoryView: View {
                             Task { await reload() }
                         } label: {
                             Image(systemName: "arrow.clockwise")
-                                .font(.subheadline).fontWeight(.semibold)
+                                .font(.title3).fontWeight(.semibold)
                                 .foregroundColor(theme.textSecondary)
                         }
                         .modifier(HeaderGlassButtonModifier(namespace: glassNamespace))

@@ -800,7 +800,8 @@ struct HeaderGlassButtonModifier: ViewModifier {
     func body(content: Content) -> some View {
         if #available(iOS 26.0, *) {
             content
-                .padding(.vertical, 10)
+                .frame(width: 24, height: 24)
+                .padding(.vertical, 8)
                 .padding(.horizontal, 9)
                 .glassEffect(.regular.interactive())
                 .glassEffectUnion(id: "header", namespace: namespace)
