@@ -119,7 +119,7 @@ struct RootView: View {
                 systemStore.clearState()
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
             lockManager.lockIfEnabled()
         }
     }
