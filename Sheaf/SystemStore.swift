@@ -874,6 +874,7 @@ class SystemStore: ObservableObject {
                     currentFronts[idx] = updated
                 }
                 saveAllToCache()
+                updateWatchComplication()
                 return
             } catch {
                 if !fallThroughToOffline(error) {
@@ -898,6 +899,7 @@ class SystemStore: ObservableObject {
             if let customStatus = update.customStatus { currentFronts[idx].customStatus = customStatus.isEmpty ? nil : customStatus }
         }
         saveAllToCache()
+        updateWatchComplication()
     }
 
     @discardableResult
@@ -909,6 +911,7 @@ class SystemStore: ObservableObject {
                     frontHistory.removeAll { $0.id == id }
                     currentFronts.removeAll { $0.id == id }
                     saveAllToCache()
+                    updateWatchComplication()
                 }
                 return queued
             } catch {
@@ -924,6 +927,7 @@ class SystemStore: ObservableObject {
         frontHistory.removeAll { $0.id == id }
         currentFronts.removeAll { $0.id == id }
         saveAllToCache()
+        updateWatchComplication()
         return nil
     }
 
@@ -936,6 +940,7 @@ class SystemStore: ObservableObject {
         // updateFront sets endedAt on currentFronts entries — filter them out
         currentFronts.removeAll { $0.endedAt != nil }
         saveAllToCache()
+        updateWatchComplication()
     }
 
     /// Create a front entry (possibly already-ended) and update local state.
@@ -951,6 +956,7 @@ class SystemStore: ObservableObject {
                 frontHistory.insert(entry, at: 0)
                 if entry.endedAt == nil {
                     currentFronts.append(entry)
+                    updateWatchComplication()
                 }
                 saveAllToCache()
                 return
@@ -978,6 +984,7 @@ class SystemStore: ObservableObject {
         frontHistory.insert(optimistic, at: 0)
         if endedAt == nil {
             currentFronts.append(optimistic)
+            updateWatchComplication()
         }
         saveAllToCache()
     }
