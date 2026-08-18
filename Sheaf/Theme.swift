@@ -356,6 +356,14 @@ struct Theme {
     var inputBackground: Color { isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05) }
     var inputBorder:     Color { isDark ? Color.white.opacity(0.15) : Color.black.opacity(0.12) }
     var inputBorderFocused: Color { accentLight }
+
+    func readable(_ color: Color) -> Color {
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        UIColor(color).getRed(&r, green: &g, blue: &b, alpha: &a)
+        let lum = 0.299 * r + 0.587 * g + 0.114 * b
+        if isDark ? lum < 0.35 : lum > 0.7 { return textSecondary }
+        return color
+    }
 }
 
 // MARK: - Environment Keys

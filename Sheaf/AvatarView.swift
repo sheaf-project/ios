@@ -243,7 +243,7 @@ struct AvatarView: View {
                 ))
             Text(member.initials)
                 .font(.system(size: size * 0.32, weight: .bold, design: .rounded))
-                .foregroundColor(.white)
+                .foregroundColor(member.displayColor.contrastingText)
         }
     }
 }

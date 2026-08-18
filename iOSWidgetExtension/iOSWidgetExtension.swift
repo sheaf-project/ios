@@ -58,26 +58,17 @@ extension Color {
         )
     }
 
-    var readable: Color {
+    var contrastingText: Color {
         var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
         UIColor(self).getRed(&r, green: &g, blue: &b, alpha: &a)
         let lum = 0.299 * r + 0.587 * g + 0.114 * b
-        return Color(UIColor { traits in
-            if traits.userInterfaceStyle == .dark {
-                guard lum < 0.35 else { return UIColor(red: r, green: g, blue: b, alpha: a) }
-                let t = (0.35 - lum) / (1 - lum)
-                return UIColor(red: r + (1 - r) * t, green: g + (1 - g) * t, blue: b + (1 - b) * t, alpha: a)
-            }
-            guard lum > 0.7 else { return UIColor(red: r, green: g, blue: b, alpha: a) }
-            let t = 1 - 0.7 / lum
-            return UIColor(red: r * (1 - t), green: g * (1 - t), blue: b * (1 - t), alpha: a)
-        })
+        return lum > 0.75 ? .black.opacity(0.7) : .white
     }
 }
 
 extension SharedMember {
     var displayColor: Color {
-        (Color(hex: color ?? "#8B5CF6") ?? .purple).readable
+        Color(hex: color ?? "#8B5CF6") ?? .purple
     }
 
     var initials: String {
@@ -133,7 +124,7 @@ struct WidgetAvatarView: View {
                     .fill(member.displayColor)
                 Text(member.initials)
                     .font(.system(size: size * 0.35, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(member.displayColor.contrastingText)
                     .fontWeight(.heavy)
                     .minimumScaleFactor(0.5)
                     .lineLimit(1)

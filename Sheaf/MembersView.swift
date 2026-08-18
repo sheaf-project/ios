@@ -562,7 +562,7 @@ struct MemberDetailSheet: View {
                                 .padding(.horizontal, 14).padding(.vertical, 5)
                                 .background(liveMember.displayColor.opacity(0.15))
                                 .cornerRadius(10)
-                                .foregroundColor(liveMember.displayColor)
+                                .foregroundColor(theme.readable(liveMember.displayColor))
                                 .font(.subheadline)
                         }
                     }

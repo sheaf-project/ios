@@ -108,7 +108,7 @@ private struct ColorAvatarView: View {
             
             Text(member.initials)
                 .font(.system(size: size * 0.35, weight: .bold, design: .rounded))
-                .foregroundStyle(.white)
+                .foregroundStyle(member.displayColor.contrastingText)
                 .fontWeight(.heavy)
                 .minimumScaleFactor(0.5)
                 .lineLimit(1)
