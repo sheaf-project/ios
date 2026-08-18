@@ -112,7 +112,7 @@ struct Member: Identifiable, Codable, Hashable {
     }
 
     var displayColor: Color {
-        Color(hex: color ?? "#8B5CF6") ?? .purple
+        (Color(hex: color ?? "#8B5CF6") ?? .purple).readable
     }
 
     var isArchived: Bool { archivedAt != nil }
@@ -383,7 +383,7 @@ struct SystemGroup: Identifiable, Codable, Hashable {
     }
 
     var displayColor: Color {
-        Color(hex: color ?? "#6366F1") ?? .indigo
+        (Color(hex: color ?? "#6366F1") ?? .indigo).readable
     }
 }
 
@@ -809,6 +809,28 @@ extension Color {
         var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
         ui.getRed(&r, green: &g, blue: &b, alpha: &a)
         return String(format: "#%02X%02X%02X", Int(r*255), Int(g*255), Int(b*255))
+    }
+
+    var readable: Color {
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        UIColor(self).getRed(&r, green: &g, blue: &b, alpha: &a)
+        let lum = 0.299 * r + 0.587 * g + 0.114 * b
+        #if os(watchOS)
+        guard lum < 0.35 else { return self }
+        let t = (0.35 - lum) / (1 - lum)
+        return Color(red: r + (1 - r) * t, green: g + (1 - g) * t, blue: b + (1 - b) * t, opacity: a)
+        #else
+        return Color(UIColor { traits in
+            if traits.userInterfaceStyle == .dark {
+                guard lum < 0.35 else { return UIColor(red: r, green: g, blue: b, alpha: a) }
+                let t = (0.35 - lum) / (1 - lum)
+                return UIColor(red: r + (1 - r) * t, green: g + (1 - g) * t, blue: b + (1 - b) * t, alpha: a)
+            }
+            guard lum > 0.7 else { return UIColor(red: r, green: g, blue: b, alpha: a) }
+            let t = 1 - 0.7 / lum
+            return UIColor(red: r * (1 - t), green: g * (1 - t), blue: b * (1 - t), alpha: a)
+        })
+        #endif
     }
 }
 
