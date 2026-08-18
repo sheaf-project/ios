@@ -276,6 +276,7 @@ struct PollDetailSheet: View {
     @State private var showDeleteQueued = false
     @State private var deleteQueuedInfo: DeleteQueued?
     @State private var showAudit = false
+    @State private var showVoterPicker = false
 
     private var activePoll: Poll { livePoll ?? poll }
 
@@ -303,13 +304,35 @@ struct PollDetailSheet: View {
     /// eligible; otherwise any system member may vote (custom fronts
     /// included only when the poll allows them).
     private var eligibleVoterIDs: [String] {
+        let ids: [String]
         if activePoll.restrictVotingToFronters {
-            return frontingMemberIDs
+            ids = frontingMemberIDs
+        } else if activePoll.includeCustomFronts {
+            ids = store.members.map(\.id)
+        } else {
+            ids = store.members.filter { !$0.isCustomFront }.map(\.id)
         }
-        if activePoll.includeCustomFronts {
-            return store.members.map(\.id)
+        let archived = Set(store.members.filter(\.isArchived).map(\.id))
+        return ids.filter { !archived.contains($0) } + ids.filter { archived.contains($0) }
+    }
+
+    private var recentVoterIDs: [String] {
+        let eligible = Set(eligibleVoterIDs)
+        var ids: [String] = []
+        let entries = store.currentFronts + store.frontHistory.sorted { $0.startedAt > $1.startedAt }
+        for entry in entries {
+            for id in entry.memberIDs where eligible.contains(id) && !ids.contains(id) {
+                ids.append(id)
+            }
+            if ids.count >= 6 { break }
         }
-        return store.members.filter { !$0.isCustomFront }.map(\.id)
+        ids = Array(ids.prefix(6))
+        if ids.isEmpty { ids = Array(eligibleVoterIDs.prefix(6)) }
+        if let selected = votingAsMemberID, eligible.contains(selected), !ids.contains(selected) {
+            ids.insert(selected, at: 0)
+            ids = Array(ids.prefix(6))
+        }
+        return ids
     }
 
     private var myVote: PollVote? {
@@ -374,6 +397,15 @@ struct PollDetailSheet: View {
         .sheet(isPresented: $showAudit) {
             PollAuditSheet(pollID: activePoll.id)
                 .environmentObject(store)
+        }
+        .sheet(isPresented: $showVoterPicker) {
+            VoterPickerSheet(
+                members: eligibleVoterIDs.compactMap { id in store.members.first(where: { $0.id == id }) },
+                selectedID: votingAsMemberID,
+                votedIDs: Set(activePoll.votes?.map(\.votedAsMemberID) ?? [])
+            ) { id in
+                selectVoter(id)
+            }
         }
         .confirmationDialog("Delete this poll?", isPresented: $showDeleteConfirm) {
             Button("Delete", role: .destructive) {
@@ -494,7 +526,7 @@ struct PollDetailSheet: View {
 
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
-                        ForEach(eligibleVoterIDs, id: \.self) { memberID in
+                        ForEach(recentVoterIDs, id: \.self) { memberID in
                             if let member = store.members.first(where: { $0.id == memberID }) {
                                 Button {
                                     selectVoter(memberID)
@@ -522,6 +554,24 @@ struct PollDetailSheet: View {
                                 }
                                 .buttonStyle(.plain)
                             }
+                        }
+
+                        if eligibleVoterIDs.count > recentVoterIDs.count {
+                            Button {
+                                showVoterPicker = true
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "magnifyingglass")
+                                        .font(.caption2)
+                                    Text("All Members")
+                                        .font(.caption).fontWeight(.medium)
+                                }
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .background(theme.backgroundCard)
+                                .cornerRadius(10)
+                            }
+                            .buttonStyle(.plain)
                         }
                     }
                 }
@@ -685,6 +735,9 @@ struct PollDetailSheet: View {
         if let refreshed = await store.refreshPoll(id: poll.id) {
             livePoll = refreshed
         }
+        if store.frontHistory.isEmpty {
+            await store.loadFrontHistory()
+        }
         if let firstEligible = eligibleVoterIDs.first, votingAsMemberID == nil {
             selectVoter(firstEligible)
         }
@@ -715,6 +768,70 @@ struct PollDetailSheet: View {
             voteError = err
         }
         isVoting = false
+    }
+}
+
+// MARK: - Voter Picker Sheet
+
+struct VoterPickerSheet: View {
+    @Environment(\.theme) var theme
+    @Environment(\.dismiss) var dismiss
+    let members: [Member]
+    let selectedID: String?
+    let votedIDs: Set<String>
+    let onSelect: (String) -> Void
+
+    @State private var searchText = ""
+
+    private var filteredMembers: [Member] {
+        if searchText.isEmpty { return members }
+        return members.filter {
+            ($0.displayName ?? $0.name).localizedCaseInsensitiveContains(searchText) ||
+            $0.name.localizedCaseInsensitiveContains(searchText)
+        }
+    }
+
+    var body: some View {
+        NavigationStack {
+            List(filteredMembers) { member in
+                Button {
+                    onSelect(member.id)
+                    dismiss()
+                } label: {
+                    HStack(spacing: 12) {
+                        AvatarView(member: member, size: 36)
+                        Text(member.displayName ?? member.name)
+                            .font(.subheadline).fontWeight(.medium)
+                            .foregroundColor(theme.textPrimary)
+                        if votedIDs.contains(member.id) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.caption)
+                                .foregroundColor(theme.accentLight)
+                        }
+                        Spacer()
+                        if member.id == selectedID {
+                            Image(systemName: "checkmark")
+                                .fontWeight(.semibold)
+                                .foregroundColor(theme.accentLight)
+                        }
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .listRowBackground(theme.backgroundCard)
+            }
+            .scrollContentBackground(.hidden)
+            .background(theme.backgroundPrimary)
+            .navigationTitle("Voting As")
+            .navigationBarTitleDisplayMode(.inline)
+            .searchable(text: $searchText, prompt: "Search members")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                        .foregroundColor(theme.accentLight)
+                }
+            }
+        }
     }
 }
 
