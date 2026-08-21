@@ -1318,6 +1318,22 @@ class APIClient {
         return try? JSONDecoder.iso.decode(DeleteQueued.self, from: data)
     }
 
+    func getTagMembers(tagID: String) async throws -> [Member] {
+        let data = try await request("/v1/tags/\(tagID)/members")
+        return try JSONDecoder.iso.decode([Member].self, from: data)
+    }
+
+    func getMemberTags(memberID: String) async throws -> [Tag] {
+        let data = try await request("/v1/members/\(memberID)/tags")
+        return try JSONDecoder.iso.decode([Tag].self, from: data)
+    }
+
+    func setMemberTags(memberID: String, tagIDs: [String]) async throws -> [Tag] {
+        let body = try JSONEncoder.iso.encode(MemberTagUpdate(tagIDs: tagIDs))
+        let data = try await request("/v1/members/\(memberID)/tags", method: "PUT", body: body)
+        return try JSONDecoder.iso.decode([Tag].self, from: data)
+    }
+
     // MARK: - Relationships
 
     func getRelationshipTypes() async throws -> [RelationshipType] {

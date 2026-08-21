@@ -496,6 +496,10 @@ struct MemberDetailSheet: View {
         store.members.first(where: { $0.id == member.id }) ?? member
     }
 
+    private var memberTags: [Tag] {
+        store.tags.filter { store.tagMemberIDs[$0.id]?.contains(member.id) ?? false }
+    }
+
     /// Header layout. With a banner set, the avatar is positioned so half
     /// of it overlaps the banner's bottom edge and half sits below; otherwise
     /// a plain centred avatar.
@@ -632,6 +636,26 @@ struct MemberDetailSheet: View {
                             Text(pkID)
                                 .font(.subheadline.monospaced())
                                 .foregroundColor(theme.textPrimary)
+                        }
+                        .padding(16)
+                        .background(theme.backgroundCard)
+                        .cornerRadius(14)
+                    }
+
+                    // Tags
+                    if !memberTags.isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Label("Tags", systemImage: "tag")
+                                .font(.footnote).fontWeight(.semibold)
+                                .foregroundColor(theme.textSecondary)
+                                .textCase(.uppercase)
+                                .kerning(0.8)
+                            ChipWrapLayout(spacing: 6) {
+                                ForEach(memberTags) { tag in
+                                    TagPill(name: tag.name, color: tag.displayColor)
+                                }
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
                         }
                         .padding(16)
                         .background(theme.backgroundCard)
@@ -896,6 +920,8 @@ struct MemberEditSheet: View {
     // re-rotate server-side ciphertext or audit history.
     @State private var fieldValues: [String: AnyCodable] = [:]
     @State private var fieldValuesBaseline: [String: AnyCodable] = [:]
+    @State private var selectedTagIDs: Set<String> = []
+    @State private var tagIDsBaseline: Set<String> = []
     @State private var selectedPhoto: PhotosPickerItem?
     @State private var isUploadingAvatar = false
     @State private var avatarMode: AvatarInputMode = .url
@@ -957,6 +983,7 @@ struct MemberEditSheet: View {
                 return true
             }
         }
+        if selectedTagIDs != tagIDsBaseline { return true }
         return false
     }
 
@@ -1098,6 +1125,37 @@ struct MemberEditSheet: View {
                             ForEach(store.fields) { field in
                                 customFieldEditor(field)
                             }
+                        }
+                    }
+
+                    // Tags
+                    if !store.tags.isEmpty {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Tags")
+                                .font(.footnote).fontWeight(.semibold)
+                                .foregroundColor(theme.textSecondary)
+                            ChipWrapLayout(spacing: 6) {
+                                ForEach(store.tags) { tag in
+                                    let isSelected = selectedTagIDs.contains(tag.id)
+                                    Button {
+                                        if isSelected { selectedTagIDs.remove(tag.id) }
+                                        else { selectedTagIDs.insert(tag.id) }
+                                    } label: {
+                                        Text(tag.name)
+                                            .font(.subheadline).fontWeight(.medium)
+                                            .padding(.horizontal, 12).padding(.vertical, 6)
+                                            .background(isSelected ? theme.accentSoft : theme.backgroundCard)
+                                            .foregroundColor(isSelected ? theme.accent : theme.textPrimary)
+                                            .cornerRadius(14)
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 14)
+                                                    .stroke(isSelected ? theme.accent.opacity(0.25) : theme.border, lineWidth: 1)
+                                            )
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
                         }
                     }
 
@@ -1306,6 +1364,18 @@ struct MemberEditSheet: View {
                 fieldValuesBaseline = byID
             }
         }
+        // Seed tag selection from the cached map so it works offline,
+        // then overwrite with the server's answer when it arrives.
+        let cached = Set(store.tagMemberIDs.filter { $0.value.contains(m.id) }.keys)
+        selectedTagIDs = cached
+        tagIDsBaseline = cached
+        Task {
+            guard let fetched = try? await store.api?.getMemberTags(memberID: m.id) else { return }
+            await MainActor.run {
+                selectedTagIDs = Set(fetched.map(\.id))
+                tagIDsBaseline = selectedTagIDs
+            }
+        }
     }
 
     func formField(_ label: String, value: Binding<String>, placeholder: String, multiline: Bool = false) -> some View {
@@ -1353,6 +1423,9 @@ struct MemberEditSheet: View {
                 }
                 if !sets.isEmpty {
                     await store.setMemberFieldValues(memberID: memberID, values: sets)
+                }
+                if selectedTagIDs != tagIDsBaseline {
+                    await store.setMemberTags(memberID: memberID, tagIDs: Array(selectedTagIDs))
                 }
             }
             isSaving = false

@@ -82,7 +82,7 @@ actor CacheManager {
     }
 
     func clearAll() {
-        let keys = ["members", "groups", "tags", "fields", "currentFronts", "frontHistory", "systemProfile", "journalEntries", "polls", "safetySettings"]
+        let keys = ["members", "groups", "tags", "tagMembers", "fields", "currentFronts", "frontHistory", "systemProfile", "journalEntries", "polls", "safetySettings"]
         for key in keys {
             let url = container.appendingPathComponent("\(key).json")
             try? FileManager.default.removeItem(at: url)
@@ -99,7 +99,7 @@ enum OperationType: String, Codable {
     case createGroup, updateGroup, deleteGroup, setGroupMembers
     case createFront, updateFront, deleteFront
     case updateSystem
-    case createTag, deleteTag
+    case createTag, updateTag, deleteTag, setMemberTags
     case createField, updateField, deleteField
     case setMemberFieldValues
     case createJournal, updateJournal, deleteJournal
@@ -122,6 +122,9 @@ class SystemStore: ObservableObject {
     @Published var members: [Member] = []
     @Published var groups: [SystemGroup] = []
     @Published var tags: [Tag] = []
+    // tagID -> member IDs; backs the member counts in TagsView and the
+    // tag chips in the member editor. Refreshed alongside tags.
+    @Published var tagMemberIDs: [String: [String]] = [:]
     @Published var fields: [CustomField] = []
     @Published var relationshipTypes: [RelationshipType] = []
     @Published var currentFronts: [FrontEntry] = []
@@ -296,6 +299,7 @@ class SystemStore: ObservableObject {
         members = []
         groups = []
         tags = []
+        tagMemberIDs = [:]
         fields = []
         currentFronts = []
         frontHistory = []
@@ -333,6 +337,9 @@ class SystemStore: ObservableObject {
         if let cached = await cache.load(key: "tags", as: [Tag].self), tags.isEmpty {
             tags = cached
         }
+        if let cached = await cache.load(key: "tagMembers", as: [String: [String]].self), tagMemberIDs.isEmpty {
+            tagMemberIDs = cached
+        }
         if let cached = await cache.load(key: "fields", as: [CustomField].self), fields.isEmpty {
             fields = cached
         }
@@ -364,6 +371,7 @@ class SystemStore: ObservableObject {
             await cache.save(members, key: "members")
             await cache.save(groups, key: "groups")
             await cache.save(tags, key: "tags")
+            await cache.save(tagMemberIDs, key: "tagMembers")
             await cache.save(fields, key: "fields")
             await cache.save(currentFronts, key: "currentFronts")
             await cache.save(frontHistory, key: "frontHistory")
@@ -428,6 +436,7 @@ class SystemStore: ObservableObject {
                 systemProfile = try await s
 
                 saveAllToCache()
+                await refreshTagMembers()
                 updateWatchComplication()
                 PhoneConnectivityManager.shared.syncAvatars(
                     members: members,
@@ -595,9 +604,20 @@ class SystemStore: ObservableObject {
                     if let tempID = op.tempID {
                         tempIDMap[tempID] = created.id
                     }
+                case .updateTag:
+                    if let rid = resolveID(op.resourceID) {
+                        let update = try JSONDecoder.iso.decode(TagUpdate.self, from: op.bodyData)
+                        _ = try await api.updateTag(id: rid, update: update)
+                    }
                 case .deleteTag:
                     if let rid = resolveID(op.resourceID) {
                         try await api.deleteTag(id: rid)
+                    }
+                case .setMemberTags:
+                    if let rid = resolveID(op.resourceID) {
+                        let tagIDs = try JSONDecoder.iso.decode([String].self, from: op.bodyData)
+                        let resolved = tagIDs.map { tempIDMap[$0] ?? $0 }
+                        _ = try await api.setMemberTags(memberID: rid, tagIDs: resolved)
                     }
                 case .createField:
                     let create = try JSONDecoder.iso.decode(CustomFieldCreate.self, from: op.bodyData)
@@ -1502,6 +1522,29 @@ class SystemStore: ObservableObject {
         return optimistic
     }
 
+    func updateTag(id: String, update: TagUpdate) async {
+        if NetworkMonitor.shared.isOnline, let api {
+            do {
+                let updated = try await api.updateTag(id: id, update: update)
+                if let idx = tags.firstIndex(where: { $0.id == id }) {
+                    tags[idx] = updated
+                }
+                saveAllToCache()
+            } catch {
+                showError(error)
+            }
+        } else {
+            if let body = try? JSONEncoder.iso.encode(update) {
+                enqueue(.updateTag, resourceID: id, body: body)
+            }
+            if let idx = tags.firstIndex(where: { $0.id == id }) {
+                if let name = update.name { tags[idx].name = name }
+                if let color = update.color { tags[idx].color = color }
+            }
+            saveAllToCache()
+        }
+    }
+
     @discardableResult
     func deleteTag(id: String, confirmation: MemberDeleteConfirm? = nil) async -> DeleteQueued? {
         if NetworkMonitor.shared.isOnline, let api {
@@ -1509,6 +1552,7 @@ class SystemStore: ObservableObject {
                 let queued = try await api.deleteTag(id: id, confirmation: confirmation)
                 if queued == nil {
                     tags.removeAll { $0.id == id }
+                    tagMemberIDs[id] = nil
                     saveAllToCache()
                 }
                 return queued
@@ -1523,8 +1567,61 @@ class SystemStore: ObservableObject {
         if blockOfflineDeletion(for: .tags, label: "tags") { return nil }
         enqueue(.deleteTag, resourceID: id)
         tags.removeAll { $0.id == id }
+        tagMemberIDs[id] = nil
         saveAllToCache()
         return nil
+    }
+
+    func refreshTagMembers() async {
+        guard NetworkMonitor.shared.isOnline, let api else { return }
+        var map: [String: [String]] = [:]
+        await withTaskGroup(of: (String, [String])?.self) { group in
+            for tag in tags {
+                group.addTask {
+                    guard let fetched = try? await api.getTagMembers(tagID: tag.id) else { return nil }
+                    return (tag.id, fetched.map(\.id))
+                }
+            }
+            for await pair in group {
+                if let (id, ids) = pair { map[id] = ids }
+            }
+        }
+        tagMemberIDs = map
+        saveAllToCache()
+    }
+
+    func setMemberTags(memberID: String, tagIDs: [String]) async {
+        var applied = false
+        if NetworkMonitor.shared.isOnline, let api {
+            do {
+                _ = try await api.setMemberTags(memberID: memberID, tagIDs: tagIDs)
+                applied = true
+            } catch {
+                if !fallThroughToOffline(error) {
+                    showError(error)
+                    return
+                }
+            }
+        }
+
+        if !applied {
+            if let body = try? JSONEncoder.iso.encode(tagIDs) {
+                enqueue(.setMemberTags, resourceID: memberID, body: body)
+            }
+        }
+
+        let chosen = Set(tagIDs)
+        for (id, ids) in tagMemberIDs {
+            if chosen.contains(id) {
+                if !ids.contains(memberID) { tagMemberIDs[id] = ids + [memberID] }
+            } else if ids.contains(memberID) {
+                tagMemberIDs[id] = ids.filter { $0 != memberID }
+            }
+        }
+        for id in chosen where tagMemberIDs[id] == nil {
+            tagMemberIDs[id] = [memberID]
+        }
+        saveAllToCache()
     }
 
     // MARK: - Journals

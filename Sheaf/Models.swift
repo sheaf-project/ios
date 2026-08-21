@@ -430,6 +430,15 @@ struct GroupMemberUpdate: Codable {
     }
 }
 
+// MARK: - MemberTagUpdate
+struct MemberTagUpdate: Codable {
+    var tagIDs: [String]
+
+    enum CodingKeys: String, CodingKey {
+        case tagIDs = "tag_ids"
+    }
+}
+
 // MARK: - TagRead
 struct Tag: Identifiable, Codable, Hashable {
     let id: String
@@ -444,6 +453,10 @@ struct Tag: Identifiable, Codable, Hashable {
         case systemID  = "system_id"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
+    }
+
+    var displayColor: Color {
+        Color(hex: color ?? "#F59E0B") ?? .orange
     }
 }
 

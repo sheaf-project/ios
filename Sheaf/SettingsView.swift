@@ -516,6 +516,28 @@ struct SettingsView: View {
                     settingsSection(title: "Data") {
                         VStack(spacing: 0) {
                             NavigationLink {
+                                TagsView()
+                                    .environmentObject(store)
+                            } label: {
+                                HStack {
+                                    Image(systemName: "tag.fill")
+                                        .foregroundColor(theme.accentLight)
+                                        .frame(width: 20)
+                                    Text("Tags")
+                                        .font(.subheadline).fontWeight(.medium)
+                                        .foregroundColor(theme.textPrimary)
+                                    Spacer()
+                                    Text("\(store.tags.count)")
+                                        .font(.subheadline)
+                                        .foregroundColor(theme.textTertiary)
+                                }
+                                .padding(.horizontal, 16).padding(.vertical, 14)
+                            }
+                            .buttonStyle(.plain)
+
+                            Divider().background(theme.divider)
+
+                            NavigationLink {
                                 CustomFieldsView()
                                     .environmentObject(store)
                             } label: {
