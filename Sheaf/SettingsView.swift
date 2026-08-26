@@ -1105,7 +1105,7 @@ struct SettingsView: View {
         isRunningFileCleanup = true
         do {
             let result = try await api.cleanupFilesDryRun()
-            let count = result["files_to_remove"] as? Int ?? result["count"] as? Int ?? 0
+            let count = result["orphaned"] as? Int ?? 0
             isRunningFileCleanup = false
             if count > 0 {
                 fileCleanupResult = "\(count) orphaned file(s) found."
@@ -1126,7 +1126,7 @@ struct SettingsView: View {
         isRunningFileCleanup = true
         do {
             let result = try await api.cleanupFiles()
-            let count = result["files_removed"] as? Int ?? result["count"] as? Int ?? 0
+            let count = result["orphaned"] as? Int ?? 0
             fileCleanupResult = "Cleaned up \(count) file(s)."
         } catch {
             fileCleanupResult = "Error: \(error.localizedDescription)"
