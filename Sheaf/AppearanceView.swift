@@ -7,6 +7,7 @@ struct AppearanceView: View {
     @EnvironmentObject var themeManager: ThemeManager
     @Environment(\.theme) var theme
     @AppStorage("quickSwitchPosition") private var quickSwitchPosition: QuickSwitchPosition = .belowFronters
+    @AppStorage("showMemberCreatedDate") private var showMemberCreatedDate = true
 
     var body: some View {
         ZStack {
@@ -17,6 +18,7 @@ struct AppearanceView: View {
                     modeSection
                     paletteSection
                     quickSwitchSection
+                    memberProfileSection
                 }
                 .padding(.vertical, 16)
             }
@@ -137,6 +139,37 @@ struct AppearanceView: View {
                     }
                 }
             }
+            .background(theme.backgroundCard)
+            .cornerRadius(16)
+            .overlay(RoundedRectangle(cornerRadius: 16).stroke(theme.backgroundCard, lineWidth: 1))
+            .padding(.horizontal, 24)
+        }
+    }
+
+    // MARK: Member Profiles
+
+    private var memberProfileSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Member Profiles")
+                .font(.caption).fontWeight(.semibold)
+                .foregroundColor(theme.textSecondary)
+                .textCase(.uppercase)
+                .kerning(0.8)
+                .padding(.horizontal, 24)
+
+            HStack(spacing: 12) {
+                Image(systemName: "calendar")
+                    .foregroundColor(theme.textTertiary)
+                    .frame(width: 20)
+                Text("Show Creation Date")
+                    .font(.subheadline)
+                    .foregroundColor(theme.textPrimary)
+                Spacer()
+                Toggle("", isOn: $showMemberCreatedDate)
+                    .labelsHidden()
+                    .tint(theme.accentLight)
+            }
+            .padding(.horizontal, 16).padding(.vertical, 14)
             .background(theme.backgroundCard)
             .cornerRadius(16)
             .overlay(RoundedRectangle(cornerRadius: 16).stroke(theme.backgroundCard, lineWidth: 1))

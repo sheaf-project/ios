@@ -485,6 +485,7 @@ struct MemberDetailSheet: View {
     @EnvironmentObject var store: SystemStore
     @Environment(\.dismiss) var dismiss
     let member: Member
+    @AppStorage("showMemberCreatedDate") private var showCreatedDate = true
     @State private var showEdit = false
     @State private var showBioRevisions = false
     @State private var fieldValues: [CustomFieldValue] = []
@@ -635,6 +636,22 @@ struct MemberDetailSheet: View {
                             Spacer()
                             Text(pkID)
                                 .font(.subheadline.monospaced())
+                                .foregroundColor(theme.textPrimary)
+                        }
+                        .padding(16)
+                        .background(theme.backgroundCard)
+                        .cornerRadius(14)
+                    }
+
+                    // Created
+                    if showCreatedDate {
+                        HStack {
+                            Label("Created", systemImage: "calendar")
+                                .font(.subheadline).fontWeight(.medium)
+                                .foregroundColor(theme.textSecondary)
+                            Spacer()
+                            Text(liveMember.createdAt.formatted(date: .abbreviated, time: .omitted))
+                                .font(.subheadline)
                                 .foregroundColor(theme.textPrimary)
                         }
                         .padding(16)
