@@ -30,6 +30,7 @@ struct HomeView: View {
     @State private var showSwitchSheet = false
     @State private var showSettings = false
     @State private var showMessages = false
+    @State private var bannersExpanded = false
     @AppStorage("quickSwitchPosition") private var quickSwitchPosition: QuickSwitchPosition = .belowFronters
     @Namespace private var glassNamespace
 
@@ -91,8 +92,53 @@ struct HomeView: View {
                     .padding(.horizontal, 24)
                     .padding(.top, 16)
 
+                    // Condensed summary chip when multiple banners would stack
+                    if bannerCount > 1 {
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                bannersExpanded.toggle()
+                            }
+                        } label: {
+                            HStack(spacing: 8) {
+                                if showOfflineBanner {
+                                    Image(systemName: "wifi.slash")
+                                        .foregroundColor(theme.warning)
+                                }
+                                if showDeletionBanner {
+                                    Image(systemName: "exclamationmark.triangle.fill")
+                                        .foregroundColor(theme.danger)
+                                }
+                                if !store.visibleAnnouncements.isEmpty {
+                                    Image(systemName: "megaphone.fill")
+                                        .foregroundColor(bannerSeverityColor)
+                                }
+                                if !safetyBannerItems.isEmpty {
+                                    Image(systemName: "shield.fill")
+                                        .foregroundColor(bannerSeverityColor)
+                                }
+                                Text("\(bannerCount) alerts")
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(theme.textPrimary)
+                                Spacer()
+                                Image(systemName: bannersExpanded ? "chevron.up" : "chevron.down")
+                                    .font(.caption).fontWeight(.medium)
+                                    .foregroundColor(theme.textTertiary)
+                            }
+                            .font(.subheadline)
+                            .padding(14)
+                            .background(bannerSeverityColor.opacity(0.12))
+                            .cornerRadius(14)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14)
+                                    .stroke(bannerSeverityColor.opacity(0.3), lineWidth: 1)
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.horizontal, 24)
+                    }
+
                     // Offline / unreachable-server banner
-                    if !networkMonitor.isOnline || !store.isOnline {
+                    if !bannersCondensed, showOfflineBanner {
                         VStack(alignment: .leading, spacing: 8) {
                             HStack(spacing: 8) {
                                 Image(systemName: "wifi.slash")
@@ -120,7 +166,7 @@ struct HomeView: View {
                     }
 
                     // Pending deletion banner
-                    if authManager.accountStatus == .pendingDeletion,
+                    if !bannersCondensed, showDeletionBanner,
                        let deletionDate = authManager.deletionRequestedAt {
                         VStack(alignment: .leading, spacing: 8) {
                             HStack(spacing: 8) {
@@ -156,19 +202,23 @@ struct HomeView: View {
                     }
 
                     // Announcements
-                    ForEach(store.visibleAnnouncements) { announcement in
-                        AnnouncementBanner(announcement: announcement) {
-                            withAnimation {
-                                store.dismissAnnouncement(announcement.id)
+                    if !bannersCondensed {
+                        ForEach(store.visibleAnnouncements) { announcement in
+                            AnnouncementBanner(announcement: announcement) {
+                                withAnimation {
+                                    store.dismissAnnouncement(announcement.id)
+                                }
                             }
+                            .padding(.horizontal, 24)
                         }
-                        .padding(.horizontal, 24)
                     }
 
                     // System Safety pending items
-                    ForEach(safetyBannerItems) { item in
-                        SafetyPendingBanner(item: item)
-                            .padding(.horizontal, 24)
+                    if !bannersCondensed {
+                        ForEach(safetyBannerItems) { item in
+                            SafetyPendingBanner(item: item)
+                                .padding(.horizontal, 24)
+                        }
                     }
 
                     // Fronting card(s)
@@ -270,6 +320,39 @@ struct HomeView: View {
             .background(Color.clear)
             .scrollContentBackground(.hidden)
         }
+    }
+
+    private var showOfflineBanner: Bool {
+        !networkMonitor.isOnline || !store.isOnline
+    }
+
+    private var showDeletionBanner: Bool {
+        authManager.accountStatus == .pendingDeletion && authManager.deletionRequestedAt != nil
+    }
+
+    private var bannerCount: Int {
+        (showOfflineBanner ? 1 : 0)
+            + (showDeletionBanner ? 1 : 0)
+            + store.visibleAnnouncements.count
+            + safetyBannerItems.count
+    }
+
+    private var bannersCondensed: Bool {
+        bannerCount > 1 && !bannersExpanded
+    }
+
+    private var bannerSeverityColor: Color {
+        if showDeletionBanner
+            || store.visibleAnnouncements.contains(where: { $0.severity == .critical })
+            || safetyBannerItems.contains(where: { $0.earliestFinalize.timeIntervalSinceNow < 24 * 3600 }) {
+            return theme.danger
+        }
+        if showOfflineBanner
+            || store.visibleAnnouncements.contains(where: { $0.severity == .warning })
+            || !safetyBannerItems.isEmpty {
+            return theme.warning
+        }
+        return theme.accentLight
     }
 
     private var safetyBannerItems: [SafetyBannerItem] {
