@@ -1218,6 +1218,20 @@ class SystemStore: ObservableObject {
         }
     }
 
+    // Online-only: the endpoint takes the full ordering, which doesn't
+    // compose with other queued edits. The response is the canonical
+    // sorted list, so on failure a refetch undoes the optimistic move.
+    func reorderGroups(ids: [String]) async {
+        guard NetworkMonitor.shared.isOnline, let api else { return }
+        do {
+            groups = try await api.reorderGroups(ids: ids)
+        } catch {
+            showError(error)
+            groups = (try? await api.getGroups()) ?? groups
+        }
+        saveAllToCache()
+    }
+
     @discardableResult
     func deleteGroup(id: String, confirmation: MemberDeleteConfirm? = nil) async -> DeleteQueued? {
         if NetworkMonitor.shared.isOnline, let api {
@@ -1385,6 +1399,18 @@ class SystemStore: ObservableObject {
             fields = (try? await api.getFields()) ?? fields
             saveAllToCache()
         }
+    }
+
+    // Online-only, same reasoning as reorderGroups.
+    func reorderFields(ids: [String]) async {
+        guard NetworkMonitor.shared.isOnline, let api else { return }
+        do {
+            fields = try await api.reorderFields(ids: ids)
+        } catch {
+            showError(error)
+            fields = (try? await api.getFields()) ?? fields
+        }
+        saveAllToCache()
     }
 
     // MARK: - Relationships (consolidated for views)

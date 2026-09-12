@@ -49,6 +49,16 @@ struct GroupsView: View {
                                 }
                             }
                             .contextMenu {
+                                Button {
+                                    moveGroup(entry.group, by: -1)
+                                } label: {
+                                    Label("Move Up", systemImage: "arrow.up")
+                                }
+                                Button {
+                                    moveGroup(entry.group, by: 1)
+                                } label: {
+                                    Label("Move Down", systemImage: "arrow.down")
+                                }
                                 Button(role: .destructive) {
                                     requestDelete(entry.group)
                                 } label: {
@@ -116,6 +126,26 @@ struct GroupsView: View {
         } else {
             showDeleteAuthSheet = true
         }
+    }
+
+    /// Move a group one place among its siblings (same parent). Sends the
+    /// full flat ordering, depth-first with the pair swapped, so the
+    /// server's order = list-index assignment reproduces the screen.
+    private func moveGroup(_ group: SystemGroup, by delta: Int) {
+        var siblings = store.groups
+            .filter { $0.parentID == group.parentID }
+            .sorted(by: groupOrderedBefore)
+        guard let i = siblings.firstIndex(where: { $0.id == group.id }),
+              (0..<siblings.count).contains(i + delta) else { return }
+        siblings.swapAt(i, i + delta)
+        let position = Dictionary(uniqueKeysWithValues: siblings.enumerated().map { ($0.element.id, $0.offset) })
+        var patched = store.groups
+        for k in patched.indices {
+            if let p = position[patched[k].id] { patched[k].order = p }
+        }
+        store.groups = patched
+        let ids = orderHierarchically(patched).map { $0.group.id }
+        Task { await store.reorderGroups(ids: ids) }
     }
 }
 
@@ -713,6 +743,13 @@ struct GroupHierarchyEntry {
     let depth: Int
 }
 
+/// (order, name), matching the API's list sort, so a list nobody has
+/// rearranged (all order 0) stays alphabetical.
+func groupOrderedBefore(_ a: SystemGroup, _ b: SystemGroup) -> Bool {
+    if a.order != b.order { return a.order < b.order }
+    return a.name.localizedCompare(b.name) == .orderedAscending
+}
+
 /// Flatten the group list into parent-before-children order with a depth for
 /// each, so the list can indent subgroups under their parent. Roots are
 /// groups with no parent (or a parent_id that isn't in the set); orphans
@@ -724,7 +761,7 @@ func orderHierarchically(_ groups: [SystemGroup]) -> [GroupHierarchyEntry] {
 
     func visit(_ group: SystemGroup, depth: Int) {
         out.append(GroupHierarchyEntry(group: group, depth: depth))
-        let children = (childrenOf[group.id] ?? []).sorted { $0.name.localizedCompare($1.name) == .orderedAscending }
+        let children = (childrenOf[group.id] ?? []).sorted(by: groupOrderedBefore)
         for child in children {
             visit(child, depth: depth + 1)
         }
@@ -733,7 +770,7 @@ func orderHierarchically(_ groups: [SystemGroup]) -> [GroupHierarchyEntry] {
     let roots = groups.filter { g in
         guard let pid = g.parentID else { return true }
         return byID[pid] == nil
-    }.sorted { $0.name.localizedCompare($1.name) == .orderedAscending }
+    }.sorted(by: groupOrderedBefore)
 
     for root in roots {
         visit(root, depth: 0)

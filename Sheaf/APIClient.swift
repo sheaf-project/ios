@@ -1291,6 +1291,12 @@ class APIClient {
         return try JSONDecoder.iso.decode([Member].self, from: data)
     }
 
+    func reorderGroups(ids: [String]) async throws -> [SystemGroup] {
+        let body = try JSONEncoder.iso.encode(GroupReorder(groupIDs: ids))
+        let data = try await request("/v1/groups/reorder", method: "PUT", body: body)
+        return try JSONDecoder.iso.decode([SystemGroup].self, from: data)
+    }
+
     // MARK: - Tags
 
     func getTags() async throws -> [Tag] {
@@ -1512,6 +1518,12 @@ class APIClient {
         let body = try JSONEncoder.iso.encode(create)
         let data = try await request("/v1/fields", method: "POST", body: body)
         return try JSONDecoder.iso.decode(CustomField.self, from: data)
+    }
+
+    func reorderFields(ids: [String]) async throws -> [CustomField] {
+        let body = try JSONEncoder.iso.encode(CustomFieldReorder(fieldIDs: ids))
+        let data = try await request("/v1/fields/reorder", method: "PUT", body: body)
+        return try JSONDecoder.iso.decode([CustomField].self, from: data)
     }
 
     func getMemberFieldValues(memberID: String) async throws -> [CustomFieldValue] {

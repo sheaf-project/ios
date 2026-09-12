@@ -72,6 +72,11 @@ struct CustomFieldsView: View {
                         .tint(theme.accentLight)
                     }
                 }
+                .onMove { source, destination in
+                    store.fields.move(fromOffsets: source, toOffset: destination)
+                    let ids = store.fields.map { $0.id }
+                    Task { await store.reorderFields(ids: ids) }
+                }
             }
         }
         .scrollContentBackground(.hidden)
@@ -79,7 +84,11 @@ struct CustomFieldsView: View {
         .navigationTitle("Custom Fields")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .primaryAction) {
+            ToolbarItemGroup(placement: .primaryAction) {
+                if !store.fields.isEmpty {
+                    EditButton()
+                        .foregroundColor(theme.accentLight)
+                }
                 Button { showAddField = true } label: {
                     Image(systemName: "plus").foregroundColor(theme.accentLight)
                 }

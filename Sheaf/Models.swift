@@ -371,11 +371,12 @@ struct SystemGroup: Identifiable, Codable, Hashable {
     var description: String?
     var color: String?
     var parentID: String?
+    var order: Int = 0
     let createdAt: Date
     let updatedAt: Date
 
     enum CodingKeys: String, CodingKey {
-        case id, name, description, color
+        case id, name, description, color, order
         case systemID  = "system_id"
         case parentID  = "parent_id"
         case createdAt = "created_at"
@@ -427,6 +428,15 @@ struct GroupMemberUpdate: Codable {
 
     enum CodingKeys: String, CodingKey {
         case memberIDs = "member_ids"
+    }
+}
+
+// MARK: - GroupReorder
+struct GroupReorder: Codable {
+    var groupIDs: [String]
+
+    enum CodingKeys: String, CodingKey {
+        case groupIDs = "group_ids"
     }
 }
 
@@ -517,6 +527,15 @@ struct CustomFieldCreate: Codable {
     enum CodingKeys: String, CodingKey {
         case name, options, order, privacy
         case fieldType = "field_type"
+    }
+}
+
+// MARK: - CustomFieldReorder
+struct CustomFieldReorder: Codable {
+    var fieldIDs: [String]
+
+    enum CodingKeys: String, CodingKey {
+        case fieldIDs = "field_ids"
     }
 }
 
