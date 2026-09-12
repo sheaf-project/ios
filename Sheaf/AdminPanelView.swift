@@ -807,7 +807,7 @@ struct AdminPanelView: View {
                 .padding(.horizontal, 24)
 
             if let stats {
-                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 12)], spacing: 12) {
                     adminStatCard(title: "Users", value: "\(stats.totalUsers)", icon: "person.2.fill")
                     adminStatCard(title: "Members", value: "\(stats.totalMembers)", icon: "person.fill")
                     adminStatCard(title: "Storage", value: formatBytes(stats.totalStorageBytes), icon: "externaldrive.fill")

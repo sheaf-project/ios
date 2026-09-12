@@ -294,7 +294,7 @@ struct CreateApiKeySheet: View {
                                 .font(.footnote).fontWeight(.semibold)
                                 .foregroundColor(theme.textSecondary)
 
-                            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+                            LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: 8)], spacing: 8) {
                                 ForEach(availableScopes, id: \.self) { scope in
                                     Button {
                                         if selectedScopes.contains(scope) {

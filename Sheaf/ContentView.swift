@@ -149,44 +149,73 @@ struct QuickSwitchAccessoryView: View {
 
 struct MembersTabView: View {
     @Environment(\.theme) var theme
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    @EnvironmentObject var store: SystemStore
     @State private var section = 0
     @State private var showAddMember = false
     @State private var showAddGroup = false
+    @State private var selectedMember: Member?
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                MembersView(showAddMember: $showAddMember)
-                    .opacity(section == 0 ? 1 : 0)
-                    .allowsHitTesting(section == 0)
-                GroupsView(showAddGroup: $showAddGroup)
-                    .opacity(section == 1 ? 1 : 0)
-                    .allowsHitTesting(section == 1)
+        // Regular width (iPad, unfolded iPhone Duo): member detail sits in
+        // the split view's detail column. Compact keeps the sheet.
+        if sizeClass == .regular {
+            NavigationSplitView {
+                sectionContent
+            } detail: {
+                if let member = selectedMember {
+                    MemberDetailSheet(member: member)
+                        .id(member.id)
+                } else {
+                    Text("Select a member")
+                        .foregroundColor(theme.textSecondary)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(theme.backgroundPrimary.ignoresSafeArea())
+                }
             }
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    Picker("", selection: $section) {
-                        Text("Members").tag(0)
-                        Text("Groups").tag(1)
-                    }
-                    .pickerStyle(.segmented)
-                    .frame(width: 200)
+        } else {
+            NavigationStack {
+                sectionContent
+            }
+            .sheet(item: $selectedMember) { member in
+                MemberDetailSheet(member: member)
+                    .environmentObject(store)
+            }
+        }
+    }
+
+    private var sectionContent: some View {
+        ZStack {
+            MembersView(showAddMember: $showAddMember, selectedMember: $selectedMember)
+                .opacity(section == 0 ? 1 : 0)
+                .allowsHitTesting(section == 0)
+            GroupsView(showAddGroup: $showAddGroup)
+                .opacity(section == 1 ? 1 : 0)
+                .allowsHitTesting(section == 1)
+        }
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Picker("", selection: $section) {
+                    Text("Members").tag(0)
+                    Text("Groups").tag(1)
                 }
-                ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        if section == 0 {
-                            showAddMember = true
-                        } else {
-                            showAddGroup = true
-                        }
-                    } label: {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.title3)
-                            .foregroundColor(theme.accentLight)
+                .pickerStyle(.segmented)
+                .frame(width: 200)
+            }
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    if section == 0 {
+                        showAddMember = true
+                    } else {
+                        showAddGroup = true
                     }
-                    .accessibilityLabel(section == 0 ? "Add member" : "Add group")
+                } label: {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.title3)
+                        .foregroundColor(theme.accentLight)
                 }
+                .accessibilityLabel(section == 0 ? "Add member" : "Add group")
             }
         }
     }

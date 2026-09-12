@@ -78,11 +78,7 @@ struct AppearanceView: View {
                 .padding(.horizontal, 24)
 
             LazyVGrid(
-                columns: [
-                    GridItem(.flexible(), spacing: 12),
-                    GridItem(.flexible(), spacing: 12),
-                    GridItem(.flexible(), spacing: 12),
-                ],
+                columns: [GridItem(.adaptive(minimum: 100), spacing: 12)],
                 spacing: 12
             ) {
                 ForEach(visiblePalettes, id: \.self) { palette in
