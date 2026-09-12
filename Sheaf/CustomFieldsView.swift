@@ -210,6 +210,7 @@ struct EditCustomFieldSheet: View {
     @State private var choices: [String] = []
     @State private var isSaving = false
     @State private var error: String?
+    @State private var stepUp: StepUpRequest?
 
     private var isChoiceField: Bool {
         field.fieldType == .select || field.fieldType == .multiselect
@@ -288,9 +289,46 @@ struct EditCustomFieldSheet: View {
             privacy = field.privacy
             choices = field.options?.choices ?? []
         }
+        .sheet(item: $stepUp) { req in
+            CeilingStepUpSheet(request: req)
+                .environmentObject(store)
+        }
     }
 
     private func save() async {
+        // A raise to public is an exposing action the server may gate with
+        // step-up, so it goes direct instead of through the offline-queued
+        // store path.
+        if privacy == .public && field.privacy != .public {
+            isSaving = true
+            error = nil
+            runCeilingChange(
+                message: String(localized: "Making this field public can expose its values on shared pages."),
+                onError: { e in
+                    error = e
+                    isSaving = false
+                    if e == nil { dismiss() }
+                },
+                onStepUp: { req in
+                    isSaving = false
+                    stepUp = req
+                }
+            ) { pw, totp in
+                guard let api = store.api else { return }
+                var u = CustomFieldUpdate(name: name, privacy: privacy)
+                if isChoiceField { u.options = CustomFieldOptions(choices: choices) }
+                u.password = pw
+                u.totpCode = totp
+                let updated = try await api.updateField(id: field.id, update: u)
+                await MainActor.run {
+                    if let i = store.fields.firstIndex(where: { $0.id == updated.id }) {
+                        store.fields[i] = updated
+                    }
+                    dismiss()
+                }
+            }
+            return
+        }
         isSaving = true
         error = nil
         await store.updateField(

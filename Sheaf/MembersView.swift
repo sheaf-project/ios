@@ -6,7 +6,7 @@ struct MembersView: View {
     @Environment(\.theme) var theme
     @State private var searchText = ""
     @Binding var showAddMember: Bool
-    @State private var selectedMember: Member?
+    @Binding var selectedMember: Member?
     @State private var memberToDelete: Member?
     @State private var showDeleteConfirm = false
     @State private var showDeleteAuthSheet = false
@@ -172,10 +172,6 @@ struct MembersView: View {
         .background(theme.backgroundPrimary.ignoresSafeArea())
         .sheet(isPresented: $showAddMember) {
             MemberEditSheet(member: nil)
-                .environmentObject(store)
-        }
-        .sheet(item: $selectedMember) { member in
-            MemberDetailSheet(member: member)
                 .environmentObject(store)
         }
         .alert("Delete this member?", isPresented: $showDeleteConfirm, presenting: memberToDelete) { member in
@@ -484,6 +480,7 @@ struct MemberDetailSheet: View {
     @Environment(\.theme) var theme
     @EnvironmentObject var store: SystemStore
     @Environment(\.dismiss) var dismiss
+    @Environment(\.isPresented) private var isPresented
     let member: Member
     @AppStorage("showMemberCreatedDate") private var showCreatedDate = true
     @State private var showEdit = false
@@ -783,9 +780,11 @@ struct MemberDetailSheet: View {
             .background(theme.backgroundPrimary)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Close") { dismiss() }
-                        .foregroundColor(theme.accentLight)
+                if isPresented {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Close") { dismiss() }
+                            .foregroundColor(theme.accentLight)
+                    }
                 }
                 ToolbarItemGroup(placement: .primaryAction) {
                     Button {
@@ -1131,6 +1130,10 @@ struct MemberEditSheet: View {
                             }
                         }
                         .pickerStyle(.segmented)
+                    }
+
+                    if let member {
+                        MemberCeilingSection(member: member)
                     }
 
                     // Custom fields

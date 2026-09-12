@@ -41,6 +41,9 @@ struct Member: Identifiable, Codable, Hashable {
     var privacy: PrivacyLevel
     var note: String?
     var archivedAt: Date?
+    var neverShareable: Bool
+    var frontingPrivate: Bool
+    var frontingPrivateActivatesAt: Date?
     let createdAt: Date
     let updatedAt: Date
 
@@ -61,6 +64,9 @@ struct Member: Identifiable, Codable, Hashable {
         case isCustomFront = "is_custom_front"
         case privacy
         case note
+        case neverShareable = "never_shareable"
+        case frontingPrivate = "fronting_private"
+        case frontingPrivateActivatesAt = "fronting_private_activates_at"
         case createdAt     = "created_at"
         case updatedAt     = "updated_at"
     }
@@ -83,6 +89,9 @@ struct Member: Identifiable, Codable, Hashable {
         isCustomFront = try c.decodeIfPresent(Bool.self, forKey: .isCustomFront) ?? false
         privacy       = try c.decode(PrivacyLevel.self, forKey: .privacy)
         note          = try c.decodeIfPresent(String.self, forKey: .note)
+        neverShareable = try c.decodeIfPresent(Bool.self, forKey: .neverShareable) ?? false
+        frontingPrivate = try c.decodeIfPresent(Bool.self, forKey: .frontingPrivate) ?? false
+        frontingPrivateActivatesAt = try c.decodeIfPresent(Date.self, forKey: .frontingPrivateActivatesAt)
         createdAt     = try c.decode(Date.self, forKey: .createdAt)
         updatedAt     = try c.decode(Date.self, forKey: .updatedAt)
     }
@@ -107,6 +116,9 @@ struct Member: Identifiable, Codable, Hashable {
         self.isCustomFront = isCustomFront
         self.privacy = privacy
         self.note = note
+        self.neverShareable = false
+        self.frontingPrivate = false
+        self.frontingPrivateActivatesAt = nil
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }
@@ -371,7 +383,10 @@ struct SystemGroup: Identifiable, Codable, Hashable {
     var description: String?
     var color: String?
     var parentID: String?
-    var order: Int = 0
+    var order: Int
+    var privacy: PrivacyLevel
+    var pendingPrivacy: PrivacyLevel?
+    var privacyActivatesAt: Date?
     let createdAt: Date
     let updatedAt: Date
 
@@ -379,8 +394,44 @@ struct SystemGroup: Identifiable, Codable, Hashable {
         case id, name, description, color, order
         case systemID  = "system_id"
         case parentID  = "parent_id"
+        case privacy
+        case pendingPrivacy = "pending_privacy"
+        case privacyActivatesAt = "privacy_activates_at"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
+    }
+
+    init(id: String, systemID: String, name: String, description: String? = nil,
+         color: String? = nil, parentID: String? = nil, order: Int = 0,
+         privacy: PrivacyLevel = .private, createdAt: Date, updatedAt: Date) {
+        self.id = id
+        self.systemID = systemID
+        self.name = name
+        self.description = description
+        self.color = color
+        self.parentID = parentID
+        self.order = order
+        self.privacy = privacy
+        self.pendingPrivacy = nil
+        self.privacyActivatesAt = nil
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        systemID = try c.decode(String.self, forKey: .systemID)
+        name = try c.decode(String.self, forKey: .name)
+        description = try c.decodeIfPresent(String.self, forKey: .description)
+        color = try c.decodeIfPresent(String.self, forKey: .color)
+        parentID = try c.decodeIfPresent(String.self, forKey: .parentID)
+        order = try c.decodeIfPresent(Int.self, forKey: .order) ?? 0
+        privacy = try c.decodeIfPresent(PrivacyLevel.self, forKey: .privacy) ?? .private
+        pendingPrivacy = try c.decodeIfPresent(PrivacyLevel.self, forKey: .pendingPrivacy)
+        privacyActivatesAt = try c.decodeIfPresent(Date.self, forKey: .privacyActivatesAt)
+        createdAt = try c.decode(Date.self, forKey: .createdAt)
+        updatedAt = try c.decode(Date.self, forKey: .updatedAt)
     }
 
     var displayColor: Color {
@@ -504,11 +555,15 @@ struct CustomField: Identifiable, Codable {
     var options: CustomFieldOptions?
     var order: Int
     var privacy: PrivacyLevel
+    var pendingPrivacy: PrivacyLevel?
+    var privacyActivatesAt: Date?
     let createdAt: Date
     let updatedAt: Date
 
     enum CodingKeys: String, CodingKey {
         case id, name, options, order, privacy
+        case pendingPrivacy = "pending_privacy"
+        case privacyActivatesAt = "privacy_activates_at"
         case systemID  = "system_id"
         case fieldType = "field_type"
         case createdAt = "created_at"
@@ -611,6 +666,8 @@ struct UserRead: Codable {
     let lastLoginAt: Date?
     let deletionRequestedAt: Date?
     let deletionScheduledFor: Date?
+    let publicProfilesEnabled: Bool
+    let adultAttestedAt: Date?
 
     enum CodingKeys: String, CodingKey {
         case id, email, tier
@@ -623,6 +680,8 @@ struct UserRead: Codable {
         case lastLoginAt          = "last_login_at"
         case deletionRequestedAt  = "deletion_requested_at"
         case deletionScheduledFor = "deletion_scheduled_for"
+        case publicProfilesEnabled = "public_profiles_enabled"
+        case adultAttestedAt      = "adult_attested_at"
     }
 
     init(from decoder: Decoder) throws {
@@ -639,6 +698,8 @@ struct UserRead: Codable {
         lastLoginAt          = try c.decodeIfPresent(Date.self, forKey: .lastLoginAt)
         deletionRequestedAt  = try c.decodeIfPresent(Date.self, forKey: .deletionRequestedAt)
         deletionScheduledFor = try c.decodeIfPresent(Date.self, forKey: .deletionScheduledFor)
+        publicProfilesEnabled = try c.decodeIfPresent(Bool.self, forKey: .publicProfilesEnabled) ?? false
+        adultAttestedAt      = try c.decodeIfPresent(Date.self, forKey: .adultAttestedAt)
     }
 }
 
@@ -1388,6 +1449,13 @@ struct CustomFieldUpdate: Codable {
     var options: CustomFieldOptions?
     var order: Int?
     var privacy: PrivacyLevel?
+    var password: String?
+    var totpCode: String?
+
+    enum CodingKeys: String, CodingKey {
+        case name, options, order, privacy, password
+        case totpCode = "totp_code"
+    }
 }
 
 // MARK: - Member Delete Confirmation
@@ -2187,6 +2255,7 @@ struct SystemSafetySettings: Codable {
     var appliesToReminders: Bool
     var appliesToPolls: Bool
     var appliesToMessages: Bool
+    var appliesToProfileVisibility: Bool
 
     enum CodingKeys: String, CodingKey {
         case gracePeriodDays = "grace_period_days"
@@ -2203,6 +2272,7 @@ struct SystemSafetySettings: Codable {
         case appliesToReminders = "applies_to_reminders"
         case appliesToPolls = "applies_to_polls"
         case appliesToMessages = "applies_to_messages"
+        case appliesToProfileVisibility = "applies_to_profile_visibility"
     }
 
     init(from decoder: Decoder) throws {
@@ -2221,6 +2291,7 @@ struct SystemSafetySettings: Codable {
         appliesToReminders = try c.decodeIfPresent(Bool.self, forKey: .appliesToReminders) ?? false
         appliesToPolls = try c.decodeIfPresent(Bool.self, forKey: .appliesToPolls) ?? false
         appliesToMessages = try c.decodeIfPresent(Bool.self, forKey: .appliesToMessages) ?? false
+        appliesToProfileVisibility = try c.decodeIfPresent(Bool.self, forKey: .appliesToProfileVisibility) ?? true
     }
 }
 
@@ -2303,15 +2374,43 @@ struct SafetyChangeRequest: Identifiable, Codable {
     }
 }
 
+struct PendingExposure: Codable {
+    let kind: String
+    let activatesAt: Date
+
+    enum CodingKeys: String, CodingKey {
+        case kind
+        case activatesAt = "activates_at"
+    }
+}
+
 struct SystemSafetyResponse: Codable {
     var settings: SystemSafetySettings
     var pendingActions: [PendingAction]
     var pendingChanges: [SafetyChangeRequest]
+    var pendingExposures: [PendingExposure]
 
     enum CodingKeys: String, CodingKey {
         case settings
         case pendingActions = "pending_actions"
         case pendingChanges = "pending_changes"
+        case pendingExposures = "pending_exposures"
+    }
+
+    init(settings: SystemSafetySettings, pendingActions: [PendingAction],
+         pendingChanges: [SafetyChangeRequest], pendingExposures: [PendingExposure] = []) {
+        self.settings = settings
+        self.pendingActions = pendingActions
+        self.pendingChanges = pendingChanges
+        self.pendingExposures = pendingExposures
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        settings = try c.decode(SystemSafetySettings.self, forKey: .settings)
+        pendingActions = try c.decode([PendingAction].self, forKey: .pendingActions)
+        pendingChanges = try c.decode([SafetyChangeRequest].self, forKey: .pendingChanges)
+        pendingExposures = try c.decodeIfPresent([PendingExposure].self, forKey: .pendingExposures) ?? []
     }
 }
 
@@ -3637,12 +3736,15 @@ struct RelationshipEdgeCreate: Codable {
     var relationshipTypeID: String
     var mutual: Bool = false
     var visibility: String = "private"
+    var password: String?
+    var totpCode: String?
 
     enum CodingKeys: String, CodingKey {
-        case mutual, visibility
+        case mutual, visibility, password
         case sourceID           = "source_id"
         case targetID           = "target_id"
         case relationshipTypeID = "relationship_type_id"
+        case totpCode           = "totp_code"
     }
 }
 
@@ -3679,12 +3781,17 @@ struct MemberRelationship: Identifiable, Codable {
     let label: String
     let direction: RelationshipDirection
     let mutual: Bool
+    let visibility: PrivacyLevel?
+    let pendingVisibility: PrivacyLevel?
+    let visibilityActivatesAt: Date?
 
     enum CodingKeys: String, CodingKey {
-        case id, label, direction, mutual
+        case id, label, direction, mutual, visibility
         case relationshipTypeID = "relationship_type_id"
         case typeName           = "type_name"
         case otherID            = "other_id"
+        case pendingVisibility  = "pending_visibility"
+        case visibilityActivatesAt = "visibility_activates_at"
     }
 }
 
@@ -3745,4 +3852,491 @@ struct RelationshipGraphEdge: Identifiable, Codable {
 struct RelationshipGraph: Codable {
     let nodes: [RelationshipGraphNode]
     let edges: [RelationshipGraphEdge]
+}
+
+// MARK: - Sharing (public profiles owner controls)
+
+enum ShareSubjectType: String, Codable, CaseIterable {
+    case `public` = "public"
+    case link = "link"
+}
+
+struct ShareViewMemberRow: Identifiable, Codable {
+    let id: String
+    let memberID: String
+    let status: String
+    let activatesAt: Date?
+    let served: Bool
+    let notServedReason: String?
+    let addedViaGroupID: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id, status, served
+        case memberID = "member_id"
+        case activatesAt = "activates_at"
+        case notServedReason = "not_served_reason"
+        case addedViaGroupID = "added_via_group_id"
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        memberID = try c.decode(String.self, forKey: .memberID)
+        status = try c.decode(String.self, forKey: .status)
+        activatesAt = try c.decodeIfPresent(Date.self, forKey: .activatesAt)
+        served = try c.decodeIfPresent(Bool.self, forKey: .served) ?? true
+        notServedReason = try c.decodeIfPresent(String.self, forKey: .notServedReason)
+        addedViaGroupID = try c.decodeIfPresent(String.self, forKey: .addedViaGroupID)
+    }
+}
+
+struct ShareViewFieldRow: Identifiable, Codable {
+    let id: String
+    let fieldID: String
+    let status: String
+    let activatesAt: Date?
+
+    enum CodingKeys: String, CodingKey {
+        case id, status
+        case fieldID = "field_id"
+        case activatesAt = "activates_at"
+    }
+}
+
+struct ShareViewGroupRow: Identifiable, Codable {
+    let id: String
+    let groupID: String
+    let syncedAt: Date
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case groupID = "group_id"
+        case syncedAt = "synced_at"
+    }
+}
+
+struct ShareView: Identifiable, Codable {
+    let id: String
+    var name: String
+    var includeMembers: Bool
+    var includeBio: Bool
+    var includeFronting: Bool
+    var frontingShowCount: Bool
+    var includeRelationships: Bool
+    var includeGroups: Bool
+    var memberPermalinks: Bool
+    let createdAt: Date
+    var isShared: Bool
+    var pendingIncludeBio: Bool?
+    var pendingIncludeFronting: Bool?
+    var pendingFrontingShowCount: Bool?
+    var pendingIncludeRelationships: Bool?
+    var pendingIncludeMembers: Bool?
+    var pendingIncludeGroups: Bool?
+    var flagsActivateAt: Date?
+    var members: [ShareViewMemberRow]
+    var fields: [ShareViewFieldRow]
+    var groups: [ShareViewGroupRow]
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, members, fields, groups
+        case includeMembers = "include_members"
+        case includeBio = "include_bio"
+        case includeFronting = "include_fronting"
+        case frontingShowCount = "fronting_show_count"
+        case includeRelationships = "include_relationships"
+        case includeGroups = "include_groups"
+        case memberPermalinks = "member_permalinks"
+        case createdAt = "created_at"
+        case isShared = "is_shared"
+        case pendingIncludeBio = "pending_include_bio"
+        case pendingIncludeFronting = "pending_include_fronting"
+        case pendingFrontingShowCount = "pending_fronting_show_count"
+        case pendingIncludeRelationships = "pending_include_relationships"
+        case pendingIncludeMembers = "pending_include_members"
+        case pendingIncludeGroups = "pending_include_groups"
+        case flagsActivateAt = "flags_activate_at"
+    }
+}
+
+struct ShareViewCreate: Codable {
+    var name: String
+    var includeMembers = true
+    var includeBio = false
+    var includeFronting = false
+    var frontingShowCount = true
+    var includeRelationships = false
+    var includeGroups = false
+    var memberPermalinks = false
+
+    enum CodingKeys: String, CodingKey {
+        case name
+        case includeMembers = "include_members"
+        case includeBio = "include_bio"
+        case includeFronting = "include_fronting"
+        case frontingShowCount = "fronting_show_count"
+        case includeRelationships = "include_relationships"
+        case includeGroups = "include_groups"
+        case memberPermalinks = "member_permalinks"
+    }
+}
+
+struct ShareViewUpdate: Codable {
+    var name: String?
+    var includeMembers: Bool?
+    var includeBio: Bool?
+    var includeFronting: Bool?
+    var frontingShowCount: Bool?
+    var includeRelationships: Bool?
+    var includeGroups: Bool?
+    var memberPermalinks: Bool?
+    var password: String?
+    var totpCode: String?
+
+    enum CodingKeys: String, CodingKey {
+        case name, password
+        case includeMembers = "include_members"
+        case includeBio = "include_bio"
+        case includeFronting = "include_fronting"
+        case frontingShowCount = "fronting_show_count"
+        case includeRelationships = "include_relationships"
+        case includeGroups = "include_groups"
+        case memberPermalinks = "member_permalinks"
+        case totpCode = "totp_code"
+    }
+}
+
+struct ShareViewMemberAdd: Codable {
+    var memberID: String
+    var password: String?
+    var totpCode: String?
+
+    enum CodingKeys: String, CodingKey {
+        case password
+        case memberID = "member_id"
+        case totpCode = "totp_code"
+    }
+}
+
+struct ShareViewFieldAdd: Codable {
+    var fieldID: String
+    var password: String?
+    var totpCode: String?
+
+    enum CodingKeys: String, CodingKey {
+        case password
+        case fieldID = "field_id"
+        case totpCode = "totp_code"
+    }
+}
+
+struct ShareViewGroupAdd: Codable {
+    var groupID: String
+    var password: String?
+    var totpCode: String?
+
+    enum CodingKeys: String, CodingKey {
+        case password
+        case groupID = "group_id"
+        case totpCode = "totp_code"
+    }
+}
+
+struct ShareViewGroupAddResult: Codable {
+    let added: Int
+    let skippedNeverShareable: Int
+    let skippedNotPublic: Int
+
+    enum CodingKeys: String, CodingKey {
+        case added
+        case skippedNeverShareable = "skipped_never_shareable"
+        case skippedNotPublic = "skipped_not_public"
+    }
+}
+
+struct ShareGrant: Identifiable, Codable {
+    let id: String
+    let viewID: String
+    let subjectType: String
+    let note: String?
+    let status: String
+    let activatesAt: Date?
+    let expiresAt: Date?
+    let revokedAt: Date?
+    let createdAt: Date
+
+    enum CodingKeys: String, CodingKey {
+        case id, note, status
+        case viewID = "view_id"
+        case subjectType = "subject_type"
+        case activatesAt = "activates_at"
+        case expiresAt = "expires_at"
+        case revokedAt = "revoked_at"
+        case createdAt = "created_at"
+    }
+}
+
+struct ShareGrantCreate: Codable {
+    var viewID: String
+    var subjectType: ShareSubjectType
+    var note: String?
+    var expiresAt: Date?
+    var password: String?
+    var totpCode: String?
+
+    enum CodingKeys: String, CodingKey {
+        case note, password
+        case viewID = "view_id"
+        case subjectType = "subject_type"
+        case expiresAt = "expires_at"
+        case totpCode = "totp_code"
+    }
+}
+
+struct ShareGrantCreated: Codable, Identifiable {
+    let grant: ShareGrant
+    let token: String?
+
+    var id: String { grant.id }
+}
+
+struct ShareAuditEntry: Codable, Identifiable {
+    let grant: ShareGrant
+    let viewID: String
+    let viewName: String
+    let memberCount: Int
+    let servedMemberCount: Int?
+    let fieldCount: Int
+    let includeMembers: Bool
+    let includeBio: Bool
+    let includeFronting: Bool
+    let includeRelationships: Bool
+    let includeGroups: Bool
+    let memberPermalinks: Bool
+    let relationshipCount: Int
+    let groupCount: Int
+
+    var id: String { grant.id }
+
+    enum CodingKeys: String, CodingKey {
+        case grant
+        case viewID = "view_id"
+        case viewName = "view_name"
+        case memberCount = "member_count"
+        case servedMemberCount = "served_member_count"
+        case fieldCount = "field_count"
+        case includeMembers = "include_members"
+        case includeBio = "include_bio"
+        case includeFronting = "include_fronting"
+        case includeRelationships = "include_relationships"
+        case includeGroups = "include_groups"
+        case memberPermalinks = "member_permalinks"
+        case relationshipCount = "relationship_count"
+        case groupCount = "group_count"
+    }
+}
+
+struct ShareAudit: Codable {
+    let entries: [ShareAuditEntry]
+    let profileSuppressed: String?
+
+    enum CodingKeys: String, CodingKey {
+        case entries
+        case profileSuppressed = "profile_suppressed"
+    }
+}
+
+struct AdultAttestation: Codable {
+    let adultAttestedAt: Date?
+
+    enum CodingKeys: String, CodingKey {
+        case adultAttestedAt = "adult_attested_at"
+    }
+}
+
+// MARK: - Public profile projections (owner preview)
+
+struct PublicMemberFieldEntry: Codable {
+    let name: String
+    let value: AnyCodable?
+}
+
+struct PublicSystemView: Codable {
+    let id: String?
+    let name: String
+    let description: String?
+    let avatarURL: String?
+    let color: String?
+    let tag: String?
+    let memberCount: Int?
+    let memberPermalinks: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, description, color, tag
+        case avatarURL = "avatar_url"
+        case memberCount = "member_count"
+        case memberPermalinks = "member_permalinks"
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(String.self, forKey: .id)
+        name = try c.decode(String.self, forKey: .name)
+        description = try c.decodeIfPresent(String.self, forKey: .description)
+        avatarURL = try c.decodeIfPresent(String.self, forKey: .avatarURL)
+        color = try c.decodeIfPresent(String.self, forKey: .color)
+        tag = try c.decodeIfPresent(String.self, forKey: .tag)
+        memberCount = try c.decodeIfPresent(Int.self, forKey: .memberCount)
+        memberPermalinks = try c.decodeIfPresent(Bool.self, forKey: .memberPermalinks) ?? false
+    }
+}
+
+struct PublicMemberView: Codable, Identifiable {
+    let id: String
+    let name: String
+    let pronouns: String?
+    let avatarURL: String?
+    let bannerURL: String?
+    let color: String?
+    let bio: String?
+    let fields: [PublicMemberFieldEntry]
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, pronouns, color, bio, fields
+        case avatarURL = "avatar_url"
+        case bannerURL = "banner_url"
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        name = try c.decode(String.self, forKey: .name)
+        pronouns = try c.decodeIfPresent(String.self, forKey: .pronouns)
+        avatarURL = try c.decodeIfPresent(String.self, forKey: .avatarURL)
+        bannerURL = try c.decodeIfPresent(String.self, forKey: .bannerURL)
+        color = try c.decodeIfPresent(String.self, forKey: .color)
+        bio = try c.decodeIfPresent(String.self, forKey: .bio)
+        fields = try c.decodeIfPresent([PublicMemberFieldEntry].self, forKey: .fields) ?? []
+    }
+}
+
+struct PublicFrontingMember: Codable, Identifiable {
+    let id: String
+    let name: String
+    let pronouns: String?
+    let avatarURL: String?
+    let color: String?
+    let since: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, pronouns, color, since
+        case avatarURL = "avatar_url"
+    }
+}
+
+struct PublicFrontingView: Codable {
+    let members: [PublicFrontingMember]
+    let hiddenCount: Int
+
+    enum CodingKeys: String, CodingKey {
+        case members
+        case hiddenCount = "hidden_count"
+    }
+}
+
+struct PublicRelationshipEndpoint: Codable {
+    let id: String
+    let name: String
+}
+
+struct PublicRelationship: Codable, Identifiable {
+    let id: String
+    let typeName: String
+    let typeColor: String?
+    let source: PublicRelationshipEndpoint
+    let target: PublicRelationshipEndpoint
+    let sourceLabel: String
+    let targetLabel: String
+    let mutual: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case id, source, target, mutual
+        case typeName = "type_name"
+        case typeColor = "type_color"
+        case sourceLabel = "source_label"
+        case targetLabel = "target_label"
+    }
+}
+
+struct PublicRelationshipsView: Codable {
+    let relationships: [PublicRelationship]
+}
+
+struct PublicGroupMember: Codable, Identifiable {
+    let id: String
+    let name: String
+}
+
+struct PublicGroupView: Codable, Identifiable {
+    let id: String
+    let name: String
+    let description: String?
+    let color: String?
+    let members: [PublicGroupMember]
+}
+
+struct PublicGroupsView: Codable {
+    let groups: [PublicGroupView]
+}
+
+struct SharePreview: Codable {
+    let system: PublicSystemView
+    let members: [PublicMemberView]?
+    let fronting: PublicFrontingView?
+    let relationships: PublicRelationshipsView?
+    let groups: PublicGroupsView?
+    let suppressed: String?
+}
+
+
+// MARK: - Ceiling updates (raise-gated visibility PATCHes)
+// Sparse on purpose: the form update structs above encode cleared fields as
+// JSON null, so reusing them for a lone visibility change would wipe content.
+
+struct MemberCeilingUpdate: Codable {
+    var privacy: PrivacyLevel?
+    var neverShareable: Bool?
+    var frontingPrivate: Bool?
+    var password: String?
+    var totpCode: String?
+
+    enum CodingKeys: String, CodingKey {
+        case privacy, password
+        case neverShareable = "never_shareable"
+        case frontingPrivate = "fronting_private"
+        case totpCode = "totp_code"
+    }
+}
+
+struct GroupCeilingUpdate: Codable {
+    var privacy: PrivacyLevel?
+    var password: String?
+    var totpCode: String?
+
+    enum CodingKeys: String, CodingKey {
+        case privacy, password
+        case totpCode = "totp_code"
+    }
+}
+
+struct RelationshipEdgeUpdate: Codable {
+    var visibility: PrivacyLevel?
+    var mutual: Bool?
+    var password: String?
+    var totpCode: String?
+
+    enum CodingKeys: String, CodingKey {
+        case visibility, mutual, password
+        case totpCode = "totp_code"
+    }
 }

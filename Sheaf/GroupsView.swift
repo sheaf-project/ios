@@ -576,6 +576,13 @@ struct GroupEditSheet: View {
                     .listRowBackground(theme.backgroundCard)
                 }
 
+                if let group {
+                    Section {
+                        GroupCeilingSection(group: group)
+                            .listRowBackground(theme.backgroundCard)
+                    }
+                }
+
                 Section("Parent group") {
                     Picker(selection: $parentID) {
                         Text("None (top-level)").tag(String?.none)

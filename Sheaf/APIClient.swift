@@ -963,6 +963,116 @@ class APIClient {
         _ = try await request("/v1/system/safety/pending-changes/\(id)", method: "DELETE")
     }
 
+    // MARK: - Sharing
+
+    func getShareViews() async throws -> [ShareView] {
+        let data = try await request("/v1/share-views")
+        return try JSONDecoder.iso.decode([ShareView].self, from: data)
+    }
+
+    func createShareView(_ create: ShareViewCreate) async throws -> ShareView {
+        let body = try JSONEncoder.iso.encode(create)
+        let data = try await request("/v1/share-views", method: "POST", body: body)
+        return try JSONDecoder.iso.decode(ShareView.self, from: data)
+    }
+
+    func getShareView(id: String) async throws -> ShareView {
+        let data = try await request("/v1/share-views/\(id)")
+        return try JSONDecoder.iso.decode(ShareView.self, from: data)
+    }
+
+    func updateShareView(id: String, update: ShareViewUpdate) async throws -> ShareView {
+        let body = try JSONEncoder.iso.encode(update)
+        let data = try await request("/v1/share-views/\(id)", method: "PATCH", body: body)
+        return try JSONDecoder.iso.decode(ShareView.self, from: data)
+    }
+
+    func deleteShareView(id: String) async throws {
+        _ = try await request("/v1/share-views/\(id)", method: "DELETE")
+    }
+
+    func previewShareView(id: String) async throws -> SharePreview {
+        let data = try await request("/v1/share-views/\(id)/preview")
+        return try JSONDecoder.iso.decode(SharePreview.self, from: data)
+    }
+
+    func addShareViewMember(viewID: String, add: ShareViewMemberAdd) async throws -> ShareView {
+        let body = try JSONEncoder.iso.encode(add)
+        let data = try await request("/v1/share-views/\(viewID)/members", method: "POST", body: body)
+        return try JSONDecoder.iso.decode(ShareView.self, from: data)
+    }
+
+    func removeShareViewMember(viewID: String, memberID: String) async throws {
+        _ = try await request("/v1/share-views/\(viewID)/members/\(memberID)", method: "DELETE")
+    }
+
+    func addShareViewGroup(viewID: String, add: ShareViewGroupAdd) async throws -> ShareViewGroupAddResult {
+        let body = try JSONEncoder.iso.encode(add)
+        let data = try await request("/v1/share-views/\(viewID)/groups", method: "POST", body: body)
+        return try JSONDecoder.iso.decode(ShareViewGroupAddResult.self, from: data)
+    }
+
+    func removeShareViewGroup(viewID: String, groupID: String, removeMembers: Bool) async throws {
+        _ = try await request("/v1/share-views/\(viewID)/groups/\(groupID)?remove_members=\(removeMembers)", method: "DELETE")
+    }
+
+    func addShareViewField(viewID: String, add: ShareViewFieldAdd) async throws -> ShareView {
+        let body = try JSONEncoder.iso.encode(add)
+        let data = try await request("/v1/share-views/\(viewID)/fields", method: "POST", body: body)
+        return try JSONDecoder.iso.decode(ShareView.self, from: data)
+    }
+
+    func removeShareViewField(viewID: String, fieldID: String) async throws {
+        _ = try await request("/v1/share-views/\(viewID)/fields/\(fieldID)", method: "DELETE")
+    }
+
+    func getShareGrants() async throws -> [ShareGrant] {
+        let data = try await request("/v1/share-grants")
+        return try JSONDecoder.iso.decode([ShareGrant].self, from: data)
+    }
+
+    func createShareGrant(_ create: ShareGrantCreate) async throws -> ShareGrantCreated {
+        let body = try JSONEncoder.iso.encode(create)
+        let data = try await request("/v1/share-grants", method: "POST", body: body)
+        return try JSONDecoder.iso.decode(ShareGrantCreated.self, from: data)
+    }
+
+    func rotateShareGrant(id: String) async throws -> ShareGrantCreated {
+        let data = try await request("/v1/share-grants/\(id)/rotate", method: "POST")
+        return try JSONDecoder.iso.decode(ShareGrantCreated.self, from: data)
+    }
+
+    func revokeShareGrant(id: String) async throws {
+        _ = try await request("/v1/share-grants/\(id)", method: "DELETE")
+    }
+
+    func getSharingAudit() async throws -> ShareAudit {
+        let data = try await request("/v1/sharing/audit")
+        return try JSONDecoder.iso.decode(ShareAudit.self, from: data)
+    }
+
+    func updateMemberCeiling(id: String, update: MemberCeilingUpdate) async throws -> Member {
+        let body = try JSONEncoder.iso.encode(update)
+        let data = try await request("/v1/members/\(id)", method: "PATCH", body: body)
+        return try JSONDecoder.iso.decode(Member.self, from: data)
+    }
+
+    func updateGroupCeiling(id: String, update: GroupCeilingUpdate) async throws -> SystemGroup {
+        let body = try JSONEncoder.iso.encode(update)
+        let data = try await request("/v1/groups/\(id)", method: "PATCH", body: body)
+        return try JSONDecoder.iso.decode(SystemGroup.self, from: data)
+    }
+
+    func updateMemberRelationship(id: String, update: RelationshipEdgeUpdate) async throws {
+        let body = try JSONEncoder.iso.encode(update)
+        _ = try await request("/v1/member-relationships/\(id)", method: "PATCH", body: body)
+    }
+
+    func attestAdult() async throws -> AdultAttestation {
+        let data = try await request("/v1/auth/me/attest-adult", method: "POST")
+        return try JSONDecoder.iso.decode(AdultAttestation.self, from: data)
+    }
+
     // MARK: - Email Verification
 
     func verifyEmail(token: String) async throws {

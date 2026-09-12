@@ -378,7 +378,10 @@ struct AddRelationshipSheet: View {
     @State private var otherID: String = ""
     @State private var nodeIsSource = true
     @State private var mutual = false
+    @State private var visibility: PrivacyLevel = .private
     @State private var isSaving = false
+    @State private var saveError: String?
+    @State private var stepUp: StepUpRequest?
 
     private var selectedType: RelationshipType? {
         store.relationshipTypes.first { $0.id == typeID }
@@ -443,10 +446,37 @@ struct AddRelationshipSheet: View {
                         }
                     }
                 }
+
+                if scope == .member {
+                    Section {
+                        Picker("Visibility", selection: $visibility) {
+                            ForEach(PrivacyLevel.allCases, id: \.self) { level in
+                                Text(level.rawValue.capitalized).tag(level)
+                            }
+                        }
+                        .listRowBackground(theme.backgroundCard)
+                        .foregroundColor(theme.textPrimary)
+                    } footer: {
+                        Text("Only public relationships can appear on shared pages, and both members must clear their own privacy ceiling.")
+                    }
+                }
+
+                if let saveError {
+                    Section {
+                        Text(saveError)
+                            .foregroundColor(theme.danger)
+                            .font(.footnote)
+                            .listRowBackground(theme.backgroundCard)
+                    }
+                }
             }
             .onChange(of: typeID) { _, _ in
                 nodeIsSource = true
                 mutual = false
+            }
+            .sheet(item: $stepUp) { req in
+                CeilingStepUpSheet(request: req)
+                    .environmentObject(store)
             }
             .scrollContentBackground(.hidden)
             .background(theme.backgroundPrimary)
@@ -477,13 +507,45 @@ struct AddRelationshipSheet: View {
     private func save() async {
         guard let type = selectedType, canSave else { return }
         isSaving = true
+        saveError = nil
         let effectiveMutual = mutual && type.symmetry == .either
-        let create = RelationshipEdgeCreate(
+        var create = RelationshipEdgeCreate(
             sourceID: nodeIsSource || effectiveMutual || type.symmetry == .symmetric ? nodeID : otherID,
             targetID: nodeIsSource || effectiveMutual || type.symmetry == .symmetric ? otherID : nodeID,
             relationshipTypeID: typeID,
             mutual: effectiveMutual
         )
+        if scope == .member {
+            create.visibility = visibility.rawValue
+        }
+        // An edge born public is a raise the server may gate with step-up, so
+        // the member path goes direct rather than through the offline queue.
+        if scope == .member && visibility == .public {
+            let x = create
+            runCeilingChange(
+                message: String(localized: "A public relationship can expose both members on shared pages."),
+                onError: { e in
+                    saveError = e
+                    isSaving = false
+                },
+                onStepUp: { req in
+                    isSaving = false
+                    stepUp = req
+                }
+            ) { pw, totp in
+                guard let api = store.api else { return }
+                var c = x
+                c.password = pw
+                c.totpCode = totp
+                _ = try await api.createMemberRelationship(c)
+                await MainActor.run {
+                    isSaving = false
+                    onAdded()
+                    dismiss()
+                }
+            }
+            return
+        }
         let created: RelationshipEdge?
         switch scope {
         case .member: created = await store.createMemberRelationship(create)

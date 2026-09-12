@@ -21,6 +21,7 @@ struct SettingsView: View {
     @State private var showTOTPSetup = false
     @State private var showTOTPManage = false
     @State private var me: UserRead?
+    @State private var hasShareGrants = false
     @State private var isLoadingFileUsage = false
     @State private var fileUsageDisplay = "—"
     @State private var showFileCleanupConfirm = false
@@ -579,6 +580,30 @@ struct SettingsView: View {
                             }
                             .buttonStyle(.plain)
 
+                            if me?.publicProfilesEnabled == true || hasShareGrants {
+                                Divider().background(theme.divider)
+
+                                NavigationLink {
+                                    SharingView()
+                                        .environmentObject(store)
+                                } label: {
+                                    HStack {
+                                        Image(systemName: "globe")
+                                            .foregroundColor(theme.accentLight)
+                                            .frame(width: 20)
+                                        Text("Sharing")
+                                            .font(.subheadline).fontWeight(.medium)
+                                            .foregroundColor(theme.textPrimary)
+                                        Spacer()
+                                        Image(systemName: "chevron.right")
+                                            .font(.caption)
+                                            .foregroundColor(theme.textTertiary)
+                                    }
+                                    .padding(.horizontal, 16).padding(.vertical, 14)
+                                }
+                                .buttonStyle(.plain)
+                            }
+
                             Divider().background(theme.divider)
 
                             Button { store.loadAll() } label: {
@@ -1067,6 +1092,11 @@ struct SettingsView: View {
         me = try? await api.getMe()
         if let me {
             newsletterOptIn = me.newsletterOptIn
+        }
+        // Sharing must stay reachable while dormant grants exist, even after an
+        // operator turns the instance flag off, so revoke is never out of reach.
+        if me?.publicProfilesEnabled != true {
+            hasShareGrants = ((try? await api.getShareGrants()) ?? []).contains { $0.status != "revoked" }
         }
         // Fetch deletion grace period if not already known
         if authManager.deletionGraceDays == nil {
