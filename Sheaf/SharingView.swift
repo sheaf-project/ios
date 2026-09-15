@@ -8,6 +8,14 @@ func isStepUpBounce(_ error: Error) -> Bool {
         (e.localizedDescription == "Password required" || e.localizedDescription == "TOTP code required")
 }
 
+/// Resolves a localized string THROUGH the inflection engine. Plain
+/// String(localized:) leaves `^[...](inflect: true)` markup unprocessed, so
+/// any count string that gets joined or stored as a String must come through
+/// here instead.
+func inflectedString(_ value: String.LocalizationValue) -> String {
+    String(AttributedString(localized: value).characters)
+}
+
 struct StepUpRequest: Identifiable {
     let id = UUID()
     let message: String
@@ -132,7 +140,7 @@ struct SharingView: View {
     private var pendingExposureBanner: some View {
         let next = pendingExposures.map(\.activatesAt).min() ?? Date()
         return banner(icon: "clock.badge.exclamationmark.fill", color: theme.warning,
-                      text: String(localized: "^[\(pendingExposures.count) staged change](inflect: true) will make more of this system public. Next takes effect \(next.formatted(.relative(presentation: .named)))."))
+                      text: inflectedString("^[\(pendingExposures.count) staged change](inflect: true) will make more of this system public. Next takes effect \(next.formatted(.relative(presentation: .named)))."))
     }
 
     private func suppressedBanner(_ reason: String) -> some View {

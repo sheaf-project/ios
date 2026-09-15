@@ -398,17 +398,17 @@ struct ShareViewDetailView: View {
         var parts: [String] = []
         if e.includeMembers {
             if let served = e.servedMemberCount, served != e.memberCount {
-                parts.append(String(localized: "\(served) of ^[\(e.memberCount) member](inflect: true) served"))
+                parts.append(inflectedString("\(served) of ^[\(e.memberCount) member](inflect: true) served"))
             } else {
-                parts.append(String(localized: "^[\(e.memberCount) member](inflect: true)"))
+                parts.append(inflectedString("^[\(e.memberCount) member](inflect: true)"))
             }
         } else {
             parts.append(String(localized: "roster hidden"))
         }
-        parts.append(String(localized: "^[\(e.fieldCount) field](inflect: true)"))
+        parts.append(inflectedString("^[\(e.fieldCount) field](inflect: true)"))
         if e.includeFronting { parts.append(String(localized: "fronting")) }
-        if e.includeRelationships { parts.append(String(localized: "^[\(e.relationshipCount) relationship](inflect: true)")) }
-        if e.includeGroups { parts.append(String(localized: "^[\(e.groupCount) group](inflect: true)")) }
+        if e.includeRelationships { parts.append(inflectedString("^[\(e.relationshipCount) relationship](inflect: true)")) }
+        if e.includeGroups { parts.append(inflectedString("^[\(e.groupCount) group](inflect: true)")) }
         return parts.joined(separator: " · ")
     }
 
@@ -675,7 +675,7 @@ struct ShareViewDetailView: View {
     }
 
     private func groupAddSummary(_ r: ShareViewGroupAddResult) -> String {
-        var parts = [String(localized: "^[\(r.added) member](inflect: true) added.")]
+        var parts = [inflectedString("^[\(r.added) member](inflect: true) added.")]
         if r.skippedNeverShareable > 0 {
             parts.append(String(localized: "\(r.skippedNeverShareable) skipped: never shareable."))
         }
