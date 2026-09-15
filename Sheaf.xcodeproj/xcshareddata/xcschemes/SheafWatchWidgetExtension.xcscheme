@@ -73,7 +73,6 @@
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "2ACEC18E2F6D27BD00B4AB57"
             BuildableName = "watchOSWidgetExtension.appex"
-            BlueprintName = "watchOSWidgetExtension"
             ReferencedContainer = "container:Sheaf.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
