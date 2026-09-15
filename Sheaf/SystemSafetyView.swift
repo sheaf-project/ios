@@ -520,6 +520,7 @@ struct SystemSafetyView: View {
         case "field_delete": return String(localized: "Delete field")
         case "front_delete": return String(localized: "Delete front")
         case "journal_delete": return String(localized: "Delete journal entry")
+        case "journal_unpin": return String(localized: "Unpin journal entry")
         case "image_delete": return String(localized: "Delete image")
         case "channel_delete": return String(localized: "Delete notification channel")
         case "watch_token_delete": return String(localized: "Revoke watcher")

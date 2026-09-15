@@ -47,11 +47,11 @@ struct JournalsView: View {
                 .padding(.top, 16)
                 .padding(.bottom, 20)
 
-                if isLoading && store.journalEntries.isEmpty {
+                if isLoading && store.journalEntries.isEmpty && store.pinnedJournalEntries.isEmpty {
                     Spacer()
                     ProgressView().tint(theme.accentLight)
                     Spacer()
-                } else if store.journalEntries.isEmpty {
+                } else if store.journalEntries.isEmpty && store.pinnedJournalEntries.isEmpty {
                     Spacer()
                     VStack(spacing: 12) {
                         Image(systemName: "book")
@@ -67,27 +67,26 @@ struct JournalsView: View {
                     Spacer()
                 } else {
                     List {
+                        if !store.pinnedJournalEntries.isEmpty {
+                            Section {
+                                ForEach(store.pinnedJournalEntries) { entry in
+                                    entryRow(entry)
+                                }
+                            } header: {
+                                Label("Pinned", systemImage: "pin.fill")
+                                    .font(.caption).fontWeight(.semibold)
+                                    .foregroundColor(theme.textTertiary)
+                                    .padding(.leading, 24)
+                            }
+                        }
+
                         ForEach(store.journalEntries) { entry in
-                            Button { selectedEntry = entry } label: {
-                                JournalEntryRow(entry: entry, members: store.members)
-                            }
-                            .buttonStyle(.plain)
-                            .swipeActions(edge: .trailing) {
-                                Button(role: .destructive) {
-                                    entryToDelete = entry
-                                    showDeleteConfirm = true
-                                } label: {
-                                    Label("Delete", systemImage: "trash")
+                            entryRow(entry)
+                                .onAppear {
+                                    if entry.id == store.journalEntries.last?.id {
+                                        Task { await loadMore() }
+                                    }
                                 }
-                            }
-                            .listRowBackground(Color.clear)
-                            .listRowSeparator(.hidden)
-                            .listRowInsets(EdgeInsets(top: 5, leading: 24, bottom: 5, trailing: 24))
-                            .onAppear {
-                                if entry.id == store.journalEntries.last?.id {
-                                    Task { await loadMore() }
-                                }
-                            }
                         }
 
                         if store.hasMoreJournals {
@@ -150,6 +149,25 @@ struct JournalsView: View {
         }
     }
 
+    @ViewBuilder
+    private func entryRow(_ entry: JournalEntry) -> some View {
+        Button { selectedEntry = entry } label: {
+            JournalEntryRow(entry: entry, members: store.members)
+        }
+        .buttonStyle(.plain)
+        .swipeActions(edge: .trailing) {
+            Button(role: .destructive) {
+                entryToDelete = entry
+                showDeleteConfirm = true
+            } label: {
+                Label("Delete", systemImage: "trash")
+            }
+        }
+        .listRowBackground(Color.clear)
+        .listRowSeparator(.hidden)
+        .listRowInsets(EdgeInsets(top: 5, leading: 24, bottom: 5, trailing: 24))
+    }
+
     func reload() async {
         isLoading = true
         await store.loadJournals()
@@ -199,6 +217,12 @@ struct JournalEntryRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
+                if entry.pinnedAt != nil {
+                    Image(systemName: "pin.fill")
+                        .font(.caption2)
+                        .foregroundColor(theme.accentLight)
+                        .accessibilityLabel(entry.pendingUnpinAt != nil ? "Pinned, unpin scheduled" : "Pinned")
+                }
                 Text(displayTitle)
                     .font(.subheadline).fontWeight(.semibold)
                     .foregroundColor(theme.textPrimary)
@@ -255,6 +279,13 @@ struct JournalDetailSheet: View {
     @State private var showDeleteConfirm = false
     @State private var showDeleteQueued = false
     @State private var deleteQueuedInfo: DeleteQueued?
+    @State private var pinnedAt: Date?
+    @State private var pendingUnpinAt: Date?
+    @State private var isPinBusy = false
+    @State private var pinError: String?
+    @State private var showUnpinConfirm = false
+    @State private var showUnpinAuth = false
+    @State private var showUnpinQueued = false
 
     private var authorNames: String {
         if !entry.authorMemberNames.isEmpty {
@@ -321,11 +352,34 @@ struct JournalDetailSheet: View {
                                     .foregroundColor(theme.textSecondary)
                             }
                         }
+
+                        if pinnedAt != nil {
+                            HStack(spacing: 8) {
+                                Image(systemName: "pin.fill")
+                                    .font(.caption)
+                                    .foregroundColor(theme.accentLight)
+                                Text("Pinned")
+                                    .font(.subheadline).fontWeight(.medium)
+                                    .foregroundColor(theme.accentLight)
+                            }
+                        }
                     }
                     .padding(14)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(theme.backgroundCard)
                     .cornerRadius(14)
+
+                    if let error = pinError {
+                        Text(error)
+                            .font(.footnote)
+                            .foregroundColor(.red)
+                    }
+
+                    if let after = pendingUnpinAt {
+                        Label("Unpin queued, finalizes \(after, style: .relative). Cancel from System Safety settings.", systemImage: "clock")
+                            .font(.footnote)
+                            .foregroundColor(theme.textSecondary)
+                    }
 
                     // Body
                     MarkdownText(entry.body, color: theme.textPrimary)
@@ -351,6 +405,19 @@ struct JournalDetailSheet: View {
                             .foregroundColor(theme.accentLight)
                     }
                     .accessibilityLabel("Revisions")
+
+                    Button {
+                        if pinnedAt != nil {
+                            Task { await requestUnpin() }
+                        } else {
+                            Task { await pin() }
+                        }
+                    } label: {
+                        Image(systemName: pinnedAt != nil ? "pin.slash" : "pin")
+                            .foregroundColor(theme.accentLight)
+                    }
+                    .disabled(isPinBusy || pendingUnpinAt != nil)
+                    .accessibilityLabel(pinnedAt != nil ? "Unpin" : "Pin")
 
                     Button {
                         showEdit = true
@@ -403,6 +470,79 @@ struct JournalDetailSheet: View {
             if let info = deleteQueuedInfo {
                 Text("This deletion has been queued and will finalize \(info.finalizeAfter, style: .relative). You can cancel it from System Safety settings.")
             }
+        }
+        .confirmationDialog("Unpin this journal entry?", isPresented: $showUnpinConfirm) {
+            Button("Unpin", role: .destructive) {
+                Task { await performUnpin() }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("The entry will return to its place in the journal list.")
+        }
+        .sheet(isPresented: $showUnpinAuth) {
+            JournalEntryUnpinSheet(onUnpin: { password, totpCode in
+                try await store.api?.unpinJournal(id: entry.id, password: password, totpCode: totpCode)
+            }, onSuccess: { response in
+                handleUnpinResponse(response)
+            })
+            .environmentObject(store)
+        }
+        .alert("Unpin Queued", isPresented: $showUnpinQueued) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            if let after = pendingUnpinAt {
+                Text("This unpin has been queued and will finalize \(after, style: .relative). You can cancel it from System Safety settings.")
+            }
+        }
+        .onAppear {
+            pinnedAt = entry.pinnedAt
+            pendingUnpinAt = entry.pendingUnpinAt
+        }
+    }
+
+    private func pin() async {
+        isPinBusy = true
+        pinError = nil
+        do {
+            if let updated = try await store.api?.pinJournal(id: entry.id) {
+                pinnedAt = updated.pinnedAt
+            }
+        } catch {
+            pinError = error.userFacingMessage
+        }
+        isPinBusy = false
+    }
+
+    private func requestUnpin() async {
+        if let safety = try? await store.api?.getSystemSafety(),
+           safety.settings.appliesToJournals,
+           safety.settings.authTier != .none {
+            showUnpinAuth = true
+        } else {
+            showUnpinConfirm = true
+        }
+    }
+
+    private func performUnpin() async {
+        isPinBusy = true
+        pinError = nil
+        do {
+            let response = try await store.api?.unpinJournal(id: entry.id)
+            handleUnpinResponse(response)
+        } catch {
+            pinError = error.userFacingMessage
+        }
+        isPinBusy = false
+    }
+
+    private func handleUnpinResponse(_ response: JournalUnpinResponse?) {
+        guard let response else { return }
+        if response.pendingActionID != nil, let after = response.finalizeAfter {
+            pendingUnpinAt = after
+            showUnpinQueued = true
+        } else {
+            pinnedAt = nil
+            pendingUnpinAt = nil
         }
     }
 }
@@ -1202,5 +1342,141 @@ private struct MarkdownHelpSheet: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - Journal Entry Unpin Sheet
+
+struct JournalEntryUnpinSheet: View {
+    @Environment(\.theme) var theme
+    @EnvironmentObject var store: SystemStore
+    @Environment(\.dismiss) var dismiss
+
+    let onUnpin: (_ password: String?, _ totpCode: String?) async throws -> JournalUnpinResponse?
+    let onSuccess: (JournalUnpinResponse?) -> Void
+
+    @State private var password = ""
+    @State private var totpCode = ""
+    @State private var authTier: DeleteConfirmation = .none
+    @State private var totpEnabled = false
+    @State private var isLoading = true
+    @State private var isUnpinning = false
+    @State private var errorMessage: String?
+
+    private var needsPassword: Bool {
+        authTier == .password || authTier == .both
+    }
+
+    private var needsTotp: Bool {
+        (authTier == .totp || authTier == .both) && totpEnabled
+    }
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 20) {
+                if isLoading {
+                    ProgressView().tint(theme.accentLight)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Label("Unpinning will be queued with a grace period. You can cancel it from System Safety settings.", systemImage: "clock")
+                            .font(.footnote)
+                            .foregroundColor(theme.textSecondary)
+
+                        if needsPassword {
+                            HStack {
+                                Image(systemName: "key.fill")
+                                    .foregroundColor(theme.textTertiary)
+                                    .frame(width: 20)
+                                SecureField("Password", text: $password)
+                                    .font(.subheadline)
+                                    .textContentType(.password)
+                            }
+                            .padding(.horizontal, 16).padding(.vertical, 12)
+                            .background(theme.backgroundCard)
+                            .cornerRadius(12)
+                        }
+
+                        if needsTotp {
+                            HStack {
+                                Image(systemName: "lock.shield.fill")
+                                    .foregroundColor(theme.textTertiary)
+                                    .frame(width: 20)
+                                TextField("6-digit code", text: $totpCode)
+                                    .font(.subheadline)
+                                    .textContentType(.oneTimeCode)
+                                    .keyboardType(.numberPad)
+                            }
+                            .padding(.horizontal, 16).padding(.vertical, 12)
+                            .background(theme.backgroundCard)
+                            .cornerRadius(12)
+                        }
+
+                        if let errorMessage {
+                            Text(errorMessage)
+                                .font(.footnote)
+                                .foregroundColor(.red)
+                        }
+                    }
+
+                    Spacer()
+
+                    Button {
+                        Task { await performUnpin() }
+                    } label: {
+                        HStack {
+                            if isUnpinning { ProgressView().tint(.white) }
+                            Text(isUnpinning ? "Unpinning…" : "Unpin Entry")
+                                .font(.subheadline).fontWeight(.semibold)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(theme.danger)
+                        .foregroundColor(.white)
+                        .cornerRadius(12)
+                    }
+                    .disabled(isUnpinning || (needsPassword && password.isEmpty) || (needsTotp && totpCode.isEmpty))
+                }
+            }
+            .padding(24)
+            .background(theme.backgroundPrimary)
+            .navigationTitle("Unpin Entry")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                        .foregroundColor(theme.accentLight)
+                }
+            }
+        }
+        .presentationDetents([.medium])
+        .task { await loadAuthRequirements() }
+    }
+
+    private func loadAuthRequirements() async {
+        if let safety = try? await store.api?.getSystemSafety() {
+            if safety.settings.appliesToJournals {
+                authTier = safety.settings.authTier
+            }
+        }
+        if let me = try? await store.api?.getMe() {
+            totpEnabled = me.totpEnabled
+        }
+        isLoading = false
+    }
+
+    private func performUnpin() async {
+        isUnpinning = true
+        errorMessage = nil
+        do {
+            let pw = needsPassword ? password : nil
+            let totp = needsTotp ? totpCode : nil
+            let response = try await onUnpin(pw, totp)
+            onSuccess(response)
+            dismiss()
+        } catch {
+            errorMessage = error.userFacingMessage
+        }
+        isUnpinning = false
     }
 }

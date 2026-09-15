@@ -1510,7 +1510,7 @@ class APIClient {
 
     // MARK: - Journals
 
-    func getJournals(before: Date? = nil, limit: Int = 50, memberID: String? = nil) async throws -> JournalListResponse {
+    func getJournals(before: Date? = nil, limit: Int = 50, memberID: String? = nil, pinned: Bool? = nil) async throws -> JournalListResponse {
         var path = "/v1/journals?limit=\(limit)"
         if let before {
             let formatter = ISO8601DateFormatter()
@@ -1519,6 +1519,9 @@ class APIClient {
         }
         if let memberID {
             path += "&member_id=\(memberID)"
+        }
+        if let pinned {
+            path += "&pinned=\(pinned)"
         }
         let data = try await request(path)
         return try JSONDecoder.iso.decode(JournalListResponse.self, from: data)
@@ -1547,6 +1550,24 @@ class APIClient {
         let data = try await request("/v1/journals/\(id)", method: "DELETE", body: body)
         guard !data.isEmpty else { return nil }
         return try? JSONDecoder.iso.decode(DeleteQueued.self, from: data)
+    }
+
+    func pinJournal(id: String) async throws -> JournalEntry {
+        let data = try await request("/v1/journals/\(id)/pin", method: "POST")
+        return try JSONDecoder.iso.decode(JournalEntry.self, from: data)
+    }
+
+    func unpinJournal(id: String, password: String? = nil, totpCode: String? = nil) async throws -> JournalUnpinResponse {
+        var body: Data? = nil
+        if password != nil || totpCode != nil {
+            body = try JSONEncoder.iso.encode(MemberDeleteConfirm(password: password, totpCode: totpCode))
+        }
+        let (data, status) = try await perform("/v1/journals/\(id)/unpin", method: "POST", body: body)
+        guard (200...299).contains(status) else {
+            throw NSError(domain: "APIError", code: status,
+                          userInfo: [NSLocalizedDescriptionKey: friendlyErrorMessage(statusCode: status, data: data)])
+        }
+        return try JSONDecoder.iso.decode(JournalUnpinResponse.self, from: data)
     }
 
     func getJournalRevisions(entryID: String) async throws -> [ContentRevision] {

@@ -1314,6 +1314,8 @@ struct JournalEntry: Identifiable, Codable, Hashable {
     var authorMemberNames: [String]
     let createdAt: Date
     let updatedAt: Date
+    var pinnedAt: Date? = nil
+    var pendingUnpinAt: Date? = nil
     var revisionCount: Int?
 
     enum CodingKeys: String, CodingKey {
@@ -1325,6 +1327,8 @@ struct JournalEntry: Identifiable, Codable, Hashable {
         case authorMemberNames = "author_member_names"
         case createdAt         = "created_at"
         case updatedAt         = "updated_at"
+        case pinnedAt          = "pinned_at"
+        case pendingUnpinAt    = "pending_unpin_at"
         case revisionCount     = "revision_count"
     }
 }
@@ -1438,6 +1442,18 @@ struct UnpinRevisionResponse: Codable {
 
     enum CodingKeys: String, CodingKey {
         case revision
+        case pendingActionID = "pending_action_id"
+        case finalizeAfter = "finalize_after"
+    }
+}
+
+struct JournalUnpinResponse: Codable {
+    var entry: JournalEntry?
+    var pendingActionID: String?
+    var finalizeAfter: Date?
+
+    enum CodingKeys: String, CodingKey {
+        case entry
         case pendingActionID = "pending_action_id"
         case finalizeAfter = "finalize_after"
     }

@@ -82,7 +82,7 @@ actor CacheManager {
     }
 
     func clearAll() {
-        let keys = ["members", "groups", "tags", "tagMembers", "fields", "currentFronts", "frontHistory", "systemProfile", "journalEntries", "polls", "safetySettings"]
+        let keys = ["members", "groups", "tags", "tagMembers", "fields", "currentFronts", "frontHistory", "systemProfile", "journalEntries", "pinnedJournalEntries", "polls", "safetySettings"]
         for key in keys {
             let url = container.appendingPathComponent("\(key).json")
             try? FileManager.default.removeItem(at: url)
@@ -144,6 +144,7 @@ class SystemStore: ObservableObject {
     @Published var pendingOperationCount = 0
     @Published var announcements: [Announcement] = []
     @Published var journalEntries: [JournalEntry] = []
+    @Published var pinnedJournalEntries: [JournalEntry] = []
     @Published var hasMoreJournals = true
     private var journalCursor: Date?
     @Published var pendingSafetyActions: [PendingAction] = []
@@ -312,6 +313,7 @@ class SystemStore: ObservableObject {
         isSyncing = false
         announcements = []
         journalEntries = []
+        pinnedJournalEntries = []
         hasMoreJournals = true
         journalCursor = nil
         pendingSafetyActions = []
@@ -358,6 +360,9 @@ class SystemStore: ObservableObject {
         if let cached = await cache.load(key: "journalEntries", as: [JournalEntry].self), journalEntries.isEmpty {
             journalEntries = cached
         }
+        if let cached = await cache.load(key: "pinnedJournalEntries", as: [JournalEntry].self), pinnedJournalEntries.isEmpty {
+            pinnedJournalEntries = cached
+        }
         if let cached = await cache.load(key: "polls", as: [Poll].self), polls.isEmpty {
             polls = cached
         }
@@ -380,6 +385,7 @@ class SystemStore: ObservableObject {
                 await cache.save(systemProfile, key: "systemProfile")
             }
             await cache.save(journalEntries, key: "journalEntries")
+            await cache.save(pinnedJournalEntries, key: "pinnedJournalEntries")
             await cache.save(polls, key: "polls")
             if let safetySettings {
                 await cache.save(safetySettings, key: "safetySettings")
@@ -1656,11 +1662,15 @@ class SystemStore: ObservableObject {
         if NetworkMonitor.shared.isOnline, let api {
             do {
                 journalCursor = nil
-                let response = try await api.getJournals()
+                // Pinned entries load in one request above the paginated list.
+                let pinned = try await api.getJournals(limit: 200, pinned: true)
+                let response = try await api.getJournals(pinned: false)
+                pinnedJournalEntries = pinned.items
                 journalEntries = response.items
                 journalCursor = response.nextCursor
                 hasMoreJournals = response.nextCursor != nil
                 await cache.save(journalEntries, key: "journalEntries")
+                await cache.save(pinnedJournalEntries, key: "pinnedJournalEntries")
                 return
             } catch {
                 if !fallThroughToOffline(error) {
@@ -1676,7 +1686,7 @@ class SystemStore: ObservableObject {
         guard hasMoreJournals, let cursor = journalCursor else { return }
         if NetworkMonitor.shared.isOnline, let api {
             do {
-                let response = try await api.getJournals(before: cursor)
+                let response = try await api.getJournals(before: cursor, pinned: false)
                 journalEntries.append(contentsOf: response.items)
                 journalCursor = response.nextCursor
                 hasMoreJournals = response.nextCursor != nil
@@ -1748,6 +1758,10 @@ class SystemStore: ObservableObject {
             if let title = update.title { journalEntries[idx].title = title }
             if let body = update.body { journalEntries[idx].body = body }
         }
+        if let idx = pinnedJournalEntries.firstIndex(where: { $0.id == id }) {
+            if let title = update.title { pinnedJournalEntries[idx].title = title }
+            if let body = update.body { pinnedJournalEntries[idx].body = body }
+        }
         saveAllToCache()
     }
 
@@ -1758,6 +1772,7 @@ class SystemStore: ObservableObject {
                 let queued = try await api.deleteJournal(id: id, confirmation: confirmation)
                 if queued == nil {
                     journalEntries.removeAll { $0.id == id }
+                    pinnedJournalEntries.removeAll { $0.id == id }
                     saveAllToCache()
                 }
                 return queued
@@ -1772,6 +1787,7 @@ class SystemStore: ObservableObject {
         if blockOfflineDeletion(for: .journals, label: "journal entries") { return nil }
         enqueue(.deleteJournal, resourceID: id)
         journalEntries.removeAll { $0.id == id }
+        pinnedJournalEntries.removeAll { $0.id == id }
         saveAllToCache()
         return nil
     }
