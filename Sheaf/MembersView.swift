@@ -482,7 +482,7 @@ struct MemberDetailSheet: View {
     @Environment(\.dismiss) var dismiss
     @Environment(\.isPresented) private var isPresented
     let member: Member
-    @AppStorage("showMemberCreatedDate") private var showCreatedDate = true
+    @AppStorage("showMemberCreatedDate") private var showCreatedDate = false
     @State private var showEdit = false
     @State private var showBioRevisions = false
     @State private var fieldValues: [CustomFieldValue] = []

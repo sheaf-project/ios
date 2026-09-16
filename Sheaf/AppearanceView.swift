@@ -7,7 +7,7 @@ struct AppearanceView: View {
     @EnvironmentObject var themeManager: ThemeManager
     @Environment(\.theme) var theme
     @AppStorage("quickSwitchPosition") private var quickSwitchPosition: QuickSwitchPosition = .belowFronters
-    @AppStorage("showMemberCreatedDate") private var showMemberCreatedDate = true
+    @AppStorage("showMemberCreatedDate") private var showMemberCreatedDate = false
 
     var body: some View {
         ZStack {
