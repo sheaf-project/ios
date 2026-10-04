@@ -450,12 +450,18 @@ struct AddRelationshipSheet: View {
                 if scope == .member {
                     Section {
                         Picker("Visibility", selection: $visibility) {
-                            ForEach(PrivacyLevel.allCases, id: \.self) { level in
+                            ForEach(PrivacyLevel.allCases.filter { $0 != .public || store.offersPublic(saved: nil) }, id: \.self) { level in
                                 Text(level.rawValue.capitalized).tag(level)
                             }
                         }
                         .listRowBackground(theme.backgroundCard)
                         .foregroundColor(theme.textPrimary)
+                        if !store.offersPublic(saved: nil) {
+                            Text(SystemStore.publishingOffNote)
+                                .font(.caption)
+                                .foregroundColor(theme.textTertiary)
+                                .listRowBackground(theme.backgroundCard)
+                        }
                     } footer: {
                         Text("Only public relationships can appear on shared pages, and both members must clear their own privacy ceiling.")
                     }

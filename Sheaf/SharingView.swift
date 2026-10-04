@@ -250,6 +250,9 @@ struct SharingView: View {
                     if v.flagsActivateAt != nil {
                         statusBadge(String(localized: "Pending"), color: theme.warning)
                     }
+                    if v.includeAllPublicMembers {
+                        statusBadge(String(localized: "Everyone"), color: theme.accentLight)
+                    }
                 }
                 Text("^[\(v.members.count) member](inflect: true) · ^[\(v.fields.count) field](inflect: true)")
                     .font(.caption)

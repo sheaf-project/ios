@@ -190,7 +190,7 @@ struct GroupCeilingSection: View {
                     get: { group.privacy },
                     set: { setPrivacy($0) }
                 )) {
-                    ForEach(PrivacyLevel.allCases, id: \.self) { level in
+                    ForEach(PrivacyLevel.allCases.filter { $0 != .public || store.offersPublic(saved: group.privacy) }, id: \.self) { level in
                         Text(level.rawValue.capitalized).tag(level)
                     }
                 }
@@ -200,6 +200,11 @@ struct GroupCeilingSection: View {
                     Text("Changes to \(pending.rawValue) \(at.formatted(.relative(presentation: .named)))")
                         .font(.caption)
                         .foregroundColor(theme.warning)
+                }
+                if !store.offersPublic(saved: group.privacy) {
+                    Text(SystemStore.publishingOffNote)
+                        .font(.caption)
+                        .foregroundColor(theme.textTertiary)
                 }
                 Text("Only public groups can appear on shared pages. Raising to public applies right away.")
                     .font(.caption)

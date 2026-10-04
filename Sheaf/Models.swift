@@ -39,6 +39,8 @@ struct Member: Identifiable, Codable, Hashable {
     var pluralkitID: String?
     var isCustomFront: Bool
     var privacy: PrivacyLevel
+    var pendingPrivacy: PrivacyLevel?
+    var privacyActivatesAt: Date?
     var note: String?
     var archivedAt: Date?
     var neverShareable: Bool
@@ -63,6 +65,8 @@ struct Member: Identifiable, Codable, Hashable {
         case pluralkitID   = "pluralkit_id"
         case isCustomFront = "is_custom_front"
         case privacy
+        case pendingPrivacy = "pending_privacy"
+        case privacyActivatesAt = "privacy_activates_at"
         case note
         case neverShareable = "never_shareable"
         case frontingPrivate = "fronting_private"
@@ -88,6 +92,8 @@ struct Member: Identifiable, Codable, Hashable {
         pluralkitID   = try c.decodeIfPresent(String.self, forKey: .pluralkitID)
         isCustomFront = try c.decodeIfPresent(Bool.self, forKey: .isCustomFront) ?? false
         privacy       = try c.decode(PrivacyLevel.self, forKey: .privacy)
+        pendingPrivacy = try c.decodeIfPresent(PrivacyLevel.self, forKey: .pendingPrivacy)
+        privacyActivatesAt = try c.decodeIfPresent(Date.self, forKey: .privacyActivatesAt)
         note          = try c.decodeIfPresent(String.self, forKey: .note)
         neverShareable = try c.decodeIfPresent(Bool.self, forKey: .neverShareable) ?? false
         frontingPrivate = try c.decodeIfPresent(Bool.self, forKey: .frontingPrivate) ?? false
@@ -115,6 +121,8 @@ struct Member: Identifiable, Codable, Hashable {
         self.pluralkitID = pluralkitID
         self.isCustomFront = isCustomFront
         self.privacy = privacy
+        self.pendingPrivacy = nil
+        self.privacyActivatesAt = nil
         self.note = note
         self.neverShareable = false
         self.frontingPrivate = false
@@ -244,6 +252,7 @@ struct SystemProfile: Identifiable, Codable {
     var note: String?
     var tag: String?
     var avatarURL: String?
+    var bannerURL: String?
     var color: String?
     var privacy: PrivacyLevel
     var deleteConfirmation: DeleteConfirmation
@@ -255,6 +264,7 @@ struct SystemProfile: Identifiable, Codable {
     enum CodingKeys: String, CodingKey {
         case id, name, description, note, tag, color, privacy
         case avatarURL            = "avatar_url"
+        case bannerURL            = "banner_url"
         case deleteConfirmation   = "delete_confirmation"
         case dateFormat           = "date_format"
         case replaceFrontsDefault = "replace_fronts_default"
@@ -270,6 +280,7 @@ struct SystemProfile: Identifiable, Codable {
         note                 = try c.decodeIfPresent(String.self, forKey: .note)
         tag                  = try c.decodeIfPresent(String.self, forKey: .tag)
         avatarURL            = try c.decodeIfPresent(String.self, forKey: .avatarURL)
+        bannerURL            = try c.decodeIfPresent(String.self, forKey: .bannerURL)
         color                = try c.decodeIfPresent(String.self, forKey: .color)
         privacy              = try c.decode(PrivacyLevel.self, forKey: .privacy)
         deleteConfirmation   = try c.decodeIfPresent(DeleteConfirmation.self, forKey: .deleteConfirmation) ?? .none
@@ -305,12 +316,14 @@ struct FrontCreate: Codable {
     var startedAt: Date?
     var replaceFronts: Bool?
     var customStatus: String?
+    var endedAt: Date?
 
     enum CodingKeys: String, CodingKey {
         case memberIDs     = "member_ids"
         case startedAt     = "started_at"
         case replaceFronts = "replace_fronts"
         case customStatus  = "custom_status"
+        case endedAt       = "ended_at"
     }
 }
 
@@ -947,6 +960,26 @@ func resolveAvatarURL(_ avatarURL: String?, baseURL: String) -> URL? {
         return URL(string: baseURL + avatarURL)
     }
     return URL(string: avatarURL)
+}
+
+// MARK: - Uploaded Files
+
+struct UploadedFile: Codable, Identifiable {
+    let id: String
+    let url: String
+    let purpose: String
+    let contentType: String
+    let sizeBytes: Int
+    let createdAt: Date
+    let pendingDeleteAt: Date?
+
+    enum CodingKeys: String, CodingKey {
+        case id, url, purpose
+        case contentType = "content_type"
+        case sizeBytes = "size_bytes"
+        case createdAt = "created_at"
+        case pendingDeleteAt = "pending_delete_at"
+    }
 }
 
 // MARK: - Admin Models
@@ -2062,6 +2095,212 @@ extension OpenPluralImportResult {
     }
 }
 
+// MARK: - BerryTree Import Models
+struct BTPreviewMember: Codable, Identifiable {
+    let id: String
+    let name: String
+}
+
+struct BTUnsupportedSection: Codable {
+    let name: String
+    let count: Int
+}
+
+struct BTPreviewSummary: Codable {
+    var systemName: String?
+    var schemaVersion: Int?
+    var memberCount: Int
+    var members: [BTPreviewMember]
+    var templateCount: Int
+    var customFrontCount: Int
+    var customFronts: [BTPreviewMember]
+    var frontingTypeCount: Int
+    var frontHistoryCount: Int
+    var folderCount: Int
+    var tagCount: Int
+    var customFieldCount: Int
+    var unsupportedSections: [BTUnsupportedSection]
+    var exportErrors: [String]
+    var limitWarnings: [String]
+
+    enum CodingKeys: String, CodingKey {
+        case members
+        case systemName          = "system_name"
+        case schemaVersion       = "schema_version"
+        case memberCount         = "member_count"
+        case templateCount       = "template_count"
+        case customFrontCount    = "custom_front_count"
+        case customFronts        = "custom_fronts"
+        case frontingTypeCount   = "fronting_type_count"
+        case frontHistoryCount   = "front_history_count"
+        case folderCount         = "folder_count"
+        case tagCount            = "tag_count"
+        case customFieldCount    = "custom_field_count"
+        case unsupportedSections = "unsupported_sections"
+        case exportErrors        = "export_errors"
+        case limitWarnings       = "limit_warnings"
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        systemName          = try c.decodeIfPresent(String.self, forKey: .systemName)
+        schemaVersion       = try c.decodeIfPresent(Int.self, forKey: .schemaVersion)
+        memberCount         = try c.decodeIfPresent(Int.self, forKey: .memberCount) ?? 0
+        members             = try c.decodeIfPresent([BTPreviewMember].self, forKey: .members) ?? []
+        templateCount       = try c.decodeIfPresent(Int.self, forKey: .templateCount) ?? 0
+        customFrontCount    = try c.decodeIfPresent(Int.self, forKey: .customFrontCount) ?? 0
+        customFronts        = try c.decodeIfPresent([BTPreviewMember].self, forKey: .customFronts) ?? []
+        frontingTypeCount   = try c.decodeIfPresent(Int.self, forKey: .frontingTypeCount) ?? 0
+        frontHistoryCount   = try c.decodeIfPresent(Int.self, forKey: .frontHistoryCount) ?? 0
+        folderCount         = try c.decodeIfPresent(Int.self, forKey: .folderCount) ?? 0
+        tagCount            = try c.decodeIfPresent(Int.self, forKey: .tagCount) ?? 0
+        customFieldCount    = try c.decodeIfPresent(Int.self, forKey: .customFieldCount) ?? 0
+        unsupportedSections = try c.decodeIfPresent([BTUnsupportedSection].self, forKey: .unsupportedSections) ?? []
+        exportErrors        = try c.decodeIfPresent([String].self, forKey: .exportErrors) ?? []
+        limitWarnings       = try c.decodeIfPresent([String].self, forKey: .limitWarnings) ?? []
+    }
+}
+
+struct BTImportResult: Codable {
+    var membersImported:       Int
+    var customFrontsImported:  Int
+    var membersSkipped:        Int
+    var membersUpdated:        Int
+    var membersPrivacySkipped: Int
+    var templatesSkipped:      Int
+    var frontsImported:        Int
+    var frontsSkipped:         Int
+    var groupsImported:        Int
+    var groupsSkipped:         Int
+    var tagsImported:          Int
+    var tagsSkipped:           Int
+    var customFieldsImported:  Int
+    var customFieldsSkipped:   Int
+    var warnings:              [String]
+}
+
+extension BTImportResult {
+    init(job: ImportJobRead) {
+        let c = job.counts
+        self.init(
+            membersImported:       c["members_imported"]         ?? 0,
+            customFrontsImported:  c["custom_fronts_imported"]   ?? 0,
+            membersSkipped:        c["members_skipped"]          ?? 0,
+            membersUpdated:        c["members_updated"]          ?? 0,
+            membersPrivacySkipped: c["members_privacy_skipped"]  ?? 0,
+            templatesSkipped:      c["templates_skipped"]        ?? 0,
+            frontsImported:        c["fronts_imported"]          ?? 0,
+            frontsSkipped:         c["fronts_skipped"]           ?? 0,
+            groupsImported:        c["groups_imported"]          ?? 0,
+            groupsSkipped:         c["groups_skipped"]           ?? 0,
+            tagsImported:          c["tags_imported"]            ?? 0,
+            tagsSkipped:           c["tags_skipped"]             ?? 0,
+            customFieldsImported:  c["custom_fields_imported"]   ?? 0,
+            customFieldsSkipped:   c["custom_fields_skipped"]    ?? 0,
+            warnings:              job.warnings
+        )
+    }
+}
+
+// MARK: - Ampersand Import Models
+struct AmpersandPreviewSummary: Codable {
+    var systemCount: Int
+    var memberCount: Int
+    var customFrontCount: Int
+    var frontHistoryCount: Int
+    var tagCount: Int
+    var customFieldCount: Int
+    var journalCount: Int
+    var noteCount: Int
+    var boardMessageCount: Int
+    var pollCount: Int
+    var reminderCount: Int
+    var assetCount: Int
+    var limitWarnings: [String]
+
+    enum CodingKeys: String, CodingKey {
+        case systemCount       = "system_count"
+        case memberCount       = "member_count"
+        case customFrontCount  = "custom_front_count"
+        case frontHistoryCount = "front_history_count"
+        case tagCount          = "tag_count"
+        case customFieldCount  = "custom_field_count"
+        case journalCount      = "journal_count"
+        case noteCount         = "note_count"
+        case boardMessageCount = "board_message_count"
+        case pollCount         = "poll_count"
+        case reminderCount     = "reminder_count"
+        case assetCount        = "asset_count"
+        case limitWarnings     = "limit_warnings"
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        systemCount       = try c.decodeIfPresent(Int.self, forKey: .systemCount) ?? 0
+        memberCount       = try c.decodeIfPresent(Int.self, forKey: .memberCount) ?? 0
+        customFrontCount  = try c.decodeIfPresent(Int.self, forKey: .customFrontCount) ?? 0
+        frontHistoryCount = try c.decodeIfPresent(Int.self, forKey: .frontHistoryCount) ?? 0
+        tagCount          = try c.decodeIfPresent(Int.self, forKey: .tagCount) ?? 0
+        customFieldCount  = try c.decodeIfPresent(Int.self, forKey: .customFieldCount) ?? 0
+        journalCount      = try c.decodeIfPresent(Int.self, forKey: .journalCount) ?? 0
+        noteCount         = try c.decodeIfPresent(Int.self, forKey: .noteCount) ?? 0
+        boardMessageCount = try c.decodeIfPresent(Int.self, forKey: .boardMessageCount) ?? 0
+        pollCount         = try c.decodeIfPresent(Int.self, forKey: .pollCount) ?? 0
+        reminderCount     = try c.decodeIfPresent(Int.self, forKey: .reminderCount) ?? 0
+        assetCount        = try c.decodeIfPresent(Int.self, forKey: .assetCount) ?? 0
+        limitWarnings     = try c.decodeIfPresent([String].self, forKey: .limitWarnings) ?? []
+    }
+}
+
+struct AmpersandImportResult: Codable {
+    var membersImported:       Int
+    var customFrontsImported:  Int
+    var membersSkipped:        Int
+    var membersUpdated:        Int
+    var membersPrivacySkipped: Int
+    var groupsImported:        Int
+    var groupsSkipped:         Int
+    var tagsImported:          Int
+    var customFieldsImported:  Int
+    var customFieldsSkipped:   Int
+    var frontsImported:        Int
+    var frontsSkipped:         Int
+    var journalsImported:      Int
+    var notesImported:         Int
+    var messagesImported:      Int
+    var pollsImported:         Int
+    var remindersImported:     Int
+    var imagesImported:        Int
+    var warnings:              [String]
+}
+
+extension AmpersandImportResult {
+    init(job: ImportJobRead) {
+        let c = job.counts
+        self.init(
+            membersImported:       c["members_imported"]        ?? 0,
+            customFrontsImported:  c["custom_fronts_imported"]  ?? 0,
+            membersSkipped:        c["members_skipped"]         ?? 0,
+            membersUpdated:        c["members_updated"]         ?? 0,
+            membersPrivacySkipped: c["members_privacy_skipped"] ?? 0,
+            groupsImported:        c["groups_imported"]         ?? 0,
+            groupsSkipped:         c["groups_skipped"]          ?? 0,
+            tagsImported:          c["tags_imported"]           ?? 0,
+            customFieldsImported:  c["custom_fields_imported"]  ?? 0,
+            customFieldsSkipped:   c["custom_fields_skipped"]   ?? 0,
+            frontsImported:        c["fronts_imported"]         ?? 0,
+            frontsSkipped:         c["fronts_skipped"]          ?? 0,
+            journalsImported:      c["journals_imported"]       ?? 0,
+            notesImported:         c["notes_imported"]          ?? 0,
+            messagesImported:      c["messages_imported"]       ?? 0,
+            pollsImported:         c["polls_imported"]          ?? 0,
+            remindersImported:     c["reminders_imported"]      ?? 0,
+            imagesImported:        c["images_imported"]         ?? 0,
+            warnings:              job.warnings
+        )
+    }
+}
+
 // MARK: - Export Jobs (async full-backup with images)
 //
 // Two-channel export surface that mirrors the Android implementation:
@@ -2148,6 +2387,7 @@ struct AnnouncementRead: Identifiable, Codable {
     let severity: AnnouncementSeverity
     let dismissible: Bool
     let active: Bool
+    let visibleWhileLoggedOut: Bool?
     let startsAt: Date?
     let expiresAt: Date?
     let createdAt: Date
@@ -2156,6 +2396,7 @@ struct AnnouncementRead: Identifiable, Codable {
 
     enum CodingKeys: String, CodingKey {
         case id, title, body, severity, dismissible, active
+        case visibleWhileLoggedOut = "visible_while_logged_out"
         case startsAt   = "starts_at"
         case expiresAt  = "expires_at"
         case createdAt  = "created_at"
@@ -2170,11 +2411,13 @@ struct AnnouncementCreate: Codable {
     var severity: AnnouncementSeverity = .info
     var dismissible: Bool = true
     var active: Bool = true
+    var visibleWhileLoggedOut: Bool = false
     var startsAt: Date?
     var expiresAt: Date?
 
     enum CodingKeys: String, CodingKey {
         case title, body, severity, dismissible, active
+        case visibleWhileLoggedOut = "visible_while_logged_out"
         case startsAt  = "starts_at"
         case expiresAt = "expires_at"
     }
@@ -2186,6 +2429,7 @@ struct AnnouncementUpdate: Codable {
     var severity: AnnouncementSeverity?
     var dismissible: Bool?
     var active: Bool?
+    var visibleWhileLoggedOut: Bool?
     var startsAt: Date?
     var expiresAt: Date?
     var clearStartsAt: Bool?
@@ -2193,10 +2437,27 @@ struct AnnouncementUpdate: Codable {
 
     enum CodingKeys: String, CodingKey {
         case title, body, severity, dismissible, active
+        case visibleWhileLoggedOut = "visible_while_logged_out"
         case startsAt      = "starts_at"
         case expiresAt     = "expires_at"
         case clearStartsAt = "clear_starts_at"
         case clearExpiresAt = "clear_expires_at"
+    }
+}
+
+// MARK: - Server Version
+struct ServerVersion: Codable {
+    let version: String?
+    let gitCommit: String?
+    let gitTag: String?
+    let buildTime: String?
+    let mode: String?
+
+    enum CodingKeys: String, CodingKey {
+        case version, mode
+        case gitCommit = "git_commit"
+        case gitTag    = "git_tag"
+        case buildTime = "build_time"
     }
 }
 
@@ -2706,6 +2967,7 @@ struct NotificationChannel: Identifiable, Codable {
     var groupRules: [GroupRuleSpec]
     var memberRules: [MemberRuleSpec]
     var lastDeliveredAt: Date?
+    var disabledReason: String?
     let createdAt: Date
     let updatedAt: Date
 
@@ -2728,6 +2990,7 @@ struct NotificationChannel: Identifiable, Codable {
         case groupRules            = "group_rules"
         case memberRules           = "member_rules"
         case lastDeliveredAt       = "last_delivered_at"
+        case disabledReason        = "disabled_reason"
         case createdAt             = "created_at"
         case updatedAt             = "updated_at"
     }
@@ -2753,6 +3016,7 @@ struct NotificationChannel: Identifiable, Codable {
         groupRules          = (try? c.decode([GroupRuleSpec].self, forKey: .groupRules)) ?? []
         memberRules         = (try? c.decode([MemberRuleSpec].self, forKey: .memberRules)) ?? []
         lastDeliveredAt     = try c.decodeIfPresent(Date.self, forKey: .lastDeliveredAt)
+        disabledReason      = try? c.decodeIfPresent(String.self, forKey: .disabledReason)
         createdAt           = try c.decode(Date.self, forKey: .createdAt)
         updatedAt           = try c.decode(Date.self, forKey: .updatedAt)
     }
@@ -2899,6 +3163,24 @@ struct ChannelPreviewResponse: Codable, Equatable {
     let warnings: [String]
 }
 
+struct NotificationServerConfig: Codable {
+    struct MobilePush: Codable {
+        let available: Bool
+        let unavailableReason: String?
+
+        enum CodingKeys: String, CodingKey {
+            case available
+            case unavailableReason = "unavailable_reason"
+        }
+    }
+
+    let mobilePush: MobilePush
+
+    enum CodingKeys: String, CodingKey {
+        case mobilePush = "mobile_push"
+    }
+}
+
 // MARK: - Receiving Channels
 
 // Account-bound view of a notification channel the authenticated user
@@ -2915,6 +3197,7 @@ struct ReceivingChannel: Identifiable, Codable {
     // from destinationState == .disabled (destination dead, e.g. token
     // revoked) — paused is a soft state the sender controls.
     var pausedBySender: Bool
+    var disabledReason: String?
 
     var id: String { channelID }
 
@@ -2927,6 +3210,7 @@ struct ReceivingChannel: Identifiable, Codable {
         case redeemedAt       = "redeemed_at"
         case lastDeliveredAt  = "last_delivered_at"
         case pausedBySender   = "paused_by_sender"
+        case disabledReason   = "disabled_reason"
     }
 
     init(from decoder: Decoder) throws {
@@ -2939,6 +3223,7 @@ struct ReceivingChannel: Identifiable, Codable {
         redeemedAt       = try c.decodeIfPresent(Date.self, forKey: .redeemedAt)
         lastDeliveredAt  = try c.decodeIfPresent(Date.self, forKey: .lastDeliveredAt)
         pausedBySender   = (try? c.decode(Bool.self, forKey: .pausedBySender)) ?? false
+        disabledReason   = try? c.decodeIfPresent(String.self, forKey: .disabledReason)
     }
 }
 
@@ -3931,6 +4216,11 @@ struct ShareViewGroupRow: Identifiable, Codable {
     }
 }
 
+enum LinkPreviewMode: String, Codable {
+    case generic
+    case systemDetails = "system_details"
+}
+
 struct ShareView: Identifiable, Codable {
     let id: String
     var name: String
@@ -3940,6 +4230,11 @@ struct ShareView: Identifiable, Codable {
     var frontingShowCount: Bool
     var includeRelationships: Bool
     var includeGroups: Bool
+    var includeAllPublicMembers: Bool
+    var linkPreviewMode: LinkPreviewMode
+    var memberLinkPreviewMode: LinkPreviewMode
+    var linkPreviewEffective: LinkPreviewMode
+    var memberLinkPreviewEffective: LinkPreviewMode
     var memberPermalinks: Bool
     let createdAt: Date
     var isShared: Bool
@@ -3949,6 +4244,9 @@ struct ShareView: Identifiable, Codable {
     var pendingIncludeRelationships: Bool?
     var pendingIncludeMembers: Bool?
     var pendingIncludeGroups: Bool?
+    var pendingIncludeAllPublicMembers: Bool?
+    var pendingLinkPreviewMode: LinkPreviewMode?
+    var pendingMemberLinkPreviewMode: LinkPreviewMode?
     var flagsActivateAt: Date?
     var members: [ShareViewMemberRow]
     var fields: [ShareViewFieldRow]
@@ -3962,6 +4260,11 @@ struct ShareView: Identifiable, Codable {
         case frontingShowCount = "fronting_show_count"
         case includeRelationships = "include_relationships"
         case includeGroups = "include_groups"
+        case includeAllPublicMembers = "include_all_public_members"
+        case linkPreviewMode = "link_preview_mode"
+        case memberLinkPreviewMode = "member_link_preview_mode"
+        case linkPreviewEffective = "link_preview_effective"
+        case memberLinkPreviewEffective = "member_link_preview_effective"
         case memberPermalinks = "member_permalinks"
         case createdAt = "created_at"
         case isShared = "is_shared"
@@ -3971,7 +4274,43 @@ struct ShareView: Identifiable, Codable {
         case pendingIncludeRelationships = "pending_include_relationships"
         case pendingIncludeMembers = "pending_include_members"
         case pendingIncludeGroups = "pending_include_groups"
+        case pendingIncludeAllPublicMembers = "pending_include_all_public_members"
+        case pendingLinkPreviewMode = "pending_link_preview_mode"
+        case pendingMemberLinkPreviewMode = "pending_member_link_preview_mode"
         case flagsActivateAt = "flags_activate_at"
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        name = try c.decode(String.self, forKey: .name)
+        includeMembers = try c.decode(Bool.self, forKey: .includeMembers)
+        includeBio = try c.decode(Bool.self, forKey: .includeBio)
+        includeFronting = try c.decode(Bool.self, forKey: .includeFronting)
+        frontingShowCount = try c.decode(Bool.self, forKey: .frontingShowCount)
+        includeRelationships = try c.decode(Bool.self, forKey: .includeRelationships)
+        includeGroups = try c.decode(Bool.self, forKey: .includeGroups)
+        includeAllPublicMembers = try c.decodeIfPresent(Bool.self, forKey: .includeAllPublicMembers) ?? false
+        linkPreviewMode = try c.decodeIfPresent(LinkPreviewMode.self, forKey: .linkPreviewMode) ?? .generic
+        memberLinkPreviewMode = try c.decodeIfPresent(LinkPreviewMode.self, forKey: .memberLinkPreviewMode) ?? .generic
+        linkPreviewEffective = try c.decodeIfPresent(LinkPreviewMode.self, forKey: .linkPreviewEffective) ?? linkPreviewMode
+        memberLinkPreviewEffective = try c.decodeIfPresent(LinkPreviewMode.self, forKey: .memberLinkPreviewEffective) ?? memberLinkPreviewMode
+        memberPermalinks = try c.decode(Bool.self, forKey: .memberPermalinks)
+        createdAt = try c.decode(Date.self, forKey: .createdAt)
+        isShared = try c.decode(Bool.self, forKey: .isShared)
+        pendingIncludeBio = try c.decodeIfPresent(Bool.self, forKey: .pendingIncludeBio)
+        pendingIncludeFronting = try c.decodeIfPresent(Bool.self, forKey: .pendingIncludeFronting)
+        pendingFrontingShowCount = try c.decodeIfPresent(Bool.self, forKey: .pendingFrontingShowCount)
+        pendingIncludeRelationships = try c.decodeIfPresent(Bool.self, forKey: .pendingIncludeRelationships)
+        pendingIncludeMembers = try c.decodeIfPresent(Bool.self, forKey: .pendingIncludeMembers)
+        pendingIncludeGroups = try c.decodeIfPresent(Bool.self, forKey: .pendingIncludeGroups)
+        pendingIncludeAllPublicMembers = try c.decodeIfPresent(Bool.self, forKey: .pendingIncludeAllPublicMembers)
+        pendingLinkPreviewMode = try c.decodeIfPresent(LinkPreviewMode.self, forKey: .pendingLinkPreviewMode)
+        pendingMemberLinkPreviewMode = try c.decodeIfPresent(LinkPreviewMode.self, forKey: .pendingMemberLinkPreviewMode)
+        flagsActivateAt = try c.decodeIfPresent(Date.self, forKey: .flagsActivateAt)
+        members = try c.decodeIfPresent([ShareViewMemberRow].self, forKey: .members) ?? []
+        fields = try c.decodeIfPresent([ShareViewFieldRow].self, forKey: .fields) ?? []
+        groups = try c.decodeIfPresent([ShareViewGroupRow].self, forKey: .groups) ?? []
     }
 }
 
@@ -3983,6 +4322,9 @@ struct ShareViewCreate: Codable {
     var frontingShowCount = true
     var includeRelationships = false
     var includeGroups = false
+    var includeAllPublicMembers = false
+    var linkPreviewMode: LinkPreviewMode = .generic
+    var memberLinkPreviewMode: LinkPreviewMode = .generic
     var memberPermalinks = false
 
     enum CodingKeys: String, CodingKey {
@@ -3993,6 +4335,9 @@ struct ShareViewCreate: Codable {
         case frontingShowCount = "fronting_show_count"
         case includeRelationships = "include_relationships"
         case includeGroups = "include_groups"
+        case includeAllPublicMembers = "include_all_public_members"
+        case linkPreviewMode = "link_preview_mode"
+        case memberLinkPreviewMode = "member_link_preview_mode"
         case memberPermalinks = "member_permalinks"
     }
 }
@@ -4005,6 +4350,9 @@ struct ShareViewUpdate: Codable {
     var frontingShowCount: Bool?
     var includeRelationships: Bool?
     var includeGroups: Bool?
+    var includeAllPublicMembers: Bool?
+    var linkPreviewMode: LinkPreviewMode?
+    var memberLinkPreviewMode: LinkPreviewMode?
     var memberPermalinks: Bool?
     var password: String?
     var totpCode: String?
@@ -4017,6 +4365,9 @@ struct ShareViewUpdate: Codable {
         case frontingShowCount = "fronting_show_count"
         case includeRelationships = "include_relationships"
         case includeGroups = "include_groups"
+        case includeAllPublicMembers = "include_all_public_members"
+        case linkPreviewMode = "link_preview_mode"
+        case memberLinkPreviewMode = "member_link_preview_mode"
         case memberPermalinks = "member_permalinks"
         case totpCode = "totp_code"
     }
@@ -4128,6 +4479,7 @@ struct ShareAuditEntry: Codable, Identifiable {
     let includeFronting: Bool
     let includeRelationships: Bool
     let includeGroups: Bool
+    let includeAllPublicMembers: Bool?
     let memberPermalinks: Bool
     let relationshipCount: Int
     let groupCount: Int
@@ -4146,6 +4498,7 @@ struct ShareAuditEntry: Codable, Identifiable {
         case includeFronting = "include_fronting"
         case includeRelationships = "include_relationships"
         case includeGroups = "include_groups"
+        case includeAllPublicMembers = "include_all_public_members"
         case memberPermalinks = "member_permalinks"
         case relationshipCount = "relationship_count"
         case groupCount = "group_count"

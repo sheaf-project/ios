@@ -752,6 +752,15 @@ struct AdminPanelView: View {
                         .background(theme.warning.opacity(0.12))
                         .cornerRadius(4)
                 }
+                if announcement.visibleWhileLoggedOut == true {
+                    Text("Login page")
+                        .font(.caption2).fontWeight(.medium)
+                        .foregroundColor(theme.accentLight)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(theme.accentLight.opacity(0.12))
+                        .cornerRadius(4)
+                }
                 Text(announcement.createdAt, style: .date)
                     .font(.caption)
                     .foregroundColor(theme.textTertiary)

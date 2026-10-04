@@ -1939,6 +1939,13 @@ class APIClient {
         _ = try await request("/v1/admin/announcements/\(id)", method: "DELETE")
     }
 
+    // MARK: - Version
+
+    func getServerVersion() async throws -> ServerVersion {
+        let data = try await request("/v1/version")
+        return try JSONDecoder().decode(ServerVersion.self, from: data)
+    }
+
     // MARK: - Export
 
     /// Synchronous JSON export. `format` is "sheaf" (full-fidelity native) or
@@ -1992,12 +1999,9 @@ class APIClient {
         return (try? JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
     }
 
-    func listFiles() async throws -> [[String: Any]] {
+    func listFiles() async throws -> [UploadedFile] {
         let data = try await request("/v1/files/list")
-        if let arr = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
-            return arr
-        }
-        return []
+        return try JSONDecoder.iso.decode([UploadedFile].self, from: data)
     }
 
     func deleteFile(id: String) async throws {
@@ -2169,6 +2173,32 @@ class APIClient {
         let groups: Bool
         let tags: Bool
         let custom_fields: Bool
+    }
+
+    private struct BTImportOptions: Encodable {
+        let conflict_strategy: String
+        let system_profile: Bool
+        let member_ids: [String]
+        let custom_fronts: Bool
+        let custom_fields: Bool
+        let tags: Bool
+        let folders: Bool
+        let front_history: Bool
+        let templates: Bool
+    }
+
+    private struct AmpersandImportOptions: Encodable {
+        let conflict_strategy: String
+        let custom_fronts: Bool
+        let custom_fields: Bool
+        let tags: Bool
+        let groups: Bool
+        let front_history: Bool
+        let journals: Bool
+        let notes: Bool
+        let board_messages: Bool
+        let reminders: Bool
+        let images: Bool
     }
 
     /// JSON body for POST /v1/imports/api.
@@ -2544,6 +2574,96 @@ class APIClient {
         return OpenPluralImportResult(job: job)
     }
 
+    // MARK: - BerryTree Import (File)
+
+    func previewBerryTreeImport(fileData: Data, filename: String) async throws -> BTPreviewSummary {
+        let data = try await multipartRequest(
+            path: "/v1/import/berrytree/preview",
+            fileData: fileData,
+            filename: filename
+        )
+        return try JSONDecoder.iso.decode(BTPreviewSummary.self, from: data)
+    }
+
+    func doBerryTreeImport(
+        fileData: Data,
+        filename: String,
+        systemProfile: Bool = true,
+        memberIDs: [String],
+        customFronts: Bool = true,
+        customFields: Bool = true,
+        tags: Bool = true,
+        folders: Bool = true,
+        frontHistory: Bool = true,
+        templates: Bool = false
+    ) async throws -> BTImportResult {
+        let options = BTImportOptions(
+            conflict_strategy: "skip",
+            system_profile: systemProfile,
+            member_ids: memberIDs,
+            custom_fronts: customFronts,
+            custom_fields: customFields,
+            tags: tags,
+            folders: folders,
+            front_history: frontHistory,
+            templates: templates
+        )
+        let job = try await runFileImport(
+            source: "berrytree_file",
+            fileData: fileData,
+            filename: filename,
+            options: options
+        )
+        return BTImportResult(job: job)
+    }
+
+    // MARK: - Ampersand Import (File)
+
+    func previewAmpersandImport(fileData: Data, filename: String) async throws -> AmpersandPreviewSummary {
+        let data = try await multipartRequest(
+            path: "/v1/import/ampersand/preview",
+            fileData: fileData,
+            filename: filename
+        )
+        return try JSONDecoder.iso.decode(AmpersandPreviewSummary.self, from: data)
+    }
+
+    func doAmpersandImport(
+        fileData: Data,
+        filename: String,
+        customFronts: Bool,
+        customFields: Bool,
+        tags: Bool,
+        groups: Bool,
+        frontHistory: Bool,
+        journals: Bool,
+        notes: Bool,
+        boardMessages: Bool,
+        reminders: Bool,
+        images: Bool
+    ) async throws -> AmpersandImportResult {
+        let options = AmpersandImportOptions(
+            conflict_strategy: "skip",
+            custom_fronts: customFronts,
+            custom_fields: customFields,
+            tags: tags,
+            groups: groups,
+            front_history: frontHistory,
+            journals: journals,
+            notes: notes,
+            board_messages: boardMessages,
+            reminders: reminders,
+            images: images
+        )
+        let job = try await runFileImport(
+            source: "ampersand_file",
+            fileData: fileData,
+            filename: filename,
+            options: options
+        )
+        return AmpersandImportResult(job: job)
+    }
+
     func uploadFile(imageData: Data, mimeType: String = "image/jpeg", purpose: String = "avatar") async throws -> String {
         let ext: String
         switch mimeType {
@@ -2640,6 +2760,11 @@ class APIClient {
     }
 
     // MARK: - Notification Channels
+
+    func getNotificationServerConfig() async throws -> NotificationServerConfig {
+        let data = try await request("/v1/notifications/server-config")
+        return try JSONDecoder.iso.decode(NotificationServerConfig.self, from: data)
+    }
 
     func listChannels(watchTokenID: String) async throws -> [NotificationChannel] {
         let data = try await request("/v1/watch-tokens/\(watchTokenID)/channels")
@@ -2942,6 +3067,7 @@ struct SystemUpdate: Codable {
     var note: String?
     var tag: String?
     var avatarURL: String?
+    var bannerURL: String?
     var color: String?
     var privacy: PrivacyLevel?
     var dateFormat: DateFormat?
@@ -2950,6 +3076,7 @@ struct SystemUpdate: Codable {
     enum CodingKeys: String, CodingKey {
         case name, description, note, tag, color, privacy
         case avatarURL            = "avatar_url"
+        case bannerURL            = "banner_url"
         case dateFormat           = "date_format"
         case replaceFrontsDefault = "replace_fronts_default"
     }
@@ -2966,6 +3093,7 @@ struct SystemUpdate: Codable {
         try c.encode(note, forKey: .note)
         try c.encode(tag, forKey: .tag)
         try c.encode(avatarURL, forKey: .avatarURL)
+        try c.encode(bannerURL, forKey: .bannerURL)
         try c.encodeIfPresent(color, forKey: .color)
         try c.encodeIfPresent(privacy, forKey: .privacy)
         try c.encodeIfPresent(dateFormat, forKey: .dateFormat)

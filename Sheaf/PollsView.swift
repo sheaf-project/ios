@@ -7,7 +7,6 @@ struct PollsView: View {
     @Environment(\.theme) var theme
     @State private var isLoading = false
     @State private var showNewPoll = false
-    @Namespace private var glassNamespace
     @State private var selectedPoll: Poll?
     @State private var pollToDelete: Poll?
     @State private var showDeleteConfirm = false
@@ -33,35 +32,6 @@ struct PollsView: View {
             theme.backgroundPrimary.ignoresSafeArea()
 
             VStack(spacing: 0) {
-                HStack {
-                    Text("Polls")
-                        .font(.title2).fontWeight(.bold).fontDesign(.rounded)
-                        .foregroundColor(theme.textPrimary)
-                    Spacer()
-                    HStack(spacing: 16) {
-                        Button {
-                            showNewPoll = true
-                        } label: {
-                            Image(systemName: "plus.circle.fill")
-                                .font(.title3)
-                                .foregroundColor(theme.accentLight)
-                        }
-                        .modifier(HeaderGlassButtonModifier(namespace: glassNamespace))
-                        Button {
-                            Task { await reload() }
-                        } label: {
-                            Image(systemName: "arrow.clockwise")
-                                .font(.title3).fontWeight(.semibold)
-                                .foregroundColor(theme.textSecondary)
-                        }
-                        .modifier(HeaderGlassButtonModifier(namespace: glassNamespace))
-                    }
-                    .modifier(HeaderGlassContainerModifier())
-                }
-                .padding(.horizontal, 24)
-                .padding(.top, 16)
-                .padding(.bottom, 20)
-
                 if isLoading && store.polls.isEmpty {
                     Spacer()
                     ProgressView().tint(theme.accentLight)
@@ -119,6 +89,29 @@ struct PollsView: View {
                         await reload()
                     }
                 }
+            }
+        }
+        .navigationTitle("Polls")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    showNewPoll = true
+                } label: {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.title3)
+                        .foregroundColor(theme.accentLight)
+                }
+                .accessibilityLabel("New poll")
+            }
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    Task { await reload() }
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                        .foregroundColor(theme.textSecondary)
+                }
+                .accessibilityLabel("Refresh")
             }
         }
         .task { await reload() }

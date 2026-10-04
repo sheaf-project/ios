@@ -17,11 +17,13 @@ struct SettingsView: View {
     @State private var showPSImport = false
     @State private var showPrismImport = false
     @State private var showOpenPluralImport = false
+    @State private var showBerryTreeImport = false
+    @State private var showAmpersandImport = false
     @State private var showImportHistory = false
     @State private var showTOTPSetup = false
     @State private var showTOTPManage = false
     @State private var me: UserRead?
-    @State private var hasShareGrants = false
+    @State private var serverVersion: ServerVersion?
     @State private var isLoadingFileUsage = false
     @State private var fileUsageDisplay = "—"
     @State private var showFileCleanupConfirm = false
@@ -107,6 +109,14 @@ struct SettingsView: View {
                         VStack(spacing: 0) {
                             infoRow(icon: "link", label: String(localized: "API URL"), value: authManager.baseURL)
                             Divider().background(theme.backgroundCard)
+                            if let v = serverVersion?.version {
+                                infoRow(icon: "server.rack", label: String(localized: "Server version"), value: v)
+                                Divider().background(theme.backgroundCard)
+                            }
+                            if let build = serverVersion?.gitTag ?? serverVersion?.gitCommit.map({ String($0.prefix(7)) }) {
+                                infoRow(icon: "number", label: String(localized: "Server build"), value: build)
+                                Divider().background(theme.backgroundCard)
+                            }
                             infoRow(icon: "envelope.fill", label: String(localized: "Email"), value: me?.email ?? "—")
                             Divider().background(theme.backgroundCard)
                             Button { showChangeEmail = true } label: {
@@ -450,6 +460,12 @@ struct SettingsView: View {
                                 Button { showOpenPluralImport = true } label: {
                                     Label("OpenPlural", systemImage: "shippingbox.fill")
                                 }
+                                Button { showBerryTreeImport = true } label: {
+                                    Label("BerryTree", systemImage: "leaf.fill")
+                                }
+                                Button { showAmpersandImport = true } label: {
+                                    Label("Ampersand", systemImage: "textformat.abc")
+                                }
                                 Button { showSheafImport = true } label: {
                                     Label("Sheaf Export", systemImage: "square.and.arrow.down.on.square.fill")
                                 }
@@ -560,52 +576,6 @@ struct SettingsView: View {
 
                             Divider().background(theme.divider)
 
-                            NavigationLink {
-                                RelationshipTypesView()
-                                    .environmentObject(store)
-                            } label: {
-                                HStack {
-                                    Image(systemName: "person.line.dotted.person")
-                                        .foregroundColor(theme.accentLight)
-                                        .frame(width: 20)
-                                    Text("Relationships")
-                                        .font(.subheadline).fontWeight(.medium)
-                                        .foregroundColor(theme.textPrimary)
-                                    Spacer()
-                                    Text("\(store.relationshipTypes.count)")
-                                        .font(.subheadline)
-                                        .foregroundColor(theme.textTertiary)
-                                }
-                                .padding(.horizontal, 16).padding(.vertical, 14)
-                            }
-                            .buttonStyle(.plain)
-
-                            if me?.publicProfilesEnabled == true || hasShareGrants {
-                                Divider().background(theme.divider)
-
-                                NavigationLink {
-                                    SharingView()
-                                        .environmentObject(store)
-                                } label: {
-                                    HStack {
-                                        Image(systemName: "globe")
-                                            .foregroundColor(theme.accentLight)
-                                            .frame(width: 20)
-                                        Text("Sharing")
-                                            .font(.subheadline).fontWeight(.medium)
-                                            .foregroundColor(theme.textPrimary)
-                                        Spacer()
-                                        Image(systemName: "chevron.right")
-                                            .font(.caption)
-                                            .foregroundColor(theme.textTertiary)
-                                    }
-                                    .padding(.horizontal, 16).padding(.vertical, 14)
-                                }
-                                .buttonStyle(.plain)
-                            }
-
-                            Divider().background(theme.divider)
-
                             Button { store.loadAll() } label: {
                                 HStack {
                                     Image(systemName: "arrow.clockwise").foregroundColor(theme.accent)
@@ -623,6 +593,17 @@ struct SettingsView: View {
                     settingsSection(title: "System") {
                         VStack(spacing: 0) {
                             if let profile = store.systemProfile {
+                                if let banner = profile.bannerURL, !banner.isEmpty,
+                                   let url = resolveAvatarURL(banner, baseURL: authManager.baseURL) {
+                                    AsyncImage(url: url) { img in
+                                        img.resizable().scaledToFill()
+                                    } placeholder: {
+                                        Rectangle().fill(theme.backgroundCard)
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                    .aspectRatio(3, contentMode: .fill)
+                                    .clipped()
+                                }
                                 HStack(spacing: 12) {
                                     ZStack {
                                     Circle()
@@ -990,6 +971,7 @@ struct SettingsView: View {
                 .environmentObject(store)
         }
         .task { await loadMe() }
+        .task { serverVersion = try? await store.api?.getServerVersion() }
         .confirmationDialog("Log out?", isPresented: $showLogoutConfirm, titleVisibility: .visible) {
             Button("Disconnect", role: .destructive) { authManager.logout() }
             Button("Cancel", role: .cancel) {}
@@ -1022,6 +1004,14 @@ struct SettingsView: View {
         }
         .sheet(isPresented: $showOpenPluralImport) {
             OpenPluralImportSheet()
+                .environmentObject(store)
+        }
+        .sheet(isPresented: $showBerryTreeImport) {
+            BerryTreeImportSheet()
+                .environmentObject(store)
+        }
+        .sheet(isPresented: $showAmpersandImport) {
+            AmpersandImportSheet()
                 .environmentObject(store)
         }
         .sheet(isPresented: $showImportHistory) {
@@ -1092,11 +1082,6 @@ struct SettingsView: View {
         me = try? await api.getMe()
         if let me {
             newsletterOptIn = me.newsletterOptIn
-        }
-        // Sharing must stay reachable while dormant grants exist, even after an
-        // operator turns the instance flag off, so revoke is never out of reach.
-        if me?.publicProfilesEnabled != true {
-            hasShareGrants = ((try? await api.getShareGrants()) ?? []).contains { $0.status != "revoked" }
         }
         // Fetch deletion grace period if not already known
         if authManager.deletionGraceDays == nil {

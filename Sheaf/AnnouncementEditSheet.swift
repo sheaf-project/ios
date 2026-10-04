@@ -16,6 +16,7 @@ struct AnnouncementEditSheet: View {
     @State private var severity: AnnouncementSeverity = .info
     @State private var dismissible = true
     @State private var active = true
+    @State private var visibleWhileLoggedOut = false
     @State private var hasStartDate = false
     @State private var startsAt = Date()
     @State private var hasExpireDate = false
@@ -92,9 +93,25 @@ struct AnnouncementEditSheet: View {
                             .tint(theme.accentLight)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 10)
+
+                            Divider().background(theme.divider).padding(.leading, 12)
+
+                            Toggle(isOn: $visibleWhileLoggedOut) {
+                                Text("Show on login page")
+                                    .font(.subheadline)
+                                    .foregroundColor(theme.textPrimary)
+                            }
+                            .tint(theme.accentLight)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 10)
                         }
                         .background(theme.backgroundCard)
                         .cornerRadius(12)
+
+                        Text("Visible to anyone before signing in.")
+                            .font(.caption)
+                            .foregroundColor(theme.textTertiary)
+                            .padding(.horizontal, 12)
 
                         // Start date
                         VStack(alignment: .leading, spacing: 6) {
@@ -191,6 +208,7 @@ struct AnnouncementEditSheet: View {
         severity = a.severity
         dismissible = a.dismissible
         active = a.active
+        visibleWhileLoggedOut = a.visibleWhileLoggedOut ?? false
         if let start = a.startsAt {
             hasStartDate = true
             startsAt = start
@@ -214,6 +232,7 @@ struct AnnouncementEditSheet: View {
                     severity: severity,
                     dismissible: dismissible,
                     active: active,
+                    visibleWhileLoggedOut: visibleWhileLoggedOut,
                     startsAt: hasStartDate ? startsAt : nil,
                     expiresAt: hasExpireDate ? expiresAt : nil,
                     clearStartsAt: !hasStartDate && existing.startsAt != nil ? true : nil,
@@ -227,6 +246,7 @@ struct AnnouncementEditSheet: View {
                     severity: severity,
                     dismissible: dismissible,
                     active: active,
+                    visibleWhileLoggedOut: visibleWhileLoggedOut,
                     startsAt: hasStartDate ? startsAt : nil,
                     expiresAt: hasExpireDate ? expiresAt : nil
                 )

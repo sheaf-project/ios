@@ -696,6 +696,7 @@ struct MemberDetailSheet: View {
                                             MarkdownText(displayValue(fv.value, field: field), color: theme.textPrimary)
                                                 .font(.subheadline).fontWeight(.medium)
                                                 .frame(maxWidth: .infinity, alignment: .leading)
+                                            PrivacyTag(level: field.privacy, pending: field.pendingPrivacy, activatesAt: field.privacyActivatesAt)
                                         }
                                         .padding(.horizontal, 16)
                                         .padding(.vertical, 10)
@@ -929,6 +930,7 @@ struct MemberEditSheet: View {
     @State private var note = ""
     @State private var isCustomFront = false
     @State private var privacy: PrivacyLevel = .private
+    @State private var privacyStepUp: StepUpRequest?
     @State private var isSaving = false
     // Staged per-field values; AnyCodable wraps the type-erased server
     // value (Bool / Int / Double / String / [String] / NSNull-for-cleared).
@@ -1125,11 +1127,21 @@ struct MemberEditSheet: View {
                             .font(.footnote).fontWeight(.semibold)
                             .foregroundColor(theme.textSecondary)
                         Picker("Privacy", selection: $privacy) {
-                            ForEach(PrivacyLevel.allCases, id: \.self) { level in
+                            ForEach(PrivacyLevel.allCases.filter { $0 != .public || store.offersPublic(saved: member?.privacy) }, id: \.self) { level in
                                 Text(level.rawValue.capitalized).tag(level)
                             }
                         }
                         .pickerStyle(.segmented)
+                        if let pending = member?.pendingPrivacy, let at = member?.privacyActivatesAt {
+                            Text("Goes \(pending.rawValue) \(at.formatted(.relative(presentation: .named)))")
+                                .font(.caption)
+                                .foregroundColor(theme.warning)
+                        }
+                        if !store.offersPublic(saved: member?.privacy) {
+                            Text(SystemStore.publishingOffNote)
+                                .font(.caption)
+                                .foregroundColor(theme.textTertiary)
+                        }
                     }
 
                     if let member {
@@ -1261,6 +1273,10 @@ struct MemberEditSheet: View {
                 .disabled(name.isEmpty || isSaving)
             Button("Discard Changes", role: .destructive) { dismiss() }
             Button("Cancel", role: .cancel) {}
+        }
+        .sheet(item: $privacyStepUp) { req in
+            CeilingStepUpSheet(request: req)
+                .environmentObject(store)
         }
         .sheet(item: $archiveAuthMember) { member in
             ArchiveAuthSheet(member: member, error: archiveError) { password, totp in
@@ -1415,7 +1431,7 @@ struct MemberEditSheet: View {
 
     func save() {
         isSaving = true
-        let create = MemberCreate(
+        var create = MemberCreate(
             name: name,
             displayName: displayName.isEmpty ? nil : displayName,
             description: description.isEmpty ? nil : description,
@@ -1429,28 +1445,61 @@ struct MemberEditSheet: View {
             privacy: privacy,
             note: note.isEmpty ? nil : note
         )
-        Task {
-            await store.saveMember(existing: member, create: create)
-            // Diff staged values against the load-time baseline so an
-            // unchanged field doesn't re-rotate its server-side ciphertext
-            // or audit row. Editor stores NSNull to signal "clear".
-            if let memberID = member?.id ?? store.members.last?.id {
-                var sets: [CustomFieldValueSet] = []
-                for (fieldID, value) in fieldValues {
-                    if !customFieldValuesEqual(value, fieldValuesBaseline[fieldID]) {
-                        sets.append(CustomFieldValueSet(fieldID: fieldID, value: value))
+        if let member, privacy == .public, member.privacy != .public {
+            create.privacy = nil
+            let rest = create
+            runCeilingChange(
+                message: String(localized: "Making this member public can expose them on shared pages."),
+                onError: { e in
+                    if let e {
+                        isSaving = false
+                        store.errorMessage = e
+                    }
+                },
+                onStepUp: { req in
+                    isSaving = false
+                    privacyStepUp = req
+                }
+            ) { pw, totp in
+                guard let api = store.api else { return }
+                let updated = try await api.updateMemberCeiling(
+                    id: member.id,
+                    update: MemberCeilingUpdate(privacy: .public, password: pw, totpCode: totp)
+                )
+                await MainActor.run {
+                    if let i = store.members.firstIndex(where: { $0.id == updated.id }) {
+                        store.members[i] = updated
                     }
                 }
-                if !sets.isEmpty {
-                    await store.setMemberFieldValues(memberID: memberID, values: sets)
-                }
-                if selectedTagIDs != tagIDsBaseline {
-                    await store.setMemberTags(memberID: memberID, tagIDs: Array(selectedTagIDs))
+                await finishSave(rest)
+            }
+            return
+        }
+        Task { await finishSave(create) }
+    }
+
+    @MainActor
+    private func finishSave(_ create: MemberCreate) async {
+        await store.saveMember(existing: member, create: create)
+        // Diff staged values against the load-time baseline so an
+        // unchanged field doesn't re-rotate its server-side ciphertext
+        // or audit row. Editor stores NSNull to signal "clear".
+        if let memberID = member?.id ?? store.members.last?.id {
+            var sets: [CustomFieldValueSet] = []
+            for (fieldID, value) in fieldValues {
+                if !customFieldValuesEqual(value, fieldValuesBaseline[fieldID]) {
+                    sets.append(CustomFieldValueSet(fieldID: fieldID, value: value))
                 }
             }
-            isSaving = false
-            dismiss()
+            if !sets.isEmpty {
+                await store.setMemberFieldValues(memberID: memberID, values: sets)
+            }
+            if selectedTagIDs != tagIDsBaseline {
+                await store.setMemberTags(memberID: memberID, tagIDs: Array(selectedTagIDs))
+            }
         }
+        isSaving = false
+        dismiss()
     }
 
     // Equality across the type-erased values the wire carries. An
@@ -1512,6 +1561,8 @@ struct MemberEditSheet: View {
                     MultiselectFreeformEditor(field: field, values: $fieldValues)
                 }
             }
+
+            PrivacyTag(level: field.privacy, pending: field.pendingPrivacy, activatesAt: field.privacyActivatesAt)
         }
     }
 

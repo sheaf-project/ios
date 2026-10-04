@@ -11,6 +11,7 @@ struct EditSystemProfileSheet: View {
     @State private var note        = ""
     @State private var tag         = ""
     @State private var avatarURL   = ""
+    @State private var bannerURL   = ""
     @State private var colorHex    = "#8B5CF6"
     @State private var privacy: PrivacyLevel = .private
     @State private var isSaving    = false
@@ -18,6 +19,9 @@ struct EditSystemProfileSheet: View {
     @State private var selectedPhoto: PhotosPickerItem?
     @State private var isUploadingAvatar = false
     @State private var avatarMode: AvatarInputMode = .url
+    @State private var selectedBannerPhoto: PhotosPickerItem?
+    @State private var isUploadingBanner = false
+    @State private var bannerCropImage: UIImage?
 
     var body: some View {
         NavigationStack {
@@ -28,6 +32,17 @@ struct EditSystemProfileSheet: View {
                     field("Tag", placeholder: "Short tag, e.g. SYS", value: $tag)
                         .autocapitalization(.allCharacters)
                         .listRowBackground(theme.backgroundCard)
+                }
+
+                Section {
+                    BannerInputSection(
+                        bannerURL: $bannerURL,
+                        selectedPhoto: $selectedBannerPhoto,
+                        isUploading: $isUploadingBanner,
+                        cropImage: $bannerCropImage,
+                        api: store.api
+                    )
+                    .listRowBackground(theme.backgroundCard)
                 }
 
                 Section("Avatar") {
@@ -69,7 +84,7 @@ struct EditSystemProfileSheet: View {
                     .listRowBackground(theme.backgroundCard)
 
                     Picker("Privacy", selection: $privacy) {
-                        ForEach(PrivacyLevel.allCases, id: \.self) { level in
+                        ForEach(PrivacyLevel.allCases.filter { $0 != .public || store.offersPublic(saved: store.systemProfile?.privacy) }, id: \.self) { level in
                             Text(level.rawValue.capitalized).tag(level)
                         }
                     }
@@ -77,6 +92,12 @@ struct EditSystemProfileSheet: View {
                     .tint(theme.accentLight)
                     .foregroundColor(theme.textPrimary)
                     .listRowBackground(theme.backgroundCard)
+                    if !store.offersPublic(saved: store.systemProfile?.privacy) {
+                        Text(SystemStore.publishingOffNote)
+                            .font(.caption)
+                            .foregroundColor(theme.textTertiary)
+                            .listRowBackground(theme.backgroundCard)
+                    }
                 }
 
                 if let error {
@@ -131,6 +152,7 @@ struct EditSystemProfileSheet: View {
         note        = profile.note ?? ""
         tag         = profile.tag ?? ""
         avatarURL   = profile.avatarURL ?? ""
+        bannerURL   = profile.bannerURL ?? ""
         if avatarURL.hasPrefix("/") { avatarMode = .upload }
         colorHex    = profile.color ?? "#8B5CF6"
         privacy     = profile.privacy
@@ -145,6 +167,7 @@ struct EditSystemProfileSheet: View {
             note:        note.isEmpty        ? nil : note,
             tag:         tag.isEmpty         ? nil : tag,
             avatarURL:   avatarURL.isEmpty   ? nil : avatarURL,
+            bannerURL:   bannerURL.isEmpty   ? nil : bannerURL,
             color:       colorHex,
             privacy:     privacy
         ))

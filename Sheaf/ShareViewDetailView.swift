@@ -65,6 +65,7 @@ struct ShareViewDetailView: View {
                     }
 
                     flagsSection
+                    linkPreviewSection
                     membersSection
                     groupsSection
                     fieldsSection
@@ -155,6 +156,11 @@ struct ShareViewDetailView: View {
                 flagRow(String(localized: "Member roster"), icon: "person.2.fill",
                         flag: "include_members", isOn: share.includeMembers, pending: share.pendingIncludeMembers)
                 Divider().background(theme.divider).padding(.leading, 52)
+                flagRow(String(localized: "Show everyone set to Public"), icon: "person.3.fill",
+                        flag: "include_all_public_members", isOn: share.includeAllPublicMembers,
+                        pending: share.pendingIncludeAllPublicMembers,
+                        footer: String(localized: "Follows each member's privacy. The hand-picked list below is kept but not used while this is on."))
+                Divider().background(theme.divider).padding(.leading, 52)
                 flagRow(String(localized: "Member bios"), icon: "text.alignleft",
                         flag: "include_bio", isOn: share.includeBio, pending: share.pendingIncludeBio)
                 Divider().background(theme.divider).padding(.leading, 52)
@@ -175,7 +181,7 @@ struct ShareViewDetailView: View {
         }
     }
 
-    private func flagRow(_ title: String, icon: String, flag: String, isOn: Bool, pending: Bool?) -> some View {
+    private func flagRow(_ title: String, icon: String, flag: String, isOn: Bool, pending: Bool?, footer: String? = nil) -> some View {
         HStack(spacing: 12) {
             Image(systemName: icon)
                 .foregroundColor(theme.accentLight)
@@ -184,6 +190,11 @@ struct ShareViewDetailView: View {
                 Text(title)
                     .font(.subheadline)
                     .foregroundColor(theme.textPrimary)
+                if let footer {
+                    Text(footer)
+                        .font(.caption)
+                        .foregroundColor(theme.textTertiary)
+                }
                 if let pending, let at = share.flagsActivateAt {
                     Text("Turns \(pending ? String(localized: "on") : String(localized: "off")) \(at.formatted(.relative(presentation: .named)))")
                         .font(.caption)
@@ -234,6 +245,70 @@ struct ShareViewDetailView: View {
         .padding(.horizontal, 16).padding(.vertical, 12)
     }
 
+    // MARK: - Link previews
+
+    private var linkPreviewSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            section(title: String(localized: "Link Previews")) {
+                VStack(spacing: 0) {
+                    previewRow(String(localized: "System link"), icon: "link",
+                               mode: share.linkPreviewMode, pending: share.pendingLinkPreviewMode,
+                               effective: share.linkPreviewEffective) { setPreviewMode(member: false, $0) }
+                    Divider().background(theme.divider).padding(.leading, 52)
+                    previewRow(String(localized: "Member links"), icon: "person.crop.rectangle",
+                               mode: share.memberLinkPreviewMode, pending: share.pendingMemberLinkPreviewMode,
+                               effective: share.memberLinkPreviewEffective) { setPreviewMode(member: true, $0) }
+                }
+            }
+            Text("Generic shows only that it is a Sheaf link. System details includes the system name and avatar.")
+                .font(.caption)
+                .foregroundColor(theme.textTertiary)
+                .padding(.horizontal, 40)
+        }
+    }
+
+    private func previewRow(_ title: String, icon: String, mode: LinkPreviewMode, pending: LinkPreviewMode?,
+                            effective: LinkPreviewMode, onPick: @escaping (LinkPreviewMode) -> Void) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .foregroundColor(theme.accentLight)
+                .frame(width: 20)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.subheadline)
+                    .foregroundColor(theme.textPrimary)
+                if let pending, let at = share.flagsActivateAt {
+                    Text("Changes to \(previewLabel(pending)) \(at.formatted(.relative(presentation: .named)))")
+                        .font(.caption)
+                        .foregroundColor(theme.warning)
+                } else if effective != mode {
+                    Text("Links currently unfurl as \(previewLabel(effective))")
+                        .font(.caption)
+                        .foregroundColor(theme.textTertiary)
+                }
+            }
+            Spacer()
+            Menu {
+                Button(previewLabel(.generic)) { onPick(.generic) }
+                Button(previewLabel(.systemDetails)) { onPick(.systemDetails) }
+            } label: {
+                HStack(spacing: 4) {
+                    Text(previewLabel(mode))
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.caption2)
+                }
+                .font(.subheadline)
+                .foregroundColor(theme.accentLight)
+            }
+            .disabled(!publishingEnabled && mode == .generic)
+        }
+        .padding(.horizontal, 16).padding(.vertical, 12)
+    }
+
+    private func previewLabel(_ m: LinkPreviewMode) -> String {
+        m == .generic ? String(localized: "Generic") : String(localized: "System details")
+    }
+
     // MARK: - Members
 
     private var membersSection: some View {
@@ -249,6 +324,7 @@ struct ShareViewDetailView: View {
                     memberRow(row)
                     Divider().background(theme.divider)
                 }
+                .opacity(share.includeAllPublicMembers ? 0.45 : 1)
                 addButton(String(localized: "Add Member")) { showMemberPicker = true }
             }
         }
@@ -466,11 +542,24 @@ struct ShareViewDetailView: View {
         case "fronting_show_count": u.frontingShowCount = value
         case "include_relationships": u.includeRelationships = value
         case "include_groups": u.includeGroups = value
+        case "include_all_public_members": u.includeAllPublicMembers = value
         default: return
         }
         let loosening = value && share.isShared
         performMutation(exposing: loosening,
                         message: String(localized: "Showing more on a published view requires re-authentication.")) { pw, totp in
+            var x = u
+            x.password = pw
+            x.totpCode = totp
+            try await apply(x)
+        }
+    }
+
+    private func setPreviewMode(member: Bool, _ mode: LinkPreviewMode) {
+        var u = ShareViewUpdate()
+        if member { u.memberLinkPreviewMode = mode } else { u.linkPreviewMode = mode }
+        performMutation(exposing: mode == .systemDetails && share.isShared,
+                        message: String(localized: "Richer link previews on a published view require re-authentication.")) { pw, totp in
             var x = u
             x.password = pw
             x.totpCode = totp

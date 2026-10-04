@@ -150,6 +150,13 @@ class SystemStore: ObservableObject {
     @Published var pendingSafetyActions: [PendingAction] = []
     @Published var pendingSafetyChanges: [SafetyChangeRequest] = []
     @Published var safetySettings: SystemSafetySettings?
+    @Published var publishingEnabled = true
+
+    static let publishingOffNote: LocalizedStringKey = "Public profiles are turned off on this instance, so nothing new can be set to Public. Anything already public is kept, and you can still lower it."
+
+    func offersPublic(saved: PrivacyLevel?) -> Bool {
+        publishingEnabled || saved == .public
+    }
 
     /// Resources guarded by System Safety. Used to block destructive offline ops
     /// when the user has Safety toggled for that resource type — those deletions
@@ -479,6 +486,10 @@ class SystemStore: ObservableObject {
                 }
             }
 
+            if let api, let me = try? await api.getMe() {
+                publishingEnabled = me.publicProfilesEnabled
+            }
+
             // Sync client settings after main data (non-fatal on failure)
             await fetchClientSettings()
         }
@@ -589,6 +600,9 @@ class SystemStore: ObservableObject {
                     var resolved = create
                     resolved.memberIDs = create.memberIDs.map { tempIDMap[$0] ?? $0 }
                     let created = try await api.createFront(resolved)
+                    if let endedAt = create.endedAt, created.endedAt == nil {
+                        _ = try await api.updateFront(id: created.id, update: FrontUpdate(endedAt: endedAt, memberIDs: nil))
+                    }
                     if let tempID = op.tempID {
                         tempIDMap[tempID] = created.id
                     }
@@ -975,8 +989,9 @@ class SystemStore: ObservableObject {
 
         if NetworkMonitor.shared.isOnline {
             do {
-                var entry = try await api.createFront(FrontCreate(memberIDs: memberIDs, startedAt: startedAt, customStatus: customStatus))
-                if let endedAt {
+                // replace_fronts false keeps an old server that drops ended_at from replacing the live front
+                var entry = try await api.createFront(FrontCreate(memberIDs: memberIDs, startedAt: startedAt, replaceFronts: endedAt == nil ? nil : false, customStatus: customStatus, endedAt: endedAt))
+                if let endedAt, entry.endedAt == nil {
                     entry = try await api.updateFront(id: entry.id, update: FrontUpdate(endedAt: endedAt, memberIDs: nil))
                 }
                 frontHistory.insert(entry, at: 0)
@@ -992,15 +1007,9 @@ class SystemStore: ObservableObject {
         }
 
         let tempID = UUID().uuidString
-        let create = FrontCreate(memberIDs: memberIDs, startedAt: startedAt, customStatus: customStatus)
+        let create = FrontCreate(memberIDs: memberIDs, startedAt: startedAt, replaceFronts: endedAt == nil ? nil : false, customStatus: customStatus, endedAt: endedAt)
         if let body = try? JSONEncoder.iso.encode(create) {
             enqueue(.createFront, tempID: tempID, body: body)
-        }
-        if let endedAt {
-            let update = FrontUpdate(endedAt: endedAt, memberIDs: nil)
-            if let body = try? JSONEncoder.iso.encode(update) {
-                enqueue(.updateFront, resourceID: tempID, body: body)
-            }
         }
         let optimistic = FrontEntry(
             id: tempID, systemID: systemProfile?.id ?? "",
@@ -1027,7 +1036,8 @@ class SystemStore: ObservableObject {
                         avatarURL: create.avatarURL, bannerURL: create.bannerURL,
                         color: create.color,
                         birthday: create.birthday, emoji: create.emoji,
-                        isCustomFront: create.isCustomFront, privacy: create.privacy,
+                        isCustomFront: create.isCustomFront,
+                        privacy: create.privacy == existing.privacy ? nil : create.privacy,
                         note: create.note
                     )
                     let updated = try await api.updateMember(id: existing.id, update: update)
@@ -1054,7 +1064,8 @@ class SystemStore: ObservableObject {
                 description: create.description, pronouns: create.pronouns,
                 avatarURL: create.avatarURL, color: create.color,
                 birthday: create.birthday, emoji: create.emoji,
-                isCustomFront: create.isCustomFront, privacy: create.privacy,
+                isCustomFront: create.isCustomFront,
+                privacy: create.privacy == existing.privacy ? nil : create.privacy,
                 note: create.note
             )
             if let body = try? JSONEncoder.iso.encode(update) {
@@ -1288,6 +1299,7 @@ class SystemStore: ObservableObject {
         if let note = update.note { systemProfile?.note = note }
         if let tag = update.tag { systemProfile?.tag = tag }
         if let url = update.avatarURL { systemProfile?.avatarURL = url }
+        if let url = update.bannerURL { systemProfile?.bannerURL = url }
         if let color = update.color { systemProfile?.color = color }
         if let privacy = update.privacy { systemProfile?.privacy = privacy }
         saveAllToCache()

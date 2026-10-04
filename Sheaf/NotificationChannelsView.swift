@@ -349,7 +349,7 @@ struct WatcherDetailView: View {
                     .foregroundColor(theme.textTertiary)
             }
             Spacer()
-            stateIndicator(channel.destinationState)
+            stateIndicator(channel)
             Image(systemName: "chevron.right")
                 .font(.caption)
                 .foregroundColor(theme.textTertiary)
@@ -357,12 +357,15 @@ struct WatcherDetailView: View {
         .padding(.horizontal, 16).padding(.vertical, 14)
     }
 
-    private func stateIndicator(_ state: DestinationState) -> some View {
-        HStack(spacing: 4) {
+    private func stateIndicator(_ channel: NotificationChannel) -> some View {
+        let state = channel.destinationState
+        let label = state == .disabled && channel.disabledReason == "delivery_failed"
+            ? "Stopped: deliveries failing" : state.label
+        return HStack(spacing: 4) {
             Circle()
                 .fill(stateColor(state))
                 .frame(width: 6, height: 6)
-            Text(state.label)
+            Text(label)
                 .font(.caption2).fontWeight(.medium)
                 .foregroundColor(stateColor(state))
         }
@@ -477,6 +480,8 @@ struct CreateChannelSheet: View {
     @State private var isSaving = false
     @State private var errorMessage: String?
     @State private var activationShare: ActivationShareInfo?
+    @State private var mobilePushAvailable = true
+    @State private var mobilePushUnavailableReason: String?
 
     struct ActivationShareInfo: Identifiable {
         let id = UUID()
@@ -507,6 +512,7 @@ struct CreateChannelSheet: View {
                         sectionCard(title: "Destination") {
                             VStack(spacing: 0) {
                                 ForEach(DestinationType.creatableTypes, id: \.self) { type in
+                                    let unavailable = type == .mobilePush && !mobilePushAvailable
                                     Button { destinationType = type } label: {
                                         HStack(spacing: 12) {
                                             Image(systemName: type.icon)
@@ -514,7 +520,7 @@ struct CreateChannelSheet: View {
                                                 .frame(width: 20)
                                             Text(type.label)
                                                 .font(.subheadline)
-                                                .foregroundColor(theme.textPrimary)
+                                                .foregroundColor(unavailable ? theme.textTertiary : theme.textPrimary)
                                             Spacer()
                                             if destinationType == type {
                                                 Image(systemName: "checkmark")
@@ -523,6 +529,14 @@ struct CreateChannelSheet: View {
                                             }
                                         }
                                         .padding(.horizontal, 16).padding(.vertical, 14)
+                                    }
+                                    .disabled(unavailable)
+                                    if unavailable {
+                                        Text(mobilePushUnavailableReason ?? "This server has no push credentials configured")
+                                            .font(.footnote)
+                                            .foregroundColor(theme.textTertiary)
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                            .padding(.horizontal, 16).padding(.bottom, 12)
                                     }
                                     if type != DestinationType.creatableTypes.last {
                                         Divider().background(theme.divider).padding(.leading, 52)
@@ -654,6 +668,16 @@ struct CreateChannelSheet: View {
                     .environmentObject(authManager)
                     .environmentObject(store)
             }
+            .task { await loadServerConfig() }
+        }
+    }
+
+    private func loadServerConfig() async {
+        guard let config = try? await store.api?.getNotificationServerConfig() else { return }
+        mobilePushAvailable = config.mobilePush.available
+        mobilePushUnavailableReason = config.mobilePush.unavailableReason
+        if !mobilePushAvailable && destinationType == .mobilePush {
+            destinationType = .webPush
         }
     }
 
@@ -908,7 +932,7 @@ struct ChannelDetailView: View {
                                 Text("State")
                                     .font(.subheadline).foregroundColor(theme.textSecondary)
                                 Spacer()
-                                stateIndicator(channel.destinationState)
+                                stateIndicator(channel)
                             }
                             .padding(.horizontal, 16).padding(.vertical, 14)
 
@@ -1631,12 +1655,15 @@ struct ChannelDetailView: View {
         return value
     }
 
-    private func stateIndicator(_ state: DestinationState) -> some View {
-        HStack(spacing: 4) {
+    private func stateIndicator(_ channel: NotificationChannel) -> some View {
+        let state = channel.destinationState
+        let label = state == .disabled && channel.disabledReason == "delivery_failed"
+            ? "Stopped: deliveries failing. Check the endpoint." : state.label
+        return HStack(spacing: 4) {
             Circle()
                 .fill(stateColor(state))
                 .frame(width: 6, height: 6)
-            Text(state.label)
+            Text(label)
                 .font(.caption2).fontWeight(.medium)
                 .foregroundColor(stateColor(state))
         }

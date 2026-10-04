@@ -163,7 +163,9 @@ struct ReceivingChannelsView: View {
 
     private func statusSuffix(for channel: ReceivingChannel) -> String? {
         if channel.pausedBySender { return "paused by sender" }
-        if channel.destinationState == .disabled { return "disabled" }
+        if channel.destinationState == .disabled {
+            return channel.disabledReason == "delivery_failed" ? "stopped: deliveries failing" : "disabled"
+        }
         return nil
     }
 

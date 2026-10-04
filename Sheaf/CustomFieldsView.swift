@@ -43,12 +43,7 @@ struct CustomFieldsView: View {
                                     .foregroundColor(theme.textSecondary)
                             }
                             Spacer()
-                            Text(field.privacy.rawValue.capitalized)
-                                .font(.caption2)
-                                .foregroundColor(theme.textTertiary)
-                                .padding(.horizontal, 8).padding(.vertical, 3)
-                                .background(theme.backgroundCard)
-                                .cornerRadius(6)
+                            PrivacyTag(level: field.privacy, pending: field.pendingPrivacy, activatesAt: field.privacyActivatesAt)
                             Image(systemName: "chevron.right")
                                 .font(.caption2)
                                 .foregroundColor(theme.textTertiary)
@@ -236,12 +231,18 @@ struct EditCustomFieldSheet: View {
                     .listRowBackground(theme.backgroundCard)
 
                     Picker("Privacy", selection: $privacy) {
-                        ForEach(PrivacyLevel.allCases, id: \.self) { level in
+                        ForEach(PrivacyLevel.allCases.filter { $0 != .public || store.offersPublic(saved: field.privacy) }, id: \.self) { level in
                             Text(level.rawValue.capitalized).tag(level)
                         }
                     }
                     .foregroundColor(theme.textPrimary)
                     .listRowBackground(theme.backgroundCard)
+                    if !store.offersPublic(saved: field.privacy) {
+                        Text(SystemStore.publishingOffNote)
+                            .font(.caption)
+                            .foregroundColor(theme.textTertiary)
+                            .listRowBackground(theme.backgroundCard)
+                    }
                 }
 
                 if isChoiceField {
@@ -379,12 +380,18 @@ struct AddCustomFieldSheet: View {
                     .foregroundColor(theme.textPrimary)
 
                     Picker("Privacy", selection: $privacy) {
-                        ForEach(PrivacyLevel.allCases, id: \.self) { level in
+                        ForEach(PrivacyLevel.allCases.filter { $0 != .public || store.offersPublic(saved: nil) }, id: \.self) { level in
                             Text(level.rawValue.capitalized).tag(level)
                         }
                     }
                     .listRowBackground(theme.backgroundCard)
                     .foregroundColor(theme.textPrimary)
+                    if !store.offersPublic(saved: nil) {
+                        Text(SystemStore.publishingOffNote)
+                            .font(.caption)
+                            .foregroundColor(theme.textTertiary)
+                            .listRowBackground(theme.backgroundCard)
+                    }
                 }
 
                 if isChoiceField {
@@ -449,5 +456,33 @@ struct AddCustomFieldSheet: View {
         ))
         isSaving = false
         dismiss()
+    }
+}
+
+// MARK: - Privacy Tag
+struct PrivacyTag: View {
+    @Environment(\.theme) var theme
+    let level: PrivacyLevel
+    var pending: PrivacyLevel? = nil
+    var activatesAt: Date? = nil
+
+    private var tint: Color {
+        level == .public ? theme.warning : theme.textTertiary
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(level.rawValue.capitalized)
+                .font(.caption2).fontWeight(.bold)
+                .foregroundColor(tint)
+                .padding(.horizontal, 6).padding(.vertical, 3)
+                .background(tint.opacity(0.15))
+                .cornerRadius(6)
+            if let pending, let activatesAt {
+                Text("becomes \(pending.rawValue.capitalized) \(activatesAt, style: .relative)")
+                    .font(.caption2)
+                    .foregroundColor(theme.warning)
+            }
+        }
     }
 }

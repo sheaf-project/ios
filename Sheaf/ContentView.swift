@@ -45,10 +45,10 @@ struct ContentView: View {
                     .tabItem {
                         Label("Journal", systemImage: "book.fill")
                     }
-                PollsView()
+                MoreView()
                     .tag(4)
                     .tabItem {
-                        Label("Polls", systemImage: "chart.bar.xaxis")
+                        Label("More", systemImage: "ellipsis.circle.fill")
                     }
             }
             .tint(theme.accentLight)
