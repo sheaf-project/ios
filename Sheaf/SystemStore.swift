@@ -152,6 +152,28 @@ class SystemStore: ObservableObject {
     @Published var safetySettings: SystemSafetySettings?
     @Published var publishingEnabled = true
 
+    var deleteConfirmation: DeleteConfirmation {
+        safetySettings?.authTier ?? systemProfile?.deleteConfirmation ?? .none
+    }
+
+    func deletionQueueDays(for category: KeyPath<SystemSafetySettings, Bool>) -> Int? {
+        guard let s = safetySettings, s[keyPath: category], s.gracePeriodDays > 0 else { return nil }
+        return s.gracePeriodDays
+    }
+
+    func queueNotice(_ category: KeyPath<SystemSafetySettings, Bool>, subject: String) -> String? {
+        guard let days = deletionQueueDays(for: category) else { return nil }
+        let span = inflectedString("^[\(days) days](inflect: true)")
+        return String(localized: "\(subject) will be queued for deletion in \(span). You can cancel from System Safety before then.")
+    }
+
+    func deletePrompt(_ category: KeyPath<SystemSafetySettings, Bool>, title: LocalizedStringResource, message: LocalizedStringResource, subject: String) -> DeletePrompt {
+        if let notice = queueNotice(category, subject: subject) {
+            return DeletePrompt(title: String(localized: "Queue deletion?"), message: notice, action: String(localized: "Queue"))
+        }
+        return DeletePrompt(title: String(localized: title), message: String(localized: message), action: String(localized: "Delete"))
+    }
+
     static let publishingOffNote: LocalizedStringKey = "Public profiles are turned off on this instance, so nothing new can be set to Public. Anything already public is kept, and you can still lower it."
 
     func offersPublic(saved: PrivacyLevel?) -> Bool {

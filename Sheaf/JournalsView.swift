@@ -126,19 +126,17 @@ struct JournalsView: View {
             JournalDetailSheet(entry: entry)
                 .environmentObject(store)
         }
-        .confirmationDialog("Delete this journal entry?", isPresented: $showDeleteConfirm, presenting: entryToDelete) { entry in
-            Button("Delete", role: .destructive) {
-                Task {
-                    let queued = await store.deleteJournal(id: entry.id)
-                    if let queued {
-                        deleteQueuedInfo = queued
-                        showDeleteQueued = true
-                    }
+        .deleteAlert(
+            store.deletePrompt(\.appliesToJournals, title: "Delete this journal entry?", message: "This will permanently delete this journal entry and cannot be undone.", subject: String(localized: "This entry")),
+            isPresented: $showDeleteConfirm, presenting: entryToDelete
+        ) { entry in
+            Task {
+                let queued = await store.deleteJournal(id: entry.id)
+                if let queued {
+                    deleteQueuedInfo = queued
+                    showDeleteQueued = store.deleteConfirmation != .none
                 }
             }
-            Button("Cancel", role: .cancel) {}
-        } message: { _ in
-            Text("This will permanently delete this journal entry and cannot be undone.")
         }
         .alert("Deletion Queued", isPresented: $showDeleteQueued) {
             Button("OK", role: .cancel) { deleteQueuedInfo = nil }
@@ -445,21 +443,19 @@ struct JournalDetailSheet: View {
             JournalRevisionsView(entry: entry)
                 .environmentObject(store)
         }
-        .confirmationDialog("Delete this journal entry?", isPresented: $showDeleteConfirm) {
-            Button("Delete", role: .destructive) {
-                Task {
-                    let queued = await store.deleteJournal(id: entry.id)
-                    if let queued {
-                        deleteQueuedInfo = queued
-                        showDeleteQueued = true
-                    } else {
-                        dismiss()
-                    }
+        .deleteAlert(
+            store.deletePrompt(\.appliesToJournals, title: "Delete this journal entry?", message: "This will permanently delete this journal entry and cannot be undone.", subject: String(localized: "This entry")),
+            isPresented: $showDeleteConfirm
+        ) {
+            Task {
+                let queued = await store.deleteJournal(id: entry.id)
+                if let queued {
+                    deleteQueuedInfo = queued
+                    showDeleteQueued = store.deleteConfirmation != .none
+                } else {
+                    dismiss()
                 }
             }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("This will permanently delete this journal entry and cannot be undone.")
         }
         .alert("Deletion Queued", isPresented: $showDeleteQueued) {
             Button("OK", role: .cancel) {
@@ -539,7 +535,7 @@ struct JournalDetailSheet: View {
         guard let response else { return }
         if response.pendingActionID != nil, let after = response.finalizeAfter {
             pendingUnpinAt = after
-            showUnpinQueued = true
+            showUnpinQueued = store.deleteConfirmation != .none
         } else {
             pinnedAt = nil
             pendingUnpinAt = nil

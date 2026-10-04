@@ -8,6 +8,11 @@ struct FilesView: View {
     @State private var files: [UploadedFile] = []
     @State private var isLoading = true
     @State private var errorMessage: String?
+    @State private var fileToDelete: UploadedFile?
+    @State private var showDeleteConfirm = false
+    @State private var showDeleteAuthSheet = false
+    @State private var deleteQueuedInfo: DeleteQueued?
+    @State private var showDeleteQueued = false
 
     private var avatars: [UploadedFile] { files.filter { $0.purpose == "avatar" } }
     private var banners: [UploadedFile] { files.filter { $0.purpose == "banner" } }
@@ -41,7 +46,6 @@ struct FilesView: View {
                         section("Banners", banners)
                     }
                 }
-                .listStyle(.plain)
                 .scrollContentBackground(.hidden)
                 .refreshable { await load() }
             }
@@ -49,12 +53,41 @@ struct FilesView: View {
         .navigationTitle("Files")
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
+        .deleteAlert(
+            store.deletePrompt(\.appliesToImages, title: "Delete this file?", message: "Anything still using this image will lose it.", subject: String(localized: "This file")),
+            isPresented: $showDeleteConfirm, presenting: fileToDelete
+        ) { f in
+            Task { await delete(f, confirmation: nil) }
+        }
+        .sheet(isPresented: $showDeleteAuthSheet) {
+            if let f = fileToDelete {
+                DeleteConfirmSheet(resourceName: fileLabel(f), actionLabel: "Delete File", category: \.appliesToImages) { confirmation in
+                    Task { await delete(f, confirmation: confirmation) }
+                }
+                .environmentObject(store)
+            }
+        }
+        .alert("Deletion Queued", isPresented: $showDeleteQueued) {
+            Button("OK", role: .cancel) { deleteQueuedInfo = nil }
+        } message: {
+            if let info = deleteQueuedInfo {
+                Text("This deletion has been queued and will finalize \(info.finalizeAfter, style: .relative). You can cancel it from System Safety settings.")
+            }
+        }
     }
 
     private func section(_ title: LocalizedStringKey, _ items: [UploadedFile]) -> some View {
         Section {
             ForEach(items) { f in
                 row(f)
+                    .listRowBackground(theme.backgroundCard)
+                    .swipeActions(edge: .trailing) {
+                        Button(role: .destructive) {
+                            requestDelete(f)
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
+                    }
             }
         } header: {
             Text(title)
@@ -62,8 +95,6 @@ struct FilesView: View {
                 .foregroundColor(theme.textTertiary)
                 .textCase(nil)
         }
-        .listRowBackground(Color.clear)
-        .listRowSeparator(.hidden)
     }
 
     private func row(_ f: UploadedFile) -> some View {
@@ -83,8 +114,8 @@ struct FilesView: View {
                 Text(f.createdAt.formatted(date: .abbreviated, time: .omitted))
                     .font(.caption)
                     .foregroundColor(theme.textSecondary)
-                if f.pendingDeleteAt != nil {
-                    Text("Pending deletion")
+                if let at = f.pendingDeleteAt {
+                    Text("Deletes \(at, style: .relative)")
                         .font(.caption)
                         .foregroundColor(theme.warning)
                 }
@@ -92,6 +123,36 @@ struct FilesView: View {
             Spacer()
         }
         .padding(.vertical, 4)
+    }
+
+    private func fileLabel(_ f: UploadedFile) -> String {
+        let kind = f.purpose == "banner" ? String(localized: "Banner") : String(localized: "Avatar")
+        return "\(kind), \(f.createdAt.formatted(date: .abbreviated, time: .omitted))"
+    }
+
+    private func requestDelete(_ f: UploadedFile) {
+        fileToDelete = f
+        if store.deleteConfirmation == .none {
+            showDeleteConfirm = true
+        } else {
+            showDeleteAuthSheet = true
+        }
+    }
+
+    private func delete(_ f: UploadedFile, confirmation: MemberDeleteConfirm?) async {
+        guard let api = store.api else { return }
+        do {
+            let queued = try await api.deleteFile(id: f.id, confirmation: confirmation)
+            if let queued {
+                deleteQueuedInfo = queued
+                showDeleteQueued = store.deleteConfirmation != .none
+                await load()
+            } else {
+                files.removeAll { $0.id == f.id }
+            }
+        } catch {
+            store.errorMessage = error.userFacingMessage
+        }
     }
 
     private func load() async {

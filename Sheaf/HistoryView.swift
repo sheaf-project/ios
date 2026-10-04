@@ -192,13 +192,11 @@ struct HistoryView: View {
                     .refreshable {
                         await reload()
                     }
-                    .alert("Delete this front entry?", isPresented: $showDeleteConfirm, presenting: entryToDelete) { entry in
-                        Button("Delete", role: .destructive) {
-                            Task { await deleteFrontEntry(entry) }
-                        }
-                        Button("Cancel", role: .cancel) {}
-                    } message: { _ in
-                        Text("This will permanently delete this front history entry and cannot be undone.")
+                    .deleteAlert(
+                        store.deletePrompt(\.appliesToFronts, title: "Delete this front entry?", message: "This will permanently delete this front history entry and cannot be undone.", subject: String(localized: "This front entry")),
+                        isPresented: $showDeleteConfirm, presenting: entryToDelete
+                    ) { entry in
+                        Task { await deleteFrontEntry(entry) }
                     }
                     .alert("Deletion Queued", isPresented: $showDeleteQueued) {
                         Button("OK", role: .cancel) { deleteQueuedInfo = nil }
@@ -210,12 +208,12 @@ struct HistoryView: View {
                     .sheet(isPresented: $showDeleteAuthSheet) {
                         if let entry = entryToDelete {
                             let names = membersFor(entry).map { $0.displayName ?? $0.name }.joined(separator: ", ")
-                            DeleteConfirmSheet(resourceName: names.isEmpty ? "front entry" : names, actionLabel: "Delete Entry") { confirmation in
+                            DeleteConfirmSheet(resourceName: names.isEmpty ? "front entry" : names, actionLabel: "Delete Entry", category: \.appliesToFronts) { confirmation in
                                 Task {
                                     let queued = await store.deleteFront(id: entry.id, confirmation: confirmation)
                                     if let queued {
                                         deleteQueuedInfo = queued
-                                        showDeleteQueued = true
+                                        showDeleteQueued = store.deleteConfirmation != .none
                                     }
                                 }
                             }
@@ -243,7 +241,7 @@ struct HistoryView: View {
 
     private func requestDelete(_ entry: FrontEntry) {
         entryToDelete = entry
-        let level = store.systemProfile?.deleteConfirmation ?? .none
+        let level = store.deleteConfirmation
         if level == .none {
             showDeleteConfirm = true
         } else {
@@ -255,7 +253,7 @@ struct HistoryView: View {
         let queued = await store.deleteFront(id: entry.id)
         if let queued {
             deleteQueuedInfo = queued
-            showDeleteQueued = true
+            showDeleteQueued = store.deleteConfirmation != .none
         }
     }
 

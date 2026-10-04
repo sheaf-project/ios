@@ -174,25 +174,23 @@ struct MembersView: View {
             MemberEditSheet(member: nil)
                 .environmentObject(store)
         }
-        .alert("Delete this member?", isPresented: $showDeleteConfirm, presenting: memberToDelete) { member in
-            Button("Delete", role: .destructive) {
-                Task {
-                    let queued = await store.deleteMember(id: member.id)
-                    if let queued {
-                        deleteQueuedInfo = queued
-                        showDeleteQueued = true
-                    }
+        .deleteAlert(
+            store.deletePrompt(\.appliesToMembers, title: "Delete this member?", message: "This will permanently delete \(memberToDelete.map { $0.displayName ?? $0.name } ?? "") and cannot be undone.", subject: memberToDelete.map { $0.displayName ?? $0.name } ?? ""),
+            isPresented: $showDeleteConfirm, presenting: memberToDelete
+        ) { member in
+            Task {
+                let queued = await store.deleteMember(id: member.id)
+                if let queued {
+                    deleteQueuedInfo = queued
+                    showDeleteQueued = store.deleteConfirmation != .none
                 }
             }
-            Button("Cancel", role: .cancel) {}
-        } message: { member in
-            Text("This will permanently delete \(member.displayName ?? member.name) and cannot be undone.")
         }
         .sheet(isPresented: $showDeleteAuthSheet) {
             if let member = memberToDelete {
                 MemberDeleteConfirmSheet(member: member) { queued in
                     deleteQueuedInfo = queued
-                    showDeleteQueued = true
+                    showDeleteQueued = store.deleteConfirmation != .none
                 }
                 .environmentObject(store)
             }
@@ -255,7 +253,7 @@ struct MembersView: View {
 
     private func requestDelete(_ member: Member) {
         memberToDelete = member
-        let level = store.systemProfile?.deleteConfirmation ?? .none
+        let level = store.deleteConfirmation
         if level == .none {
             showDeleteConfirm = true
         } else {
@@ -1297,27 +1295,25 @@ struct MemberEditSheet: View {
             }
             .environmentObject(store)
         }
-        .alert("Delete this member?", isPresented: $showDeleteConfirm, presenting: member) { existing in
-            Button("Delete", role: .destructive) {
-                Task {
-                    let queued = await store.deleteMember(id: existing.id)
-                    if let queued {
-                        deleteQueuedInfo = queued
-                        showDeleteQueued = true
-                    } else {
-                        dismiss()
-                    }
+        .deleteAlert(
+            store.deletePrompt(\.appliesToMembers, title: "Delete this member?", message: "This will permanently delete \(member.map { $0.displayName ?? $0.name } ?? "") and cannot be undone.", subject: member.map { $0.displayName ?? $0.name } ?? ""),
+            isPresented: $showDeleteConfirm, presenting: member
+        ) { existing in
+            Task {
+                let queued = await store.deleteMember(id: existing.id)
+                if let queued {
+                    deleteQueuedInfo = queued
+                    showDeleteQueued = store.deleteConfirmation != .none
+                } else {
+                    dismiss()
                 }
             }
-            Button("Cancel", role: .cancel) {}
-        } message: { existing in
-            Text("This will permanently delete \(existing.displayName ?? existing.name) and cannot be undone.")
         }
         .sheet(isPresented: $showDeleteAuthSheet) {
             if let existing = member {
                 MemberDeleteConfirmSheet(member: existing) { queued in
                     deleteQueuedInfo = queued
-                    showDeleteQueued = true
+                    showDeleteQueued = store.deleteConfirmation != .none
                 }
                 .environmentObject(store)
             }
@@ -1335,7 +1331,7 @@ struct MemberEditSheet: View {
     }
 
     private func requestDelete(_ existing: Member) {
-        let level = store.systemProfile?.deleteConfirmation ?? .none
+        let level = store.deleteConfirmation
         if level == .none {
             showDeleteConfirm = true
         } else {
@@ -2246,7 +2242,11 @@ struct MemberDeleteConfirmSheet: View {
     @State private var errorMessage: String?
 
     private var level: DeleteConfirmation {
-        store.systemProfile?.deleteConfirmation ?? .none
+        store.deleteConfirmation
+    }
+
+    private var willQueue: Bool {
+        store.deletionQueueDays(for: \.appliesToMembers) != nil
     }
 
     private var needsPassword: Bool {
@@ -2268,6 +2268,13 @@ struct MemberDeleteConfirmSheet: View {
                     Text("Deleting \(member.displayName ?? member.name)")
                         .font(.subheadline).fontWeight(.medium)
                         .foregroundColor(theme.textPrimary)
+
+                    if let notice = store.queueNotice(\.appliesToMembers, subject: member.displayName ?? member.name) {
+                        Text(notice)
+                            .font(.subheadline)
+                            .foregroundColor(theme.textSecondary)
+                            .multilineTextAlignment(.center)
+                    }
 
                     Text("Deletion protection is enabled. Please verify your identity to continue.")
                         .font(.subheadline)
@@ -2308,7 +2315,7 @@ struct MemberDeleteConfirmSheet: View {
                             if isDeleting {
                                 ProgressView().tint(.white).scaleEffect(0.8)
                             }
-                            Text("Delete Member")
+                            Text(willQueue ? "Queue" : "Delete Member")
                                 .font(.subheadline).fontWeight(.semibold)
                         }
                         .foregroundColor(.white)
@@ -2322,7 +2329,7 @@ struct MemberDeleteConfirmSheet: View {
                 .padding(.horizontal, 24).padding(.top, 24)
             }
             .background(theme.backgroundPrimary)
-            .navigationTitle("Confirm Deletion")
+            .navigationTitle(willQueue ? "Queue Deletion" : "Confirm Deletion")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

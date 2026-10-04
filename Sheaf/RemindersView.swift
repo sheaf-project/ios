@@ -112,25 +112,23 @@ struct RemindersView: View {
             EditReminderSheet(existing: reminder, channels: channels)
                 .environmentObject(store)
         }
-        .confirmationDialog("Delete this reminder?", isPresented: $showDeleteConfirm, presenting: reminderToDelete) { reminder in
-            Button("Delete", role: .destructive) {
-                Task {
-                    let queued = await store.deleteReminder(id: reminder.id)
-                    if let queued {
-                        deleteQueuedInfo = queued
-                        showDeleteQueued = true
-                    }
+        .deleteAlert(
+            store.deletePrompt(\.appliesToReminders, title: "Delete this reminder?", message: "This will permanently delete this reminder.", subject: String(localized: "This reminder")),
+            isPresented: $showDeleteConfirm, presenting: reminderToDelete
+        ) { reminder in
+            Task {
+                let queued = await store.deleteReminder(id: reminder.id)
+                if let queued {
+                    deleteQueuedInfo = queued
+                    showDeleteQueued = store.deleteConfirmation != .none
                 }
             }
-            Button("Cancel", role: .cancel) {}
-        } message: { _ in
-            Text("This will permanently delete this reminder.")
         }
         .sheet(isPresented: $showDeleteAuthSheet) {
             if let reminder = reminderToDelete {
                 ReminderDeleteConfirmSheet(reminder: reminder) { queued in
                     deleteQueuedInfo = queued
-                    showDeleteQueued = true
+                    showDeleteQueued = store.deleteConfirmation != .none
                 }
                 .environmentObject(store)
             }
@@ -184,7 +182,7 @@ struct RemindersView: View {
 
     private func requestDelete(_ reminder: Reminder) {
         reminderToDelete = reminder
-        let level = store.systemProfile?.deleteConfirmation ?? .none
+        let level = store.deleteConfirmation
         if level == .none {
             showDeleteConfirm = true
         } else {
@@ -720,7 +718,11 @@ struct ReminderDeleteConfirmSheet: View {
     @State private var errorMessage: String?
 
     private var level: DeleteConfirmation {
-        store.systemProfile?.deleteConfirmation ?? .none
+        store.deleteConfirmation
+    }
+
+    private var willQueue: Bool {
+        store.deletionQueueDays(for: \.appliesToReminders) != nil
     }
 
     private var needsPassword: Bool {
@@ -742,6 +744,13 @@ struct ReminderDeleteConfirmSheet: View {
                     Text("Deleting \"\(reminder.name)\"")
                         .font(.subheadline).fontWeight(.medium)
                         .foregroundColor(theme.textPrimary)
+
+                    if let notice = store.queueNotice(\.appliesToReminders, subject: "\"\(reminder.name)\"") {
+                        Text(notice)
+                            .font(.subheadline)
+                            .foregroundColor(theme.textSecondary)
+                            .multilineTextAlignment(.center)
+                    }
 
                     Text("Deletion protection is enabled. Please verify your identity to continue.")
                         .font(.subheadline)
@@ -782,7 +791,7 @@ struct ReminderDeleteConfirmSheet: View {
                             if isDeleting {
                                 ProgressView().tint(.white).scaleEffect(0.8)
                             }
-                            Text("Delete Reminder")
+                            Text(willQueue ? "Queue" : "Delete Reminder")
                                 .font(.subheadline).fontWeight(.semibold)
                         }
                         .foregroundColor(.white)
@@ -796,7 +805,7 @@ struct ReminderDeleteConfirmSheet: View {
                 .padding(.horizontal, 24).padding(.top, 24)
             }
             .background(theme.backgroundPrimary)
-            .navigationTitle("Confirm Deletion")
+            .navigationTitle(willQueue ? "Queue Deletion" : "Confirm Deletion")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

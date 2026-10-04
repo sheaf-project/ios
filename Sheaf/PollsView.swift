@@ -19,7 +19,7 @@ struct PollsView: View {
 
     private func requestDelete(_ poll: Poll) {
         pollToDelete = poll
-        let level = store.systemProfile?.deleteConfirmation ?? .none
+        let level = store.deleteConfirmation
         if level == .none {
             showDeleteConfirm = true
         } else {
@@ -123,28 +123,26 @@ struct PollsView: View {
             PollDetailSheet(poll: poll)
                 .environmentObject(store)
         }
-        .confirmationDialog("Delete this poll?", isPresented: $showDeleteConfirm, presenting: pollToDelete) { poll in
-            Button("Delete", role: .destructive) {
-                Task {
-                    let queued = await store.deletePoll(id: poll.id)
-                    if let queued {
-                        deleteQueuedInfo = queued
-                        showDeleteQueued = true
-                    }
+        .deleteAlert(
+            store.deletePrompt(\.appliesToPolls, title: "Delete this poll?", message: "This will permanently delete this poll and all votes.", subject: String(localized: "This poll")),
+            isPresented: $showDeleteConfirm, presenting: pollToDelete
+        ) { poll in
+            Task {
+                let queued = await store.deletePoll(id: poll.id)
+                if let queued {
+                    deleteQueuedInfo = queued
+                    showDeleteQueued = store.deleteConfirmation != .none
                 }
             }
-            Button("Cancel", role: .cancel) {}
-        } message: { _ in
-            Text("This will permanently delete this poll and all votes.")
         }
         .sheet(isPresented: $showDeleteAuthSheet) {
             if let poll = pollToDelete {
-                DeleteConfirmSheet(resourceName: poll.question, actionLabel: "Delete Poll") { confirmation in
+                DeleteConfirmSheet(resourceName: poll.question, actionLabel: "Delete Poll", category: \.appliesToPolls) { confirmation in
                     Task {
                         let queued = await store.deletePoll(id: poll.id, confirmation: confirmation)
                         if let queued {
                             deleteQueuedInfo = queued
-                            showDeleteQueued = true
+                            showDeleteQueued = store.deleteConfirmation != .none
                         }
                     }
                 }
@@ -274,7 +272,7 @@ struct PollDetailSheet: View {
     private var activePoll: Poll { livePoll ?? poll }
 
     private func requestDelete() {
-        let level = store.systemProfile?.deleteConfirmation ?? .none
+        let level = store.deleteConfirmation
         if level == .none {
             showDeleteConfirm = true
         } else {
@@ -400,29 +398,27 @@ struct PollDetailSheet: View {
                 selectVoter(id)
             }
         }
-        .confirmationDialog("Delete this poll?", isPresented: $showDeleteConfirm) {
-            Button("Delete", role: .destructive) {
-                Task {
-                    let queued = await store.deletePoll(id: activePoll.id)
-                    if let queued {
-                        deleteQueuedInfo = queued
-                        showDeleteQueued = true
-                    } else {
-                        dismiss()
-                    }
+        .deleteAlert(
+            store.deletePrompt(\.appliesToPolls, title: "Delete this poll?", message: "This will permanently delete this poll and all votes.", subject: String(localized: "This poll")),
+            isPresented: $showDeleteConfirm
+        ) {
+            Task {
+                let queued = await store.deletePoll(id: activePoll.id)
+                if let queued {
+                    deleteQueuedInfo = queued
+                    showDeleteQueued = store.deleteConfirmation != .none
+                } else {
+                    dismiss()
                 }
             }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("This will permanently delete this poll and all votes.")
         }
         .sheet(isPresented: $showDeleteAuthSheet) {
-            DeleteConfirmSheet(resourceName: activePoll.question, actionLabel: "Delete Poll") { confirmation in
+            DeleteConfirmSheet(resourceName: activePoll.question, actionLabel: "Delete Poll", category: \.appliesToPolls) { confirmation in
                 Task {
                     let queued = await store.deletePoll(id: activePoll.id, confirmation: confirmation)
                     if let queued {
                         deleteQueuedInfo = queued
-                        showDeleteQueued = true
+                        showDeleteQueued = store.deleteConfirmation != .none
                     } else {
                         dismiss()
                     }

@@ -306,16 +306,17 @@ struct WatcherDetailView: View {
             Button("Save") { Task { await renameWatcher() } }
             Button("Cancel", role: .cancel) {}
         }
-        .confirmationDialog("Revoke this watcher?", isPresented: $showRevokeConfirm, titleVisibility: .visible) {
-            Button("Revoke", role: .destructive) { Task { await revokeWatcher(confirmation: nil) } }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("This will disable all notification channels under \"\(watchToken.label ?? "this watcher")\". This cannot be undone.")
+        .deleteAlert(
+            store.deletePrompt(\.appliesToNotifications, title: "Revoke this watcher?", message: "This will disable all notification channels under \"\(watchToken.label ?? "this watcher")\". This cannot be undone.", subject: "\"\(watchToken.label ?? "this watcher")\""),
+            isPresented: $showRevokeConfirm
+        ) {
+            Task { await revokeWatcher(confirmation: nil) }
         }
         .sheet(isPresented: $showRevokeAuthSheet) {
             DeleteConfirmSheet(
                 resourceName: watchToken.label ?? "this watcher",
-                actionLabel: "Revoke Watcher"
+                actionLabel: "Revoke Watcher",
+                category: \.appliesToNotifications
             ) { confirmation in
                 Task { await revokeWatcher(confirmation: confirmation) }
             }
@@ -424,7 +425,7 @@ struct WatcherDetailView: View {
     }
 
     private func requestRevoke() {
-        let level = store.systemProfile?.deleteConfirmation ?? .none
+        let level = store.deleteConfirmation
         if level == .none {
             showRevokeConfirm = true
         } else {
@@ -439,7 +440,7 @@ struct WatcherDetailView: View {
             let queued = try await api.deleteWatchToken(id: watchToken.id, confirmation: confirmation)
             if let queued {
                 revokeQueuedInfo = queued
-                showRevokeQueued = true
+                showRevokeQueued = store.deleteConfirmation != .none
                 isRevoking = false
             } else {
                 await onUpdate()
@@ -1246,16 +1247,17 @@ struct ChannelDetailView: View {
         } message: {
             Text(testResult ?? "")
         }
-        .confirmationDialog("Delete this channel?", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
-            Button("Delete", role: .destructive) { Task { await deleteChannel(confirmation: nil) } }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("This will permanently remove the notification channel \"\(channel.name)\".")
+        .deleteAlert(
+            store.deletePrompt(\.appliesToNotifications, title: "Delete this channel?", message: "This will permanently remove the notification channel \"\(channel.name)\".", subject: "\"\(channel.name)\""),
+            isPresented: $showDeleteConfirm
+        ) {
+            Task { await deleteChannel(confirmation: nil) }
         }
         .sheet(isPresented: $showDeleteAuthSheet) {
             DeleteConfirmSheet(
                 resourceName: channel.name,
-                actionLabel: "Delete Channel"
+                actionLabel: "Delete Channel",
+                category: \.appliesToNotifications
             ) { confirmation in
                 Task { await deleteChannel(confirmation: confirmation) }
             }
@@ -1393,7 +1395,7 @@ struct ChannelDetailView: View {
     }
 
     private func requestDelete() {
-        let level = store.systemProfile?.deleteConfirmation ?? .none
+        let level = store.deleteConfirmation
         if level == .none {
             showDeleteConfirm = true
         } else {
@@ -1408,7 +1410,7 @@ struct ChannelDetailView: View {
             let queued = try await api.deleteChannel(id: channel.id, confirmation: confirmation)
             if let queued {
                 deleteQueuedInfo = queued
-                showDeleteQueued = true
+                showDeleteQueued = store.deleteConfirmation != .none
                 isDeleting = false
             } else {
                 await onUpdate()
@@ -1898,13 +1900,18 @@ struct DeleteConfirmSheet: View {
     @Environment(\.dismiss) var dismiss
     let resourceName: String
     var actionLabel: String = "Delete"
+    var category: KeyPath<SystemSafetySettings, Bool>? = nil
     var onConfirm: (MemberDeleteConfirm) -> Void
 
     @State private var password = ""
     @State private var totpCode = ""
 
     private var level: DeleteConfirmation {
-        store.systemProfile?.deleteConfirmation ?? .none
+        store.deleteConfirmation
+    }
+
+    private var queueNotice: String? {
+        category.flatMap { store.queueNotice($0, subject: "\"\(resourceName)\"") }
     }
 
     private var needsPassword: Bool {
@@ -1929,6 +1936,14 @@ struct DeleteConfirmSheet: View {
                         Text("\"\(resourceName)\"")
                             .font(.subheadline).fontWeight(.medium)
                             .foregroundColor(theme.textPrimary)
+
+                        if let queueNotice {
+                            Text(queueNotice)
+                                .font(.footnote)
+                                .foregroundColor(theme.textSecondary)
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal, 16)
+                        }
 
                         Text("Your system safety settings require authentication to delete resources.")
                             .font(.footnote)
@@ -1970,7 +1985,7 @@ struct DeleteConfirmSheet: View {
                             dismiss()
                             onConfirm(confirmation)
                         } label: {
-                            Text(actionLabel)
+                            Text(queueNotice == nil ? actionLabel : String(localized: "Queue"))
                                 .font(.subheadline).fontWeight(.semibold)
                                 .foregroundColor(.white)
                                 .frame(maxWidth: .infinity)
@@ -1984,7 +1999,7 @@ struct DeleteConfirmSheet: View {
                     .padding(.top, 24)
                 }
             }
-            .navigationTitle("Confirm \(actionLabel)")
+            .navigationTitle(queueNotice == nil ? "Confirm \(actionLabel)" : String(localized: "Queue Deletion"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {

@@ -86,25 +86,23 @@ struct GroupsView: View {
             GroupDetailSheet(group: group)
                 .environmentObject(store)
         }
-        .confirmationDialog("Delete this group?", isPresented: $showDeleteGroupConfirm, presenting: groupToDelete) { group in
-            Button("Delete", role: .destructive) {
-                Task {
-                    let queued = await store.deleteGroup(id: group.id)
-                    if let queued {
-                        deleteQueuedInfo = queued
-                        showDeleteQueued = true
-                    }
+        .deleteAlert(
+            store.deletePrompt(\.appliesToGroups, title: "Delete this group?", message: "This will permanently delete \"\(groupToDelete?.name ?? "")\" and cannot be undone.", subject: "\"\(groupToDelete?.name ?? "")\""),
+            isPresented: $showDeleteGroupConfirm, presenting: groupToDelete
+        ) { group in
+            Task {
+                let queued = await store.deleteGroup(id: group.id)
+                if let queued {
+                    deleteQueuedInfo = queued
+                    showDeleteQueued = store.deleteConfirmation != .none
                 }
             }
-            Button("Cancel", role: .cancel) {}
-        } message: { group in
-            Text("This will permanently delete \"\(group.name)\" and cannot be undone.")
         }
         .sheet(isPresented: $showDeleteAuthSheet) {
             if let group = groupToDelete {
                 GroupDeleteConfirmSheet(group: group) { queued in
                     deleteQueuedInfo = queued
-                    showDeleteQueued = true
+                    showDeleteQueued = store.deleteConfirmation != .none
                 }
                 .environmentObject(store)
             }
@@ -120,7 +118,7 @@ struct GroupsView: View {
 
     private func requestDelete(_ group: SystemGroup) {
         groupToDelete = group
-        let level = store.systemProfile?.deleteConfirmation ?? .none
+        let level = store.deleteConfirmation
         if level == .none {
             showDeleteGroupConfirm = true
         } else {
@@ -163,7 +161,11 @@ struct GroupDeleteConfirmSheet: View {
     @State private var errorMessage: String?
 
     private var level: DeleteConfirmation {
-        store.systemProfile?.deleteConfirmation ?? .none
+        store.deleteConfirmation
+    }
+
+    private var willQueue: Bool {
+        store.deletionQueueDays(for: \.appliesToGroups) != nil
     }
 
     private var needsPassword: Bool {
@@ -185,6 +187,13 @@ struct GroupDeleteConfirmSheet: View {
                     Text("Deleting \"\(group.name)\"")
                         .font(.subheadline).fontWeight(.medium)
                         .foregroundColor(theme.textPrimary)
+
+                    if let notice = store.queueNotice(\.appliesToGroups, subject: "\"\(group.name)\"") {
+                        Text(notice)
+                            .font(.subheadline)
+                            .foregroundColor(theme.textSecondary)
+                            .multilineTextAlignment(.center)
+                    }
 
                     Text("Deletion protection is enabled. Please verify your identity to continue.")
                         .font(.subheadline)
@@ -225,7 +234,7 @@ struct GroupDeleteConfirmSheet: View {
                             if isDeleting {
                                 ProgressView().tint(.white).scaleEffect(0.8)
                             }
-                            Text("Delete Group")
+                            Text(willQueue ? "Queue" : "Delete Group")
                                 .font(.subheadline).fontWeight(.semibold)
                         }
                         .foregroundColor(.white)
@@ -239,7 +248,7 @@ struct GroupDeleteConfirmSheet: View {
                 .padding(.horizontal, 24).padding(.top, 24)
             }
             .background(theme.backgroundPrimary)
-            .navigationTitle("Confirm Deletion")
+            .navigationTitle(willQueue ? "Queue Deletion" : "Confirm Deletion")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

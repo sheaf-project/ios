@@ -212,7 +212,7 @@ struct BoardDetailView: View {
 
     private func requestDelete(_ message: BoardMessage) {
         messageToDelete = message
-        let level = store.systemProfile?.deleteConfirmation ?? .none
+        let level = store.deleteConfirmation
         if level == .none {
             showDeleteConfirm = true
         } else {
@@ -225,7 +225,7 @@ struct BoardDetailView: View {
             let queued = await store.deleteMessage(id: id, confirmation: confirmation)
             if let queued {
                 deleteQueuedInfo = queued
-                showDeleteQueued = true
+                showDeleteQueued = store.deleteConfirmation != .none
             } else {
                 messages.removeAll { $0.id == id }
             }
@@ -336,17 +336,15 @@ struct BoardDetailView: View {
             }
             .environmentObject(store)
         }
-        .confirmationDialog("Delete Message", isPresented: $showDeleteConfirm, presenting: messageToDelete) { msg in
-            Button("Delete Message", role: .destructive) {
-                performDelete(id: msg.id)
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: { _ in
-            Text("This message will be permanently deleted.")
+        .deleteAlert(
+            store.deletePrompt(\.appliesToMessages, title: "Delete Message", message: "This message will be permanently deleted.", subject: String(localized: "This message")),
+            isPresented: $showDeleteConfirm, presenting: messageToDelete
+        ) { msg in
+            performDelete(id: msg.id)
         }
         .sheet(isPresented: $showDeleteAuthSheet) {
             if let msg = messageToDelete {
-                DeleteConfirmSheet(resourceName: String(msg.body.prefix(40)), actionLabel: "Delete Message") { confirmation in
+                DeleteConfirmSheet(resourceName: String(msg.body.prefix(40)), actionLabel: "Delete Message", category: \.appliesToMessages) { confirmation in
                     performDelete(id: msg.id, confirmation: confirmation)
                 }
                 .environmentObject(store)

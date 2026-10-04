@@ -89,19 +89,17 @@ struct TagsView: View {
             TagEditSheet(tag: tag)
                 .environmentObject(store)
         }
-        .confirmationDialog("Delete this tag?", isPresented: $showDeleteConfirm, presenting: tagToDelete) { tag in
-            Button("Delete", role: .destructive) {
-                Task {
-                    let queued = await store.deleteTag(id: tag.id)
-                    if let queued {
-                        deleteQueuedInfo = queued
-                        showDeleteQueued = true
-                    }
+        .deleteAlert(
+            store.deletePrompt(\.appliesToTags, title: "Delete this tag?", message: "This will permanently delete \"\(tagToDelete?.name ?? "")\" and cannot be undone.", subject: "\"\(tagToDelete?.name ?? "")\""),
+            isPresented: $showDeleteConfirm, presenting: tagToDelete
+        ) { tag in
+            Task {
+                let queued = await store.deleteTag(id: tag.id)
+                if let queued {
+                    deleteQueuedInfo = queued
+                    showDeleteQueued = store.deleteConfirmation != .none
                 }
             }
-            Button("Cancel", role: .cancel) {}
-        } message: { tag in
-            Text("This will permanently delete \"\(tag.name)\" and cannot be undone.")
         }
         .alert("Deletion Queued", isPresented: $showDeleteQueued) {
             Button("OK", role: .cancel) { deleteQueuedInfo = nil }

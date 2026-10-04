@@ -2004,8 +2004,11 @@ class APIClient {
         return try JSONDecoder.iso.decode([UploadedFile].self, from: data)
     }
 
-    func deleteFile(id: String) async throws {
-        _ = try await request("/v1/files/\(id)", method: "DELETE")
+    func deleteFile(id: String, confirmation: MemberDeleteConfirm? = nil) async throws -> DeleteQueued? {
+        let body = confirmation != nil ? try JSONEncoder.iso.encode(confirmation) : nil
+        let data = try await request("/v1/files/\(id)", method: "DELETE", body: body)
+        guard !data.isEmpty else { return nil }
+        return try? JSONDecoder.iso.decode(DeleteQueued.self, from: data)
     }
 
     func cleanupFiles() async throws -> [String: Any] {
