@@ -483,6 +483,7 @@ struct CreateChannelSheet: View {
     @State private var activationShare: ActivationShareInfo?
     @State private var mobilePushAvailable = true
     @State private var mobilePushUnavailableReason: String?
+    @State private var showPushUnavailableReason = false
 
     struct ActivationShareInfo: Identifiable {
         let id = UUID()
@@ -533,11 +534,19 @@ struct CreateChannelSheet: View {
                                     }
                                     .disabled(unavailable)
                                     if unavailable {
-                                        Text(mobilePushUnavailableReason ?? "This server has no push credentials configured")
-                                            .font(.footnote)
-                                            .foregroundColor(theme.textTertiary)
-                                            .frame(maxWidth: .infinity, alignment: .leading)
-                                            .padding(.horizontal, 16).padding(.bottom, 12)
+                                        DisclosureGroup(isExpanded: $showPushUnavailableReason) {
+                                            Text(mobilePushUnavailableReason ?? "This server has no push credentials configured")
+                                                .font(.footnote)
+                                                .foregroundColor(theme.textTertiary)
+                                                .frame(maxWidth: .infinity, alignment: .leading)
+                                                .padding(.top, 6)
+                                        } label: {
+                                            Text("Why is mobile push unavailable?")
+                                                .font(.footnote)
+                                                .foregroundColor(theme.textSecondary)
+                                        }
+                                        .tint(theme.textTertiary)
+                                        .padding(.horizontal, 16).padding(.bottom, 12)
                                     }
                                     if type != DestinationType.creatableTypes.last {
                                         Divider().background(theme.divider).padding(.leading, 52)
