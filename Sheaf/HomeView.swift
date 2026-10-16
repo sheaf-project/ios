@@ -30,6 +30,7 @@ struct HomeView: View {
     @State private var showSwitchSheet = false
     @State private var showSettings = false
     @State private var showMessages = false
+    @State private var showSystemSafety = false
     @State private var bannersExpanded = false
     @AppStorage("quickSwitchPosition") private var quickSwitchPosition: QuickSwitchPosition = .belowFronters
     @Namespace private var glassNamespace
@@ -216,8 +217,13 @@ struct HomeView: View {
                     // System Safety pending items
                     if !bannersCondensed {
                         ForEach(safetyBannerItems) { item in
-                            SafetyPendingBanner(item: item)
-                                .padding(.horizontal, 24)
+                            Button {
+                                showSystemSafety = true
+                            } label: {
+                                SafetyPendingBanner(item: item)
+                            }
+                            .buttonStyle(.plain)
+                            .padding(.horizontal, 24)
                         }
                     }
 
@@ -274,6 +280,13 @@ struct HomeView: View {
         .sheet(isPresented: $showMessages) {
             MessageBoardView()
                 .environmentObject(store)
+        }
+        .sheet(isPresented: $showSystemSafety) {
+            NavigationStack {
+                SystemSafetyView()
+                    .environmentObject(authManager)
+                    .environmentObject(store)
+            }
         }
         .task {
             await loadHistoryForFrequency()
