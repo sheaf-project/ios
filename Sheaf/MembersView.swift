@@ -888,6 +888,9 @@ struct MemberDetailSheet: View {
             if let arr = value.value as? [String] {
                 return arr.isEmpty ? "—" : arr.joined(separator: ", ")
             }
+        case .slider:
+            let s = formatSliderValue(value.value, options: field.options)
+            if !s.isEmpty { return s }
         default: break
         }
         if let s = value.value as? String, !s.isEmpty { return s }
@@ -1556,6 +1559,15 @@ struct MemberEditSheet: View {
                 } else {
                     MultiselectFreeformEditor(field: field, values: $fieldValues)
                 }
+            case .slider:
+                SliderInput(
+                    value: sliderNumber(fieldValues[field.id]?.value),
+                    spec: SliderSpec(options: field.options)
+                ) { v in
+                    fieldValues[field.id] = AnyCodable(v ?? NSNull())
+                }
+            case .unknown:
+                cfUnknownTypeDisplay(field: field)
             }
 
             PrivacyTag(level: field.privacy, pending: field.pendingPrivacy, activatesAt: field.privacyActivatesAt)
@@ -1563,6 +1575,31 @@ struct MemberEditSheet: View {
     }
 
     // MARK: Per-type custom field editors
+
+    // The API asks clients to treat a type they don't know as text: show
+    // the value rather than an error, and don't offer an editor.
+    private func cfUnknownTypeDisplay(field: CustomField) -> some View {
+        let raw = fieldValues[field.id]?.value
+        let shown: String = {
+            switch raw {
+            case let s as String where !s.isEmpty: return s
+            case let a as [String] where !a.isEmpty: return a.joined(separator: ", ")
+            case let b as Bool: return b ? "Yes" : "No"
+            case let i as Int: return "\(i)"
+            case let d as Double: return tidyNumber(d)
+            default: return String(localized: "Not set")
+            }
+        }()
+        return VStack(alignment: .leading, spacing: 4) {
+            Text(shown)
+                .foregroundColor(theme.textPrimary)
+            Text("Update the app to edit this field.")
+                .font(.caption)
+                .foregroundColor(theme.textTertiary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12).background(theme.backgroundCard).cornerRadius(12)
+    }
 
     private func cfTextEditor(field: CustomField) -> some View {
         TextField(field.name, text: Binding(

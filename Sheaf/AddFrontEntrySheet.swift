@@ -13,6 +13,35 @@ struct AddFrontEntrySheet: View {
     @State private var isSaving = false
     @State private var error: String?
     @State private var showAllMembers = false
+    @State private var openFronts: [FrontEntry] = []
+
+    // An entry left open is a switch, so the server ends every open front at
+    // its start. One that began after that start cannot be ended there and
+    // the request fails with a 500, so the sheet checks first. Equal
+    // timestamps pass: a zero-length front is allowed.
+    private var clashes: [FrontEntry] {
+        guard isOngoing, store.systemProfile?.replaceFrontsDefault ?? true else { return [] }
+        return openFronts.filter { $0.endedAt == nil && $0.startedAt > startedAt }
+    }
+
+    private var clashMessage: String {
+        var names = [String]()
+        for id in clashes.flatMap(\.memberIDs) {
+            guard let m = store.members.first(where: { $0.id == id }) else { continue }
+            let n = m.displayName ?? m.name
+            if !names.contains(n) { names.append(n) }
+        }
+        if names.isEmpty { names = [String(localized: "whoever is fronting")] }
+        let who = names.joined(separator: ", ")
+        let verb = names.count == 1 ? String(localized: "has been fronting") : String(localized: "have been fronting")
+        var text = String(localized: "An entry left open starts a front, which ends the ones already running. ")
+        text += "\(who) \(verb)"
+        if let earliest = clashes.map(\.startedAt).min() {
+            text += " " + String(localized: "since \(earliest.formatted(date: .abbreviated, time: .shortened))")
+        }
+        text += String(localized: ", which is after this start, so it can't be ended there. Pick a later start, or give this entry an end time to record it as history instead.")
+        return text
+    }
 
     var body: some View {
         NavigationStack {
@@ -99,6 +128,13 @@ struct AddFrontEntrySheet: View {
                             .foregroundColor(theme.textPrimary)
                             .listRowBackground(theme.backgroundCard)
                     }
+
+                    if !clashes.isEmpty {
+                        Text(clashMessage)
+                            .font(.footnote)
+                            .foregroundColor(theme.danger)
+                            .listRowBackground(theme.backgroundCard)
+                    }
                 }
 
                 if let error {
@@ -128,11 +164,19 @@ struct AddFrontEntrySheet: View {
                         } else {
                             Text("Add")
                                 .fontWeight(.semibold)
-                                .foregroundColor(selectedIDs.isEmpty
+                                .foregroundColor(selectedIDs.isEmpty || !clashes.isEmpty
                                     ? theme.textTertiary : theme.accentLight)
                         }
                     }
-                    .disabled(selectedIDs.isEmpty || isSaving)
+                    .disabled(selectedIDs.isEmpty || isSaving || !clashes.isEmpty)
+                }
+            }
+            .task {
+                // The history page is paginated, so an open front is only
+                // probably on it; ask for the live roster instead.
+                openFronts = store.currentFronts
+                if let api = store.api, let fresh = try? await api.getCurrentFronts() {
+                    openFronts = fresh
                 }
             }
         }

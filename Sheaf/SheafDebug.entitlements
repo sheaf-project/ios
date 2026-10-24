@@ -11,6 +11,8 @@
 	<key>com.apple.developer.associated-domains</key>
 	<array>
 		<string>applinks:sheaf.sh</string>
+		<string>webcredentials:sheaf.sh</string>
+		<string>webcredentials:app.sheaf.sh</string>
 	</array>
 </dict>
 </plist>

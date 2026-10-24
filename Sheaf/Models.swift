@@ -258,6 +258,7 @@ struct SystemProfile: Identifiable, Codable {
     var deleteConfirmation: DeleteConfirmation
     var dateFormat: DateFormat
     var replaceFrontsDefault: Bool
+    var coalesceContiguousFronts: Bool
     let createdAt: Date
     let updatedAt: Date
 
@@ -268,6 +269,7 @@ struct SystemProfile: Identifiable, Codable {
         case deleteConfirmation   = "delete_confirmation"
         case dateFormat           = "date_format"
         case replaceFrontsDefault = "replace_fronts_default"
+        case coalesceContiguousFronts = "coalesce_contiguous_fronts"
         case createdAt            = "created_at"
         case updatedAt            = "updated_at"
     }
@@ -285,7 +287,8 @@ struct SystemProfile: Identifiable, Codable {
         privacy              = try c.decode(PrivacyLevel.self, forKey: .privacy)
         deleteConfirmation   = try c.decodeIfPresent(DeleteConfirmation.self, forKey: .deleteConfirmation) ?? .none
         dateFormat           = try c.decodeIfPresent(DateFormat.self, forKey: .dateFormat) ?? .mdy
-        replaceFrontsDefault = try c.decodeIfPresent(Bool.self, forKey: .replaceFrontsDefault) ?? false
+        replaceFrontsDefault = try c.decodeIfPresent(Bool.self, forKey: .replaceFrontsDefault) ?? true
+        coalesceContiguousFronts = try c.decodeIfPresent(Bool.self, forKey: .coalesceContiguousFronts) ?? true
         createdAt            = try c.decode(Date.self, forKey: .createdAt)
         updatedAt            = try c.decode(Date.self, forKey: .updatedAt)
     }
@@ -548,15 +551,53 @@ enum FieldType: String, Codable, CaseIterable {
     case boolean     = "boolean"
     case select      = "select"
     case multiselect = "multiselect"
+    case slider      = "slider"
+    // A type the server knows and this build does not. Shown as text.
+    case unknown     = "unknown"
+
+    static var allCases: [FieldType] {
+        [.text, .number, .date, .boolean, .select, .multiselect, .slider]
+    }
+
+    init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = FieldType(rawValue: raw) ?? .unknown
+    }
+}
+
+struct SliderLabels: Codable, Equatable {
+    var left: String?
+    var center: String?
+    var right: String?
 }
 
 // MARK: - CustomFieldOptions
 // Per-field-type options. For select / multiselect, `choices` carries
 // the predefined values the user can pick from; nil = freeform tag
-// mode (any string accepted server-side). Other field types don't
-// carry options today.
+// mode (any string accepted server-side). Slider fields carry the
+// remaining keys. The server replaces slider options wholesale, so a
+// nil key is omitted on the wire and reads as "reset to default".
 struct CustomFieldOptions: Codable, Equatable {
     var choices: [String]?
+    var mode: String?
+    var min: Double?
+    var max: Double?
+    var step: Double?
+    var unit: String?
+    var labels: SliderLabels?
+    var gradient: [String]?
+
+    init(choices: [String]? = nil, mode: String? = nil, min: Double? = nil, max: Double? = nil,
+         step: Double? = nil, unit: String? = nil, labels: SliderLabels? = nil, gradient: [String]? = nil) {
+        self.choices = choices
+        self.mode = mode
+        self.min = min
+        self.max = max
+        self.step = step
+        self.unit = unit
+        self.labels = labels
+        self.gradient = gradient
+    }
 }
 
 // MARK: - CustomFieldRead
@@ -2368,15 +2409,37 @@ struct Announcement: Identifiable, Codable {
     let body: String
     let severity: AnnouncementSeverity
     let dismissible: Bool
+    let platforms: [String]?
     let startsAt: Date?
     let expiresAt: Date?
     let createdAt: Date
 
     enum CodingKeys: String, CodingKey {
-        case id, title, body, severity, dismissible
+        case id, title, body, severity, dismissible, platforms
         case startsAt  = "starts_at"
         case expiresAt = "expires_at"
         case createdAt = "created_at"
+    }
+}
+
+// The clients an announcement can be aimed at, in the order the admin
+// editor lists them. An empty list means everyone.
+enum AnnouncementPlatform: String, CaseIterable {
+    case web, android, ios, watch
+
+    var label: String {
+        switch self {
+        case .web:     return "Web"
+        case .android: return "Android"
+        case .ios:     return "iOS"
+        case .watch:   return "Watch"
+        }
+    }
+
+    static func labels(for platforms: [String]) -> [String] {
+        let known = allCases.filter { platforms.contains($0.rawValue) }.map(\.label)
+        let other = platforms.filter { AnnouncementPlatform(rawValue: $0) == nil }
+        return known + other
     }
 }
 
@@ -2388,6 +2451,7 @@ struct AnnouncementRead: Identifiable, Codable {
     let dismissible: Bool
     let active: Bool
     let visibleWhileLoggedOut: Bool?
+    let platforms: [String]?
     let startsAt: Date?
     let expiresAt: Date?
     let createdAt: Date
@@ -2395,7 +2459,7 @@ struct AnnouncementRead: Identifiable, Codable {
     let updatedAt: Date
 
     enum CodingKeys: String, CodingKey {
-        case id, title, body, severity, dismissible, active
+        case id, title, body, severity, dismissible, active, platforms
         case visibleWhileLoggedOut = "visible_while_logged_out"
         case startsAt   = "starts_at"
         case expiresAt  = "expires_at"
@@ -2412,11 +2476,12 @@ struct AnnouncementCreate: Codable {
     var dismissible: Bool = true
     var active: Bool = true
     var visibleWhileLoggedOut: Bool = false
+    var platforms: [String] = []
     var startsAt: Date?
     var expiresAt: Date?
 
     enum CodingKeys: String, CodingKey {
-        case title, body, severity, dismissible, active
+        case title, body, severity, dismissible, active, platforms
         case visibleWhileLoggedOut = "visible_while_logged_out"
         case startsAt  = "starts_at"
         case expiresAt = "expires_at"
@@ -2430,19 +2495,66 @@ struct AnnouncementUpdate: Codable {
     var dismissible: Bool?
     var active: Bool?
     var visibleWhileLoggedOut: Bool?
+    // nil leaves targeting alone; the editor always sends the list so an
+    // emptied selection puts [] on the wire.
+    var platforms: [String]?
     var startsAt: Date?
     var expiresAt: Date?
     var clearStartsAt: Bool?
     var clearExpiresAt: Bool?
 
     enum CodingKeys: String, CodingKey {
-        case title, body, severity, dismissible, active
+        case title, body, severity, dismissible, active, platforms
         case visibleWhileLoggedOut = "visible_while_logged_out"
         case startsAt      = "starts_at"
         case expiresAt     = "expires_at"
         case clearStartsAt = "clear_starts_at"
         case clearExpiresAt = "clear_expires_at"
     }
+}
+
+// MARK: - Passkeys
+struct PasskeyRead: Identifiable, Codable {
+    let id: String
+    var nickname: String?
+    let rpID: String
+    let usable: Bool
+    let backupEligible: Bool
+    let createdAt: Date
+    let lastUsedAt: Date?
+
+    enum CodingKeys: String, CodingKey {
+        case id, nickname, usable
+        case rpID           = "rp_id"
+        case backupEligible = "backup_eligible"
+        case createdAt      = "created_at"
+        case lastUsedAt     = "last_used_at"
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id             = try c.decode(String.self, forKey: .id)
+        nickname       = try c.decodeIfPresent(String.self, forKey: .nickname)
+        rpID           = try c.decodeIfPresent(String.self, forKey: .rpID) ?? ""
+        usable         = try c.decodeIfPresent(Bool.self, forKey: .usable) ?? true
+        backupEligible = try c.decodeIfPresent(Bool.self, forKey: .backupEligible) ?? false
+        createdAt      = try c.decode(Date.self, forKey: .createdAt)
+        lastUsedAt     = try c.decodeIfPresent(Date.self, forKey: .lastUsedAt)
+    }
+}
+
+struct PasskeyRegisterBegin: Codable {
+    var password: String
+    var totpCode: String?
+
+    enum CodingKeys: String, CodingKey {
+        case password
+        case totpCode = "totp_code"
+    }
+}
+
+struct PasskeyUpdate: Codable {
+    var nickname: String?
 }
 
 // MARK: - Server Version

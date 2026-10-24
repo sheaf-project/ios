@@ -24,6 +24,20 @@ extension Data {
     }
 }
 
+// MARK: - Technical error details
+// Off by default. On, failures carry the status code and the server's own
+// message instead of a short summary. Kept on the device as well as in the
+// account's client settings, since the failures it explains are often the
+// ones where the account copy never loads.
+enum TechnicalErrors {
+    static let defaultsKey = "show_technical_errors"
+
+    static var enabled: Bool {
+        get { UserDefaults.standard.bool(forKey: defaultsKey) }
+        set { UserDefaults.standard.set(newValue, forKey: defaultsKey) }
+    }
+}
+
 // MARK: - AuthManager
 final class AuthManager: ObservableObject {
     /// Single app-wide instance. Background tasks must use this rather than
@@ -407,6 +421,12 @@ class APIClient {
 
     /// Builds a user-friendly error message from an HTTP error response.
     private func friendlyErrorMessage(statusCode: Int, data: Data) -> String {
+        let friendly = summaryErrorMessage(statusCode: statusCode, data: data)
+        guard TechnicalErrors.enabled else { return friendly }
+        return "[\(statusCode)] \(parseJSONErrorMessage(from: data) ?? friendly)"
+    }
+
+    private func summaryErrorMessage(statusCode: Int, data: Data) -> String {
         // Check for HTML responses (e.g. Cloudflare error pages, proxy errors)
         if let prefix = String(data: data.prefix(200), encoding: .utf8),
            prefix.contains("<!DOCTYPE") || prefix.contains("<html") {
@@ -1250,6 +1270,12 @@ class APIClient {
         return try JSONDecoder.iso.decode(SystemProfile.self, from: data)
     }
 
+    func updateFrontPreferences(_ update: FrontPreferencesUpdate) async throws -> SystemProfile {
+        let body = try JSONEncoder.iso.encode(update)
+        let data = try await request("/v1/systems/me", method: "PATCH", body: body)
+        return try JSONDecoder.iso.decode(SystemProfile.self, from: data)
+    }
+
     // MARK: - Members
 
     func getMembers() async throws -> [Member] {
@@ -1704,6 +1730,106 @@ class APIClient {
         _ = try await request("/v1/settings/client/\(Self.clientSettingsId)", method: "DELETE")
     }
 
+    /// Top-level key merge, so one key can be written without restating the rest.
+    func patchClientSettings(_ settings: [String: Any]) async throws {
+        let payload = ["settings": settings]
+        let body = try JSONSerialization.data(withJSONObject: payload)
+        _ = try await request("/v1/settings/client/\(Self.clientSettingsId)", method: "PATCH", body: body)
+    }
+
+    // MARK: - Passkeys
+
+    func getPasskeys() async throws -> [PasskeyRead] {
+        let data = try await request("/v1/auth/passkeys")
+        return try JSONDecoder.iso.decode([PasskeyRead].self, from: data)
+    }
+
+    /// Step-up (password, plus a code when 2FA is on), then the WebAuthn
+    /// creation options as raw JSON. Uses perform() so a wrong password
+    /// doesn't trip the refresh-then-logout path in request().
+    func beginPasskeyRegistration(password: String, totpCode: String?) async throws -> [String: Any] {
+        let body = try JSONEncoder.iso.encode(PasskeyRegisterBegin(password: password, totpCode: totpCode))
+        let (data, status) = try await perform("/v1/auth/passkeys/register/begin", method: "POST", body: body)
+        guard (200...299).contains(status) else {
+            throw NSError(domain: "APIError", code: status,
+                          userInfo: [NSLocalizedDescriptionKey: friendlyErrorMessage(statusCode: status, data: data)])
+        }
+        return try Self.passkeyOptions(from: data)
+    }
+
+    func completePasskeyRegistration(credential: [String: Any], nickname: String?) async throws -> PasskeyRead {
+        var payload: [String: Any] = ["credential": credential]
+        if let nickname, !nickname.isEmpty { payload["nickname"] = nickname }
+        let body = try JSONSerialization.data(withJSONObject: payload)
+        let data = try await request("/v1/auth/passkeys/register/complete", method: "POST", body: body)
+        return try JSONDecoder.iso.decode(PasskeyRead.self, from: data)
+    }
+
+    func renamePasskey(id: String, nickname: String?) async throws -> PasskeyRead {
+        let body = try JSONEncoder.iso.encode(PasskeyUpdate(nickname: nickname))
+        let data = try await request("/v1/auth/passkeys/\(id)", method: "PATCH", body: body)
+        return try JSONDecoder.iso.decode(PasskeyRead.self, from: data)
+    }
+
+    func deletePasskey(id: String) async throws {
+        _ = try await request("/v1/auth/passkeys/\(id)", method: "DELETE")
+    }
+
+    /// Sign-in is unauthenticated, like login, so these build their own requests.
+    func beginPasskeySignIn() async throws -> [String: Any] {
+        let (data, status) = try await unauthenticatedPost("/v1/auth/passkeys/sign-in/begin", body: nil)
+        guard (200...299).contains(status) else {
+            throw NSError(domain: "APIError", code: status,
+                          userInfo: [NSLocalizedDescriptionKey: friendlyErrorMessage(statusCode: status, data: data)])
+        }
+        return try Self.passkeyOptions(from: data)
+    }
+
+    func completePasskeySignIn(credential: [String: Any], captcha: String?) async throws -> TokenResponse {
+        var payload: [String: Any] = ["credential": credential]
+        if let captcha { payload["captcha"] = captcha }
+        let body = try JSONSerialization.data(withJSONObject: payload)
+        let (data, status) = try await unauthenticatedPost("/v1/auth/passkeys/sign-in/complete", body: body)
+        if status == 423 {
+            let msg = parseJSONErrorMessage(from: data)
+                ?? "Account temporarily locked. Please wait a few minutes and try again."
+            throw AccountLockedError(message: msg)
+        }
+        guard (200...299).contains(status) else {
+            throw NSError(domain: "APIError", code: status,
+                          userInfo: [NSLocalizedDescriptionKey: friendlyErrorMessage(statusCode: status, data: data)])
+        }
+        return try Self.decodeJSON(TokenResponse.self, from: data)
+    }
+
+    private static func passkeyOptions(from data: Data) throws -> [String: Any] {
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        guard let options = json?["options"] as? [String: Any] else {
+            throw NSError(domain: "APIError", code: 0,
+                          userInfo: [NSLocalizedDescriptionKey: "The server sent passkey options that could not be read."])
+        }
+        return options
+    }
+
+    private func unauthenticatedPost(_ path: String, body: Data?) async throws -> (Data, Int) {
+        guard let url = URL(string: auth.baseURL + path) else { throw URLError(.badURL) }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Accept")
+        req.setValue(clientIdentifier, forHTTPHeaderField: "X-Sheaf-Client")
+        applyCFHeaders(to: &req)
+        if let body {
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            req.httpBody = body
+        }
+        let (data, response) = try await urlSession.data(for: req)
+        guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
+        if (200...299).contains(http.statusCode) {
+            try detectCloudflareInterception(data)
+        }
+        return (data, http.statusCode)
+    }
+
     // MARK: - Sessions
 
     func listSessions() async throws -> [SessionRead] {
@@ -1912,7 +2038,8 @@ class APIClient {
     // MARK: - Announcements
 
     func getAnnouncements() async throws -> [Announcement] {
-        let data = try await request("/v1/announcements")
+        // Naming the platform is what lets an announcement aimed at iOS reach us.
+        let data = try await request("/v1/announcements?platform=ios")
         return try JSONDecoder.iso.decode([Announcement].self, from: data)
     }
 
@@ -3101,6 +3228,20 @@ struct SystemUpdate: Codable {
         try c.encodeIfPresent(privacy, forKey: .privacy)
         try c.encodeIfPresent(dateFormat, forKey: .dateFormat)
         try c.encodeIfPresent(replaceFrontsDefault, forKey: .replaceFrontsDefault)
+    }
+}
+
+// MARK: - FrontPreferencesUpdate
+// Kept apart from SystemUpdate, whose encoder nulls the profile form's
+// fields on purpose. Each toggle sends only its own key, so saving one
+// never restates the other.
+struct FrontPreferencesUpdate: Codable {
+    var replaceFrontsDefault: Bool?
+    var coalesceContiguousFronts: Bool?
+
+    enum CodingKeys: String, CodingKey {
+        case replaceFrontsDefault     = "replace_fronts_default"
+        case coalesceContiguousFronts = "coalesce_contiguous_fronts"
     }
 }
 

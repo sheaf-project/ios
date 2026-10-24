@@ -128,6 +128,8 @@ struct CustomFieldsView: View {
         case .boolean:     return "togglepower"
         case .select:      return "list.bullet"
         case .multiselect: return "checklist"
+        case .slider:      return "slider.horizontal.3"
+        case .unknown:     return "questionmark.square"
         }
     }
 }
@@ -203,12 +205,19 @@ struct EditCustomFieldSheet: View {
     @State private var name    = ""
     @State private var privacy: PrivacyLevel = .private
     @State private var choices: [String] = []
+    @State private var slider = SliderSpec.labeled
     @State private var isSaving = false
     @State private var error: String?
     @State private var stepUp: StepUpRequest?
 
     private var isChoiceField: Bool {
         field.fieldType == .select || field.fieldType == .multiselect
+    }
+
+    private var isSliderField: Bool { field.fieldType == .slider }
+
+    private var canSave: Bool {
+        !name.isEmpty && !isSaving && (!isSliderField || slider.problem == nil)
     }
 
     var body: some View {
@@ -252,6 +261,13 @@ struct EditCustomFieldSheet: View {
                     }
                 }
 
+                if isSliderField {
+                    Section {
+                        SliderOptionsEditor(spec: $slider)
+                            .listRowBackground(theme.backgroundCard)
+                    }
+                }
+
                 if let error {
                     Section {
                         Text(error)
@@ -278,10 +294,10 @@ struct EditCustomFieldSheet: View {
                         else {
                             Text("Save")
                                 .fontWeight(.semibold)
-                                .foregroundColor(name.isEmpty ? theme.textTertiary : theme.accentLight)
+                                .foregroundColor(canSave ? theme.accentLight : theme.textTertiary)
                         }
                     }
-                    .disabled(name.isEmpty || isSaving)
+                    .disabled(!canSave)
                 }
             }
         }
@@ -289,6 +305,7 @@ struct EditCustomFieldSheet: View {
             name    = field.name
             privacy = field.privacy
             choices = field.options?.choices ?? []
+            slider  = SliderSpec(options: field.options)
         }
         .sheet(item: $stepUp) { req in
             CeilingStepUpSheet(request: req)
@@ -318,6 +335,7 @@ struct EditCustomFieldSheet: View {
                 guard let api = store.api else { return }
                 var u = CustomFieldUpdate(name: name, privacy: privacy)
                 if isChoiceField { u.options = CustomFieldOptions(choices: choices) }
+                if isSliderField { u.options = slider.options }
                 u.password = pw
                 u.totpCode = totp
                 let updated = try await api.updateField(id: field.id, update: u)
@@ -337,7 +355,8 @@ struct EditCustomFieldSheet: View {
             name: name,
             privacy: privacy,
             choices: isChoiceField ? choices : nil,
-            fieldType: field.fieldType
+            fieldType: field.fieldType,
+            sliderOptions: isSliderField ? slider.options : nil
         )
         isSaving = false
         dismiss()
@@ -354,11 +373,16 @@ struct AddCustomFieldSheet: View {
     @State private var fieldType: FieldType = .text
     @State private var privacy: PrivacyLevel = .private
     @State private var choices: [String] = []
+    @State private var slider = SliderSpec.labeled
     @State private var isSaving = false
     @State private var error: String?
 
     private var isChoiceField: Bool {
         fieldType == .select || fieldType == .multiselect
+    }
+
+    private var canSave: Bool {
+        !name.isEmpty && !isSaving && (fieldType != .slider || slider.problem == nil)
     }
 
     var body: some View {
@@ -401,6 +425,13 @@ struct AddCustomFieldSheet: View {
                     }
                 }
 
+                if fieldType == .slider {
+                    Section {
+                        SliderOptionsEditor(spec: $slider)
+                            .listRowBackground(theme.backgroundCard)
+                    }
+                }
+
                 if let error {
                     Section {
                         Text(error)
@@ -427,10 +458,10 @@ struct AddCustomFieldSheet: View {
                         else {
                             Text("Add")
                                 .fontWeight(.semibold)
-                                .foregroundColor(name.isEmpty ? theme.textTertiary : theme.accentLight)
+                                .foregroundColor(canSave ? theme.accentLight : theme.textTertiary)
                         }
                     }
-                    .disabled(name.isEmpty || isSaving)
+                    .disabled(!canSave)
                 }
             }
         }
@@ -441,6 +472,7 @@ struct AddCustomFieldSheet: View {
         isSaving = true
         error = nil
         let options: CustomFieldOptions? = {
+            if fieldType == .slider { return slider.options }
             guard isChoiceField else { return nil }
             let cleaned = choices
                 .map { $0.trimmingCharacters(in: .whitespaces) }

@@ -533,6 +533,10 @@ class SystemStore: ObservableObject {
                let newPalette = Palette(rawValue: rawPalette) {
                 themeManager?.applyFromServer(palette: newPalette)
             }
+            if let developer = source["developer"] as? [String: Any],
+               let technical = developer[TechnicalErrors.defaultsKey] as? Bool {
+                TechnicalErrors.enabled = technical
+            }
         } catch {
             // Non-fatal — local settings remain in effect
         }
@@ -546,6 +550,15 @@ class SystemStore: ObservableObject {
         )
         Task {
             try? await api.saveClientSettings(settings.toDict())
+        }
+    }
+
+    /// The device copy is written first; the account copy is best effort.
+    func setTechnicalErrors(_ enabled: Bool) {
+        TechnicalErrors.enabled = enabled
+        guard NetworkMonitor.shared.isOnline, let api else { return }
+        Task {
+            try? await api.patchClientSettings(["developer": [TechnicalErrors.defaultsKey: enabled]])
         }
     }
 
@@ -1327,6 +1340,19 @@ class SystemStore: ObservableObject {
         saveAllToCache()
     }
 
+    /// Online only: the toggle reads back from the profile, so a refused or
+    /// unsent save leaves it where it was rather than claiming a setting
+    /// that is not in force.
+    func updateFrontPreferences(_ update: FrontPreferencesUpdate) async {
+        guard NetworkMonitor.shared.isOnline, let api else { return }
+        do {
+            systemProfile = try await api.updateFrontPreferences(update)
+            saveAllToCache()
+        } catch {
+            showError(error)
+        }
+    }
+
     // MARK: - Custom Fields (consolidated for views)
 
     @discardableResult
@@ -1359,13 +1385,16 @@ class SystemStore: ObservableObject {
         name: String,
         privacy: PrivacyLevel,
         choices: [String]? = nil,
-        fieldType: FieldType? = nil
+        fieldType: FieldType? = nil,
+        sliderOptions: CustomFieldOptions? = nil
     ) async {
         // Mirror the Android contract: options dict is only carried for
         // select / multiselect; other types must omit it (backend 422s
         // on a non-null options for text/number/date/boolean). Empty /
         // all-blank choices collapse to nil = freeform tag mode.
-        let options = optionsForUpdate(choices: choices, fieldType: fieldType)
+        let options = fieldType == .slider
+            ? sliderOptions
+            : optionsForUpdate(choices: choices, fieldType: fieldType)
         let update = CustomFieldUpdate(name: name, options: options, privacy: privacy)
         if NetworkMonitor.shared.isOnline, let api {
             do {
@@ -1389,7 +1418,7 @@ class SystemStore: ObservableObject {
         if let idx = fields.firstIndex(where: { $0.id == id }) {
             fields[idx].name = name
             fields[idx].privacy = privacy
-            if fieldType == .select || fieldType == .multiselect {
+            if fieldType == .select || fieldType == .multiselect || fieldType == .slider {
                 fields[idx].options = options
             }
         }
@@ -2276,6 +2305,11 @@ extension Error {
         if self is CancellationError { return nil }
         let ns = self as NSError
         if ns.domain == NSURLErrorDomain && ns.code == NSURLErrorCancelled { return nil }
-        return SystemStore.isOfflineLikeError(self) ? nil : localizedDescription
+        if SystemStore.isOfflineLikeError(self) {
+            // With technical details on, a connectivity failure names itself
+            // rather than leaving only the offline banner to explain it.
+            return TechnicalErrors.enabled ? "\(localizedDescription) (\(ns.domain) \(ns.code))" : nil
+        }
+        return localizedDescription
     }
 }

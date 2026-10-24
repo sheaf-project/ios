@@ -269,7 +269,10 @@ struct ClientSettings: Codable, Equatable {
     }
 
     func toDict() -> [String: Any] {
-        ["theme_mode": themeMode, "palette": palette]
+        // PUT replaces the whole blob, so the developer group rides along
+        // or a theme change would wipe it.
+        ["theme_mode": themeMode, "palette": palette,
+         "developer": [TechnicalErrors.defaultsKey: TechnicalErrors.enabled]]
     }
 }
 

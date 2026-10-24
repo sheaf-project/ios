@@ -134,8 +134,18 @@ struct SignInForm: View {
     @State private var needsTOTP = false
     @State private var useRecoveryCode = false
     @State private var forgotPasswordURL: URL?
+    @State private var passkeysAvailable = false
+    @State private var isPasskeyLoading = false
+    @State private var passkeyAuthenticator = PasskeyAuthenticator()
     @FocusState private var focused: Field?
     enum Field { case url, email, password, totp }
+
+    private var cleanBaseURL: String {
+        var x = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        if x.isEmpty { x = defaultLoginBaseURL }
+        if x.hasSuffix("/") { x = String(x.dropLast()) }
+        return x
+    }
 
     var body: some View {
         VStack(spacing: 20) {
@@ -187,6 +197,16 @@ struct SignInForm: View {
             .tint(theme.accentLight)
             .disabled(email.isEmpty || password.isEmpty || isLoading || (needsTOTP && !totpInputComplete))
 
+            if passkeysAvailable {
+                Button { signInWithPasskey() } label: {
+                    buttonContent(label: String(localized: "Sign in with a passkey"), icon: "person.badge.key", loading: isPasskeyLoading)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.large)
+                .tint(theme.accentLight)
+                .disabled(isLoading || isPasskeyLoading)
+            }
+
             // Forgot password
             Button { openForgotPassword() } label: {
                 Text("Forgot Password?")
@@ -215,6 +235,15 @@ struct SignInForm: View {
             SafariView(url: url)
                 .ignoresSafeArea()
         }
+        .task(id: cleanBaseURL) {
+            // Debounced so typing a URL doesn't hit the server per keystroke.
+            try? await Task.sleep(nanoseconds: 600_000_000)
+            guard !Task.isCancelled, cleanBaseURL.lowercased().hasPrefix("http") else { return }
+            let tempAuth = AuthManager()
+            tempAuth.baseURL = cleanBaseURL
+            let config = try? await APIClient(auth: tempAuth).getAuthConfig()
+            passkeysAvailable = config?["passkeys_available"] as? Bool ?? false
+        }
     }
 
     /// Recovery codes are alphanumeric (two hyphen-separated groups of 8),
@@ -224,45 +253,91 @@ struct SignInForm: View {
         return useRecoveryCode ? code.count >= 8 : code.count == 6
     }
 
+    private func validatedBaseURL() -> String? {
+        let cleanURL = cleanBaseURL
+        guard cleanURL.lowercased().hasPrefix("http") else { error = String(localized: "URL must start with http:// or https://"); return nil }
+        guard URL(string: cleanURL + "/v1/auth/login") != nil else { error = String(localized: "Invalid URL"); return nil }
+        return cleanURL
+    }
+
+    private func captchaIfRequired(_ api: APIClient) async throws -> String? {
+        if let config = try? await api.getAuthConfig(),
+           config["captcha_provider"] as? String == "altcha",
+           config["captcha_on_login"] as? Bool == true {
+            debugLog("Login: Altcha required, fetching challenge...")
+            let challenge = try await api.getAltchaChallenge()
+            let payload = try await APIClient.solveAltchaChallenge(challenge)
+            debugLog("Login: Altcha challenge solved")
+            return payload
+        }
+        return nil
+    }
+
+    /// Shared by password and passkey sign-in once a session exists.
+    private func finishLogin(tokens: TokenResponse, baseURL cleanURL: String) async {
+        await MainActor.run {
+            authManager.save(baseURL: cleanURL, tokens: tokens, isNewLogin: true)
+        }
+        // Check account status after login
+        let authedAPI = APIClient(auth: authManager)
+        if let me = try? await authedAPI.getMe() {
+            await MainActor.run {
+                authManager.accountStatus = me.accountStatus
+                authManager.emailVerified = me.emailVerified
+            }
+        }
+    }
+
+    private func signInWithPasskey() {
+        error = ""
+        guard let cleanURL = validatedBaseURL() else { return }
+        isPasskeyLoading = true
+        let tempAuth = AuthManager()
+        tempAuth.baseURL = cleanURL
+        let api = APIClient(auth: tempAuth)
+        Task {
+            do {
+                let captchaPayload = try await captchaIfRequired(api)
+                let options = try await api.beginPasskeySignIn()
+                let credential = try await passkeyAuthenticator.assert(options: options)
+                let tokens = try await api.completePasskeySignIn(credential: credential, captcha: captchaPayload)
+                debugLog("Login: Passkey sign-in successful, got tokens")
+                await finishLogin(tokens: tokens, baseURL: cleanURL)
+                await MainActor.run { isPasskeyLoading = false }
+            } catch PasskeyError.cancelled {
+                await MainActor.run { isPasskeyLoading = false }
+            } catch let lockError as APIClient.AccountLockedError {
+                await MainActor.run {
+                    self.error = lockError.message
+                    isPasskeyLoading = false
+                }
+            } catch is CancellationError {
+                await MainActor.run { isPasskeyLoading = false }
+            } catch {
+                debugLog("Login: Passkey sign-in failed: \(error.localizedDescription)")
+                await MainActor.run {
+                    self.error = error.localizedDescription
+                    isPasskeyLoading = false
+                }
+            }
+        }
+    }
+
     private func signIn() {
         error = ""
-        var cleanURL = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
-        if cleanURL.isEmpty { cleanURL = defaultLoginBaseURL }
-        if cleanURL.hasSuffix("/") { cleanURL = String(cleanURL.dropLast()) }
-        guard cleanURL.lowercased().hasPrefix("http") else { error = String(localized: "URL must start with http:// or https://"); return }
-        guard URL(string: cleanURL + "/v1/auth/login") != nil else { error = String(localized: "Invalid URL"); return }
+        guard let cleanURL = validatedBaseURL() else { return }
         isLoading = true
         let tempAuth = AuthManager()
         tempAuth.baseURL = cleanURL
         let api = APIClient(auth: tempAuth)
         Task {
             do {
-                var captchaPayload: String?
-                if let config = try? await api.getAuthConfig(),
-                   config["captcha_provider"] as? String == "altcha",
-                   config["captcha_on_login"] as? Bool == true {
-                    debugLog("Login: Altcha required, fetching challenge...")
-                    let challenge = try await api.getAltchaChallenge()
-                    captchaPayload = try await APIClient.solveAltchaChallenge(challenge)
-                    debugLog("Login: Altcha challenge solved")
-                }
+                let captchaPayload = try await captchaIfRequired(api)
                 let code = totpCode.trimmingCharacters(in: .whitespacesAndNewlines)
                 debugLog("Login: Starting login request... (TOTP: \(code.isEmpty ? "no" : "yes"))")
                 let tokens = try await api.login(email: email, password: password, totpCode: code.isEmpty ? nil : code, captcha: captchaPayload, rememberDevice: rememberDevice)
                 debugLog("Login: Login successful, got tokens")
-                
-                // Login succeeded, save credentials
-                await MainActor.run {
-                    authManager.save(baseURL: cleanURL, tokens: tokens, isNewLogin: true)
-                }
-                // Check account status after login
-                let authedAPI = APIClient(auth: authManager)
-                if let me = try? await authedAPI.getMe() {
-                    await MainActor.run {
-                        authManager.accountStatus = me.accountStatus
-                        authManager.emailVerified = me.emailVerified
-                    }
-                }
+                await finishLogin(tokens: tokens, baseURL: cleanURL)
                 await MainActor.run { isLoading = false }
             } catch is APIClient.TOTPRequiredError {
                 // Server returned X-Sheaf-2FA: required — show the TOTP field
@@ -292,9 +367,7 @@ struct SignInForm: View {
     }
 
     private func openForgotPassword() {
-        var cleanURL = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
-        if cleanURL.isEmpty { cleanURL = defaultLoginBaseURL }
-        if cleanURL.hasSuffix("/") { cleanURL = String(cleanURL.dropLast()) }
+        let cleanURL = cleanBaseURL
         let tempAuth = AuthManager()
         tempAuth.baseURL = cleanURL
         let api = APIClient(auth: tempAuth)

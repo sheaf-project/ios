@@ -37,6 +37,8 @@ struct SettingsView: View {
     @State private var showChangePassword = false
     @State private var showChangeEmail = false
     @State private var showPasscodeAlert = false
+    @State private var passkeysAvailable = false
+    @State private var technicalErrors = TechnicalErrors.enabled
 
     var body: some View {
         NavigationStack {
@@ -363,6 +365,35 @@ struct SettingsView: View {
                             }
 
                             Divider().background(theme.backgroundCard)
+
+                            if passkeysAvailable {
+                                NavigationLink {
+                                    PasskeysView(totpEnabled: me?.totpEnabled == true)
+                                        .environmentObject(store)
+                                } label: {
+                                    HStack(spacing: 12) {
+                                        Image(systemName: "person.badge.key.fill")
+                                            .foregroundColor(theme.accentLight)
+                                            .frame(width: 20)
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text("Passkeys")
+                                                .font(.subheadline).fontWeight(.medium)
+                                                .foregroundColor(theme.textPrimary)
+                                            Text("Sign in without typing your password")
+                                                .font(.caption)
+                                                .foregroundColor(theme.textTertiary)
+                                        }
+                                        Spacer()
+                                        Image(systemName: "chevron.right")
+                                            .font(.caption)
+                                            .foregroundColor(theme.textTertiary)
+                                    }
+                                    .padding(.horizontal, 16).padding(.vertical, 14)
+                                }
+                                .buttonStyle(.plain)
+
+                                Divider().background(theme.backgroundCard)
+                            }
 
                             // Trusted devices
                             NavigationLink {
@@ -706,6 +737,38 @@ struct SettingsView: View {
                         }
                     }
 
+                    // Fronting preferences. Account-wide, unlike the quick
+                    // switch placement under Appearance, which is per device.
+                    settingsSection(title: String(localized: "Fronting")) {
+                        VStack(spacing: 0) {
+                            Text("These apply everywhere you use Sheaf, not just on this device.")
+                                .font(.caption)
+                                .foregroundColor(theme.textTertiary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, 16).padding(.vertical, 12)
+
+                            Divider().background(theme.divider)
+
+                            frontPreferenceRow(
+                                title: String(localized: "End current fronts when starting a new one"),
+                                subtitle: String(localized: "The default for the \"end all current fronts\" choice when you switch. You can still override it per switch."),
+                                value: store.systemProfile?.replaceFrontsDefault
+                            ) { v in
+                                Task { await store.updateFrontPreferences(FrontPreferencesUpdate(replaceFrontsDefault: v)) }
+                            }
+
+                            Divider().background(theme.divider)
+
+                            frontPreferenceRow(
+                                title: String(localized: "Coalesce contiguous fronting"),
+                                subtitle: String(localized: "Show \"fronting since\" per member instead of per entry. In a chain of back-to-back entries, say solo then co-fronting, their timer counts from the earliest one rather than restarting each time."),
+                                value: store.systemProfile?.coalesceContiguousFronts
+                            ) { v in
+                                Task { await store.updateFrontPreferences(FrontPreferencesUpdate(coalesceContiguousFronts: v)) }
+                            }
+                        }
+                    }
+
                     // API Keys
                     settingsSection(title: String(localized: "API Keys")) {
                         VStack(spacing: 0) {
@@ -841,6 +904,31 @@ struct SettingsView: View {
                                 .padding(.horizontal, 16).padding(.vertical, 14)
                             }
                             .buttonStyle(.plain)
+
+                            Divider().background(theme.divider)
+
+                            HStack(alignment: .top, spacing: 12) {
+                                Image(systemName: "exclamationmark.bubble.fill")
+                                    .foregroundColor(theme.accentLight)
+                                    .frame(width: 20)
+                                    .padding(.top, 2)
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("Show technical error details")
+                                        .font(.subheadline).fontWeight(.medium)
+                                        .foregroundColor(theme.textPrimary)
+                                    Text("When something goes wrong, show the status code and the server's exact message instead of a short summary. Useful for reporting a problem; noisy day to day.")
+                                        .font(.caption)
+                                        .foregroundColor(theme.textTertiary)
+                                }
+                                Spacer()
+                                Toggle("", isOn: $technicalErrors)
+                                    .labelsHidden()
+                                    .tint(theme.accentLight)
+                                    .onChange(of: technicalErrors) { _, v in
+                                        store.setTechnicalErrors(v)
+                                    }
+                            }
+                            .padding(.horizontal, 16).padding(.vertical, 14)
                         }
                     }
 
@@ -1083,9 +1171,9 @@ struct SettingsView: View {
         if let me {
             newsletterOptIn = me.newsletterOptIn
         }
-        // Fetch deletion grace period if not already known
-        if authManager.deletionGraceDays == nil {
-            if let config = try? await api.getAuthConfig(),
+        if let config = try? await api.getAuthConfig() {
+            passkeysAvailable = config["passkeys_available"] as? Bool ?? false
+            if authManager.deletionGraceDays == nil,
                let days = config["account_deletion_grace_days"] as? Int {
                 authManager.deletionGraceDays = days
             }
@@ -1187,6 +1275,28 @@ struct SettingsView: View {
                 .font(.footnote).foregroundColor(theme.textTertiary)
                 .lineLimit(1).truncationMode(.middle).frame(maxWidth: 160, alignment: .trailing)
         }
+        .padding(.horizontal, 16).padding(.vertical, 14)
+    }
+
+    /// Disabled until the system has loaded, so the switch never shows a
+    /// confident "off" that somebody would turn on twice.
+    func frontPreferenceRow(title: String, subtitle: String, value: Bool?, onChange: @escaping (Bool) -> Void) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.subheadline).fontWeight(.medium)
+                    .foregroundColor(theme.textPrimary)
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundColor(theme.textTertiary)
+            }
+            Spacer()
+            Toggle("", isOn: Binding(get: { value ?? false }, set: onChange))
+                .labelsHidden()
+                .tint(theme.accentLight)
+                .disabled(value == nil)
+        }
+        .opacity(value == nil ? 0.5 : 1)
         .padding(.horizontal, 16).padding(.vertical, 14)
     }
 

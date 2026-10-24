@@ -17,6 +17,7 @@ struct AnnouncementEditSheet: View {
     @State private var dismissible = true
     @State private var active = true
     @State private var visibleWhileLoggedOut = false
+    @State private var platforms: Set<String> = []
     @State private var hasStartDate = false
     @State private var startsAt = Date()
     @State private var hasExpireDate = false
@@ -113,6 +114,48 @@ struct AnnouncementEditSheet: View {
                             .foregroundColor(theme.textTertiary)
                             .padding(.horizontal, 12)
 
+                        // Platform targeting. Nothing ticked means everyone.
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Show on")
+                                .font(.footnote).fontWeight(.semibold)
+                                .foregroundColor(theme.textSecondary)
+                            VStack(spacing: 0) {
+                                ForEach(Array(AnnouncementPlatform.allCases.enumerated()), id: \.element) { i, p in
+                                    if i > 0 {
+                                        Divider().background(theme.divider).padding(.leading, 12)
+                                    }
+                                    Button {
+                                        if platforms.contains(p.rawValue) {
+                                            platforms.remove(p.rawValue)
+                                        } else {
+                                            platforms.insert(p.rawValue)
+                                        }
+                                    } label: {
+                                        HStack {
+                                            Image(systemName: platforms.contains(p.rawValue) ? "checkmark.square.fill" : "square")
+                                                .foregroundColor(platforms.contains(p.rawValue) ? theme.accentLight : theme.textTertiary)
+                                            Text(p.label)
+                                                .font(.subheadline)
+                                                .foregroundColor(theme.textPrimary)
+                                            Spacer()
+                                        }
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 10)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                            .background(theme.backgroundCard)
+                            .cornerRadius(12)
+
+                            Text(platforms.isEmpty
+                                 ? String(localized: "Everyone sees this.")
+                                 : String(localized: "Only \(AnnouncementPlatform.labels(for: Array(platforms)).joined(separator: ", ")) see this."))
+                                .font(.caption)
+                                .foregroundColor(theme.textTertiary)
+                                .padding(.horizontal, 12)
+                        }
+
                         // Start date
                         VStack(alignment: .leading, spacing: 6) {
                             Toggle(isOn: $hasStartDate) {
@@ -201,6 +244,10 @@ struct AnnouncementEditSheet: View {
         .onAppear { populate() }
     }
 
+    private var orderedPlatforms: [String] {
+        AnnouncementPlatform.allCases.map(\.rawValue).filter { platforms.contains($0) }
+    }
+
     private func populate() {
         guard let a = announcement else { return }
         title = a.title
@@ -209,6 +256,7 @@ struct AnnouncementEditSheet: View {
         dismissible = a.dismissible
         active = a.active
         visibleWhileLoggedOut = a.visibleWhileLoggedOut ?? false
+        platforms = Set(a.platforms ?? [])
         if let start = a.startsAt {
             hasStartDate = true
             startsAt = start
@@ -233,6 +281,7 @@ struct AnnouncementEditSheet: View {
                     dismissible: dismissible,
                     active: active,
                     visibleWhileLoggedOut: visibleWhileLoggedOut,
+                    platforms: orderedPlatforms,
                     startsAt: hasStartDate ? startsAt : nil,
                     expiresAt: hasExpireDate ? expiresAt : nil,
                     clearStartsAt: !hasStartDate && existing.startsAt != nil ? true : nil,
@@ -247,6 +296,7 @@ struct AnnouncementEditSheet: View {
                     dismissible: dismissible,
                     active: active,
                     visibleWhileLoggedOut: visibleWhileLoggedOut,
+                    platforms: orderedPlatforms,
                     startsAt: hasStartDate ? startsAt : nil,
                     expiresAt: hasExpireDate ? expiresAt : nil
                 )
