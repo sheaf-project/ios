@@ -28,11 +28,17 @@ struct MembersView: View {
     /// members too; we split them so the main roster stays clean and
     /// archived members surface in their own collapsible section.
     var activeMembers: [Member] {
-        store.members.filter { !$0.isArchived }
+        sortedMembers.filter { !$0.isArchived }
     }
 
     var archivedMembers: [Member] {
-        store.members.filter { $0.isArchived }
+        sortedMembers.filter { $0.isArchived }
+    }
+
+    private var sortedMembers: [Member] {
+        store.members.sorted { a, b in
+            (a.displayName ?? a.name).localizedStandardCompare(b.displayName ?? b.name) == .orderedAscending
+        }
     }
 
     var filtered: [Member] {
