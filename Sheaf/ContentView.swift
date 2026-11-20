@@ -116,7 +116,7 @@ struct QuickSwitchAccessoryView: View {
                     HStack(spacing: 10) {
                         ForEach(store.membersByFrontFrequency.filter { !$0.isArchived }.prefix(8)) { member in
                             Button {
-                                Task { await store.switchFronting(to: [member.id]) }
+                                Task { await store.quickSwitch(to: member.id) }
                             } label: {
                                 AvatarView(member: member, size: 36)
                             }

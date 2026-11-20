@@ -302,14 +302,18 @@ struct FrontEntry: Identifiable, Codable {
     var endedAt: Date?
     var memberIDs: [String]
     var customStatus: String?
+    var memberSince: [String: Date]? = nil
+    var memberSinceCapped: [String]? = nil
 
     enum CodingKeys: String, CodingKey {
         case id
-        case systemID     = "system_id"
-        case startedAt    = "started_at"
-        case endedAt      = "ended_at"
-        case memberIDs    = "member_ids"
-        case customStatus = "custom_status"
+        case systemID          = "system_id"
+        case startedAt         = "started_at"
+        case endedAt           = "ended_at"
+        case memberIDs         = "member_ids"
+        case customStatus      = "custom_status"
+        case memberSince       = "member_since"
+        case memberSinceCapped = "member_since_capped"
     }
 }
 

@@ -787,8 +787,17 @@ class SystemStore: ObservableObject {
         return members.filter { ids.contains($0.id) }
     }
 
-    var oldestCurrentFront: FrontEntry? {
-        currentFronts.min(by: { $0.startedAt < $1.startedAt })
+    /// Server-coalesced start for a member when available. capped means the
+    /// server stopped walking back early, so the date is only a lower bound.
+    func frontingSince(_ memberID: String) -> (date: Date, capped: Bool)? {
+        let x = currentFronts
+            .filter { $0.endedAt == nil && $0.memberIDs.contains(memberID) }
+            .map { f in (date: f.memberSince?[memberID] ?? f.startedAt, capped: f.memberSinceCapped?.contains(memberID) ?? false) }
+        return x.min { $0.date < $1.date }
+    }
+
+    var earliestFrontingSince: Date? {
+        frontingMembers.compactMap { frontingSince($0.id)?.date }.min()
     }
 
     func addToFront(_ memberIDs: [String], customStatus: String? = nil) async {
@@ -884,6 +893,33 @@ class SystemStore: ObservableObject {
         currentFronts = [optimistic]
         saveAllToCache()
         updateWatchComplication()
+    }
+
+    /// Quick switch chip: replaces current fronts only when the account's
+    /// replace_fronts_default is on, otherwise the member joins alongside them.
+    func quickSwitch(to memberID: String) async {
+        if systemProfile?.replaceFrontsDefault ?? true {
+            await switchFronting(to: [memberID])
+        } else if !frontingMembers.contains(where: { $0.id == memberID }) {
+            await addToFront([memberID])
+        }
+    }
+
+    /// Switch sheets pre-select current fronters. With replace_fronts_default
+    /// off, members still selected keep their open front entries.
+    func applyFrontSelection(_ memberIDs: [String]) async {
+        if systemProfile?.replaceFrontsDefault ?? true {
+            await switchFronting(to: memberIDs)
+            return
+        }
+        let current = Set(frontingMembers.map { $0.id })
+        for id in current.subtracting(memberIDs) {
+            await removeMemberFromFront(id)
+        }
+        let added = memberIDs.filter { !current.contains($0) }
+        if !added.isEmpty {
+            await addToFront(added)
+        }
     }
 
     func loadFrontHistory() async {
@@ -1344,7 +1380,10 @@ class SystemStore: ObservableObject {
     /// unsent save leaves it where it was rather than claiming a setting
     /// that is not in force.
     func updateFrontPreferences(_ update: FrontPreferencesUpdate) async {
-        guard NetworkMonitor.shared.isOnline, let api else { return }
+        guard NetworkMonitor.shared.isOnline, let api else {
+            errorMessage = String(localized: "Can't change front preferences while offline. Reconnect and try again.")
+            return
+        }
         do {
             systemProfile = try await api.updateFrontPreferences(update)
             saveAllToCache()
