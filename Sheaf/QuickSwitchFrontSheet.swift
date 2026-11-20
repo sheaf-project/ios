@@ -141,7 +141,7 @@ struct QuickSwitchFrontSheet: View {
 
     private func confirmSwitch() async {
         isSwitching = true
-        await store.switchFronting(to: Array(selectedIDs))
+        await store.applyFrontSelection(Array(selectedIDs))
         isSwitching = false
         dismiss()
     }
