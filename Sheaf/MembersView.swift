@@ -498,6 +498,12 @@ struct MemberDetailSheet: View {
         store.members.first(where: { $0.id == member.id }) ?? member
     }
 
+    private var orderedFieldValues: [(field: CustomField, value: CustomFieldValue)] {
+        store.fields.compactMap { f in
+            fieldValues.first(where: { $0.fieldID == f.id }).map { (f, $0) }
+        }
+    }
+
     private var memberTags: [Tag] {
         store.tags.filter { store.tagMemberIDs[$0.id]?.contains(member.id) ?? false }
     }
@@ -690,23 +696,23 @@ struct MemberDetailSheet: View {
                                 .kerning(0.8)
 
                             VStack(spacing: 0) {
-                                ForEach(Array(fieldValues.enumerated()), id: \.offset) { i, fv in
-                                    if let field = store.fields.first(where: { $0.id == fv.fieldID }) {
-                                        HStack(alignment: .top, spacing: 12) {
-                                            Text(field.name)
-                                                .font(.subheadline)
-                                                .foregroundColor(theme.textSecondary)
-                                                .frame(width: 100, alignment: .leading)
-                                            MarkdownText(displayValue(fv.value, field: field), color: theme.textPrimary)
-                                                .font(.subheadline).fontWeight(.medium)
-                                                .frame(maxWidth: .infinity, alignment: .leading)
-                                            PrivacyTag(level: field.privacy, pending: field.pendingPrivacy, activatesAt: field.privacyActivatesAt)
-                                        }
-                                        .padding(.horizontal, 16)
-                                        .padding(.vertical, 10)
-                                        if i < fieldValues.count - 1 {
-                                            Divider().background(theme.divider).padding(.leading, 16)
-                                        }
+                                let rows = orderedFieldValues
+                                ForEach(Array(rows.enumerated()), id: \.offset) { i, row in
+                                    let field = row.field
+                                    HStack(alignment: .top, spacing: 12) {
+                                        Text(field.name)
+                                            .font(.subheadline)
+                                            .foregroundColor(theme.textSecondary)
+                                            .frame(width: 100, alignment: .leading)
+                                        MarkdownText(displayValue(row.value.value, field: field), color: theme.textPrimary)
+                                            .font(.subheadline).fontWeight(.medium)
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                        PrivacyTag(level: field.privacy, pending: field.pendingPrivacy, activatesAt: field.privacyActivatesAt)
+                                    }
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 10)
+                                    if i < rows.count - 1 {
+                                        Divider().background(theme.divider).padding(.leading, 16)
                                     }
                                 }
                             }
