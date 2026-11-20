@@ -51,7 +51,7 @@ struct HomeView: View {
                                     .font(.title2).fontWeight(.bold).fontDesign(.rounded)
                                     .foregroundColor(theme.textPrimary)
                             }
-                            if let since = store.oldestCurrentFront?.startedAt {
+                            if let since = store.earliestFrontingSince {
                                 Text("Since \(since.formatted(date: .omitted, time: .shortened))")
                                     .font(.footnote)
                                     .foregroundColor(theme.textSecondary)
@@ -307,7 +307,7 @@ struct HomeView: View {
                     Spacer().frame(width: 12)
                     ForEach(store.membersByFrontFrequency.filter { !$0.isArchived }.prefix(8)) { member in
                         QuickSwitchChip(member: member) {
-                            Task { await store.switchFronting(to: [member.id]) }
+                            Task { await store.quickSwitch(to: member.id) }
                         }
                     }
                     Button {
@@ -418,6 +418,22 @@ struct FrontingMemberCard: View {
     @Environment(\.theme) var theme
     let member: Member
 
+    private func frontingForText(since: Date, capped: Bool, now: Date) -> String {
+        let m = max(0, Int(now.timeIntervalSince(since) / 60))
+        let d: String
+        switch m {
+        case ..<1: d = String(localized: "under a minute")
+        case ..<60: d = "\(m)m"
+        case ..<1440: d = m % 60 == 0 ? "\(m / 60)hr" : "\(m / 60)hr \(m % 60)m"
+        default:
+            let h = (m % 1440) / 60
+            d = h == 0 ? "\(m / 1440)d" : "\(m / 1440)d \(h)hr"
+        }
+        return capped
+            ? String(localized: "Fronting for > \(d)")
+            : String(localized: "Fronting for \(d)")
+    }
+
     private var activeFrontStatus: String? {
         store.currentFronts
             .first { $0.memberIDs.contains(member.id) && $0.endedAt == nil }?
@@ -462,6 +478,14 @@ struct FrontingMemberCard: View {
                         .font(.caption)
                         .foregroundColor(theme.textSecondary)
                         .lineLimit(2)
+                }
+
+                if let since = store.frontingSince(member.id) {
+                    TimelineView(.everyMinute) { ctx in
+                        Text(frontingForText(since: since.date, capped: since.capped, now: ctx.date))
+                            .font(.caption)
+                            .foregroundColor(theme.textTertiary)
+                    }
                 }
             }
 
@@ -813,7 +837,7 @@ struct SwitchFrontingSheet: View {
                     Button {
                         Task {
                             isSwitching = true
-                            await store.switchFronting(to: Array(selectedIDs))
+                            await store.applyFrontSelection(Array(selectedIDs))
                             isSwitching = false
                             dismiss()
                         }
